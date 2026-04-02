@@ -21,8 +21,8 @@ target_include_directories(sleeplink_parser PUBLIC
 )
 
 # Tests
-option(SLEEPLINK_PARSER_BUILD_TESTS "Build tests" ON)
-if(SLEEPLINK_PARSER_BUILD_TESTS)
+option(SLEEPLINK_PARSER_BUILD_TESTS "Build tests" OFF)
+if(SLEEPLINK_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     enable_testing()
     find_package(GTest REQUIRED)
 
