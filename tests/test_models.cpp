@@ -26,7 +26,7 @@ TEST(ModelsTest, SleepEventConstruction) {
     auto now = std::chrono::system_clock::now();
     SleepEvent event(EventType::OBSTRUCTIVE, now, 12.5);
 
-    EXPECT_EQ(event.type, EventType::OBSTRUCTIVE);
+    EXPECT_EQ(event.event_type, EventType::OBSTRUCTIVE);
     EXPECT_EQ(event.timestamp, now);
     EXPECT_DOUBLE_EQ(event.duration_seconds, 12.5);
     EXPECT_FALSE(event.details.has_value());

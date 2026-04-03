@@ -12,6 +12,7 @@ add_library(sleeplink_parser STATIC
     src/EDFParser_SAD.cpp
     src/EDFParser_EVE.cpp
     src/EDFParser_STR.cpp
+    src/ISessionParser.cpp
     src/Models.cpp
 )
 
@@ -19,6 +20,22 @@ target_include_directories(sleeplink_parser PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
+
+# Philips DreamStation 2 parser (optional, requires OpenSSL for AES-256-GCM decryption)
+option(SLEEPLINK_PARSER_WITH_PHILIPS "Build Philips DreamStation parser (requires OpenSSL)" OFF)
+
+if(SLEEPLINK_PARSER_WITH_PHILIPS)
+    find_package(OpenSSL REQUIRED)
+    target_sources(sleeplink_parser PRIVATE
+        src/PhilipsCrypto.cpp
+        src/PhilipsChunk.cpp
+        src/PhilipsParser.cpp
+        src/PhilipsParser_Summary.cpp
+        src/PhilipsParser_Events.cpp
+    )
+    target_link_libraries(sleeplink_parser PUBLIC OpenSSL::Crypto)
+    target_compile_definitions(sleeplink_parser PUBLIC SLEEPLINK_WITH_PHILIPS=1)
+endif()
 
 # Tests
 option(SLEEPLINK_PARSER_BUILD_TESTS "Build tests" OFF)
@@ -29,6 +46,7 @@ if(SLEEPLINK_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOUR
     add_executable(run_tests
         tests/test_edf_file.cpp
         tests/test_models.cpp
+        tests/test_philips.cpp
     )
     target_link_libraries(run_tests sleeplink_parser GTest::GTest GTest::Main)
     add_test(NAME parser_tests COMMAND run_tests)

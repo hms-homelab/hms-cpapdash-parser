@@ -18,7 +18,20 @@ enum class EventType {
     CSR,
     OBSTRUCTIVE,
     CENTRAL,
-    CLEAR_AIRWAY
+    CLEAR_AIRWAY,
+    FLOW_LIMITATION,
+    PERIODIC_BREATHING,
+    LARGE_LEAK,
+    VIBRATORY_SNORE
+};
+
+/**
+ * Device manufacturer identifier
+ */
+enum class DeviceManufacturer {
+    UNKNOWN,
+    RESMED,
+    PHILIPS
 };
 
 std::string eventTypeToString(EventType type);
@@ -27,14 +40,14 @@ std::string eventTypeToString(EventType type);
  * SleepEvent - Respiratory event (apnea, hypopnea, etc.)
  */
 struct SleepEvent {
-    EventType type;
+    EventType event_type;
     std::chrono::system_clock::time_point timestamp;
     double duration_seconds;
     std::optional<std::string> details;
 
     SleepEvent() = default;
     SleepEvent(EventType t, std::chrono::system_clock::time_point ts, double dur)
-        : type(t), timestamp(ts), duration_seconds(dur) {}
+        : event_type(t), timestamp(ts), duration_seconds(dur) {}
 };
 
 /**
@@ -171,6 +184,27 @@ struct SessionMetrics {
 };
 
 /**
+ * DeviceSettings - Therapy device configuration for the session
+ */
+struct DeviceSettings {
+    std::optional<int> therapy_mode;        // 0=CPAP, 1=APAP, 2=BiPAP, 7=ASV, 8=ASVAuto
+    std::optional<double> set_pressure;     // cmH2O (fixed CPAP)
+    std::optional<double> min_pressure;     // cmH2O (Auto range)
+    std::optional<double> max_pressure;     // cmH2O (Auto range)
+    std::optional<double> ipap;             // cmH2O (BiPAP/ASV)
+    std::optional<double> epap;             // cmH2O (BiPAP/ASV)
+    std::optional<int> flex_mode;           // Philips: 0=Off, 1=Flex, 2=AFlex, 3=Rise, 4=BiFlex
+    std::optional<int> flex_level;          // 1-3
+    std::optional<int> ramp_time;           // minutes
+    std::optional<double> ramp_pressure;    // cmH2O
+    std::optional<int> humidifier_mode;     // 0=Off, 1=Fixed, 2=Adaptive, 3=HeatedTube
+    std::optional<int> humidifier_level;    // 0-5
+    std::optional<int> tube_temp;           // 0-5 (heated tube)
+    std::optional<int> mask_type;           // 0=Pillows, 1=Nasal, 2=FullFace
+    std::optional<int> hose_diameter;       // mm (22, 15, 12)
+};
+
+/**
  * ParsedSession - Complete CPAP session data
  */
 struct ParsedSession {
@@ -180,6 +214,7 @@ struct ParsedSession {
     std::string serial_number;
     std::optional<int> model_id;
     std::optional<int> version_id;
+    DeviceManufacturer manufacturer = DeviceManufacturer::UNKNOWN;
 
     // Session metadata
     std::optional<std::chrono::system_clock::time_point> session_start;
@@ -200,6 +235,16 @@ struct ParsedSession {
     Status status = Status::IN_PROGRESS;
     bool has_summary = false;
     bool has_events = false;
+
+    // File path references (optional, populated when parsing from disk)
+    std::optional<std::string> brp_file_path;
+    std::optional<std::string> eve_file_path;
+    std::optional<std::string> sad_file_path;
+    std::optional<std::string> pld_file_path;
+    std::optional<std::string> csl_file_path;
+
+    // Device settings for this session
+    std::optional<DeviceSettings> settings;
 
     // Session data
     std::vector<SleepEvent> events;
