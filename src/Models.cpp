@@ -16,6 +16,10 @@ std::string eventTypeToString(EventType type) {
         case EventType::OBSTRUCTIVE: return "Obstructive";
         case EventType::CENTRAL: return "Central";
         case EventType::CLEAR_AIRWAY: return "Clear Airway";
+        case EventType::FLOW_LIMITATION: return "Flow Limitation";
+        case EventType::PERIODIC_BREATHING: return "Periodic Breathing";
+        case EventType::LARGE_LEAK: return "Large Leak";
+        case EventType::VIBRATORY_SNORE: return "Vibratory Snore";
         default: return "Unknown";
     }
 }
@@ -53,7 +57,7 @@ void ParsedSession::calculateMetrics() {
 
     // Event breakdown by type
     for (const auto& event : events) {
-        switch (event.type) {
+        switch (event.event_type) {
             case EventType::OBSTRUCTIVE:
                 metrics->obstructive_apneas++;
                 break;
