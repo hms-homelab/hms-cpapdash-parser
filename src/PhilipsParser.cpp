@@ -4,8 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
-#include <dirent.h>
-#include <sys/stat.h>
+#include <filesystem>
 #include <fstream>
 
 namespace sleeplink::parser {
@@ -61,12 +60,13 @@ std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
     // Find summary (.001 or .B01) and events (.002 or .B02) files
     std::string summary_file, events_file;
 
-    DIR* dir = opendir(session_dir.c_str());
-    if (!dir) return nullptr;
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    if (!fs::is_directory(session_dir, ec)) return nullptr;
 
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        std::string name(entry->d_name);
+    for (const auto& entry : fs::directory_iterator(session_dir, ec)) {
+        if (!entry.is_regular_file(ec)) continue;
+        std::string name = entry.path().filename().string();
         std::string name_upper = name;
         std::transform(name_upper.begin(), name_upper.end(), name_upper.begin(),
                        [](unsigned char c) { return std::toupper(c); });
@@ -78,7 +78,6 @@ std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
             else if (ext == ".002" || ext == ".B02") events_file = session_dir + "/" + name;
         }
     }
-    closedir(dir);
 
     // Parse summary
     if (!summary_file.empty()) {

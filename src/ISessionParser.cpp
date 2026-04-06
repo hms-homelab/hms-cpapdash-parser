@@ -4,62 +4,47 @@
 #include <algorithm>
 #include <cctype>
 
-// Minimal filesystem detection without <filesystem> (C++17 compat with older toolchains)
-#include <sys/stat.h>
-#include <dirent.h>
+// Cross-platform directory scanning via std::filesystem (C++17)
+#include <filesystem>
 
 namespace sleeplink::parser {
 
 namespace {
 
-bool directoryExists(const std::string& path) {
-    struct stat st;
-    return stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
-}
+namespace fs = std::filesystem;
 
 bool hasSubdirCaseInsensitive(const std::string& parent, const std::string& target) {
-    DIR* dir = opendir(parent.c_str());
-    if (!dir) return false;
+    std::error_code ec;
+    if (!fs::is_directory(parent, ec)) return false;
 
     std::string target_lower = target;
     std::transform(target_lower.begin(), target_lower.end(), target_lower.begin(),
                    [](unsigned char c) { return std::tolower(c); });
 
-    bool found = false;
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        std::string name(entry->d_name);
+    for (const auto& entry : fs::directory_iterator(parent, ec)) {
+        if (!entry.is_directory(ec)) continue;
+        std::string name = entry.path().filename().string();
         std::string name_lower = name;
         std::transform(name_lower.begin(), name_lower.end(), name_lower.begin(),
                        [](unsigned char c) { return std::tolower(c); });
-        if (name_lower == target_lower) {
-            std::string full = parent + "/" + name;
-            if (directoryExists(full)) {
-                found = true;
-                break;
-            }
-        }
+        if (name_lower == target_lower) return true;
     }
-    closedir(dir);
-    return found;
+    return false;
 }
 
 bool hasFileWithExtension(const std::string& dir_path, const std::string& ext) {
-    DIR* dir = opendir(dir_path.c_str());
-    if (!dir) return false;
+    std::error_code ec;
+    if (!fs::is_directory(dir_path, ec)) return false;
 
-    bool found = false;
-    struct dirent* entry;
-    while ((entry = readdir(dir)) != nullptr) {
-        std::string name(entry->d_name);
+    for (const auto& entry : fs::directory_iterator(dir_path, ec)) {
+        if (!entry.is_regular_file(ec)) continue;
+        std::string name = entry.path().filename().string();
         if (name.size() > ext.size() &&
             name.compare(name.size() - ext.size(), ext.size(), ext) == 0) {
-            found = true;
-            break;
+            return true;
         }
     }
-    closedir(dir);
-    return found;
+    return false;
 }
 
 } // anonymous namespace
