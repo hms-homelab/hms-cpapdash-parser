@@ -21,6 +21,13 @@ target_include_directories(sleeplink_parser PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
+# std::filesystem: GCC < 9 and Clang < 9 need explicit linking
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+    target_link_libraries(sleeplink_parser PUBLIC stdc++fs)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
+    target_link_libraries(sleeplink_parser PUBLIC c++fs)
+endif()
+
 # Philips DreamStation 2 parser (optional, requires OpenSSL for AES-256-GCM decryption)
 option(SLEEPLINK_PARSER_WITH_PHILIPS "Build Philips DreamStation parser (requires OpenSSL)" OFF)
 
