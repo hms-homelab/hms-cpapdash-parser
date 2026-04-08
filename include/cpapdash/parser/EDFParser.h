@@ -1,14 +1,14 @@
 #pragma once
 
-#include "sleeplink/parser/EDFFile.h"
-#include "sleeplink/parser/Models.h"
+#include "cpapdash/parser/EDFFile.h"
+#include "cpapdash/parser/Models.h"
 #include <string>
 #include <memory>
 #include <vector>
 #include <chrono>
 #include <cstdint>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 /**
  * EDFParser - Parser for ResMed CPAP EDF files
@@ -121,4 +121,4 @@ private:
         const std::string& device_id);
 };
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser

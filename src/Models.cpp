@@ -1,11 +1,11 @@
-#include "sleeplink/parser/Models.h"
+#include "cpapdash/parser/Models.h"
 #include <numeric>
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
 #include <cmath>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 std::string eventTypeToString(EventType type) {
     switch (type) {
@@ -345,4 +345,4 @@ std::string ParsedSession::toString() const {
     return oss.str();
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser

@@ -1,10 +1,10 @@
 #include <gtest/gtest.h>
-#include "sleeplink/parser/EDFFile.h"
+#include "cpapdash/parser/EDFFile.h"
 #include <cstring>
 #include <vector>
 #include <cstdint>
 
-using namespace sleeplink::parser;
+using namespace cpapdash::parser;
 
 namespace {
 

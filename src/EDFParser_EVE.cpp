@@ -1,8 +1,8 @@
-#include "sleeplink/parser/EDFParser.h"
+#include "cpapdash/parser/EDFParser.h"
 #include <iostream>
 #include <algorithm>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 bool EDFParser::parseEVEFile(EDFFile& edf, ParsedSession& session) {
     if (!edf.isEDFPlus()) {
@@ -53,4 +53,4 @@ bool EDFParser::parseEVEFile(EDFFile& edf, ParsedSession& session) {
     return true;
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser
