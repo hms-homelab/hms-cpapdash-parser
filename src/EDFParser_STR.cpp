@@ -1,8 +1,8 @@
-#include "sleeplink/parser/EDFParser.h"
+#include "cpapdash/parser/EDFParser.h"
 #include <iostream>
 #include <cmath>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 std::vector<STRDailyRecord> EDFParser::parseSTRFile(
     const std::string& filepath,
@@ -267,4 +267,4 @@ std::vector<STRDailyRecord> EDFParser::parseSTRInternal(
     return records;
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser

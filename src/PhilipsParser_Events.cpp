@@ -1,11 +1,11 @@
-#include "sleeplink/parser/PhilipsParser.h"
+#include "cpapdash/parser/PhilipsParser.h"
 
-#ifdef SLEEPLINK_WITH_PHILIPS
+#ifdef CPAPDASH_WITH_PHILIPS
 
 #include <cstring>
 #include <cmath>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 // F0V6 event codes — from OSCAR prs1_parser_xpap.cpp:2155 (ParseEventsF0V6)
 // Minimum data sizes per event code (excluding 2-byte timestamp delta)
@@ -235,6 +235,6 @@ bool PhilipsParser::parseEvents(
     return !session.events.empty();
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser
 
-#endif // SLEEPLINK_WITH_PHILIPS
+#endif // CPAPDASH_WITH_PHILIPS

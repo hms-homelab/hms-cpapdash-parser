@@ -1,6 +1,6 @@
 #pragma once
 
-#include "sleeplink/parser/Models.h"
+#include "cpapdash/parser/Models.h"
 #include <string>
 #include <memory>
 #include <optional>
@@ -9,14 +9,14 @@
 #include <utility>
 #include <cstdint>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 /**
  * ISessionParser - Abstract interface for CPAP session parsing.
  *
  * Implementations:
  *   ResMedParser  - wraps EDFParser (EDF+ files from ResMed AirSense 10/11)
- *   PhilipsParser - PRS1 binary files from Philips DreamStation 2 (requires SLEEPLINK_WITH_PHILIPS)
+ *   PhilipsParser - PRS1 binary files from Philips DreamStation 2 (requires CPAPDASH_WITH_PHILIPS)
  */
 class ISessionParser {
 public:
@@ -62,7 +62,7 @@ public:
  * Create a parser by auto-detecting the device type from directory contents.
  *
  * Detection:
- *   - P-SERIES/ folder -> Philips (returns PhilipsParser if SLEEPLINK_WITH_PHILIPS, else nullptr)
+ *   - P-SERIES/ folder -> Philips (returns PhilipsParser if CPAPDASH_WITH_PHILIPS, else nullptr)
  *   - .edf files or DATALOG/ -> ResMed
  *
  * @param data_dir  Root of SD card or data directory
@@ -77,4 +77,4 @@ std::unique_ptr<ISessionParser> createParser(const std::string& data_dir);
  */
 std::unique_ptr<ISessionParser> createParser(DeviceManufacturer manufacturer);
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser

@@ -1,4 +1,4 @@
-#include "sleeplink/parser/EDFParser.h"
+#include "cpapdash/parser/EDFParser.h"
 #include <iostream>
 #include <filesystem>
 #include <regex>
@@ -6,7 +6,7 @@
 #include <iomanip>
 #include <sstream>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 bool EDFParser::parseDeviceInfo(EDFFile& edf,
                                  std::string& serial_number,
@@ -220,4 +220,4 @@ std::unique_ptr<ParsedSession> EDFParser::parseSessionFromBuffers(
     return session;
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser

@@ -1,13 +1,13 @@
 #pragma once
 
-#ifdef SLEEPLINK_WITH_PHILIPS
+#ifdef CPAPDASH_WITH_PHILIPS
 
 #include <cstdint>
 #include <vector>
 #include <map>
 #include <utility>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 /**
  * PRS1 chunk header — common binary header for all Philips data files.
@@ -59,6 +59,6 @@ private:
                            PRS1ChunkHeader& hdr, size_t& header_end);
 };
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser
 
-#endif // SLEEPLINK_WITH_PHILIPS
+#endif // CPAPDASH_WITH_PHILIPS

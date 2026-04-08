@@ -1,5 +1,5 @@
-#include "sleeplink/parser/ISessionParser.h"
-#include "sleeplink/parser/EDFParser.h"
+#include "cpapdash/parser/ISessionParser.h"
+#include "cpapdash/parser/EDFParser.h"
 
 #include <algorithm>
 #include <cctype>
@@ -7,7 +7,7 @@
 // Cross-platform directory scanning via std::filesystem (C++17)
 #include <filesystem>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 namespace {
 
@@ -109,7 +109,7 @@ public:
 std::unique_ptr<ISessionParser> createParser(const std::string& data_dir) {
     // Philips: look for P-SERIES/ directory (case-insensitive)
     if (hasSubdirCaseInsensitive(data_dir, "P-SERIES")) {
-#ifdef SLEEPLINK_WITH_PHILIPS
+#ifdef CPAPDASH_WITH_PHILIPS
         return createParser(DeviceManufacturer::PHILIPS);
 #else
         return nullptr;  // Philips support not compiled in
@@ -131,7 +131,7 @@ std::unique_ptr<ISessionParser> createParser(DeviceManufacturer manufacturer) {
             return std::make_unique<ResMedParser>();
 
         case DeviceManufacturer::PHILIPS:
-#ifdef SLEEPLINK_WITH_PHILIPS
+#ifdef CPAPDASH_WITH_PHILIPS
             // Will be implemented in PhilipsParser.cpp
             // Forward declaration resolved at link time
             extern std::unique_ptr<ISessionParser> createPhilipsParser();
@@ -145,4 +145,4 @@ std::unique_ptr<ISessionParser> createParser(DeviceManufacturer manufacturer) {
     }
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser

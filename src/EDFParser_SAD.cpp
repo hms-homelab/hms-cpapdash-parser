@@ -1,8 +1,8 @@
-#include "sleeplink/parser/EDFParser.h"
+#include "cpapdash/parser/EDFParser.h"
 #include <iostream>
 #include <algorithm>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 bool EDFParser::parseSADFile(EDFFile& edf, ParsedSession& session) {
     auto start_time = edf.getStartTime();
@@ -44,4 +44,4 @@ bool EDFParser::parseSADFile(EDFFile& edf, ParsedSession& session) {
     return true;
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser

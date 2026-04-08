@@ -1,14 +1,14 @@
 #pragma once
 
-#ifdef SLEEPLINK_WITH_PHILIPS
+#ifdef CPAPDASH_WITH_PHILIPS
 
-#include "sleeplink/parser/ISessionParser.h"
-#include "sleeplink/parser/PhilipsCrypto.h"
-#include "sleeplink/parser/PhilipsChunk.h"
+#include "cpapdash/parser/ISessionParser.h"
+#include "cpapdash/parser/PhilipsCrypto.h"
+#include "cpapdash/parser/PhilipsChunk.h"
 #include <memory>
 #include <string>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 /**
  * PhilipsParser - Parser for Philips DreamStation 2 (PRS1 F0V6) CPAP data.
@@ -64,6 +64,6 @@ private:
 /** Factory function called by createParser(DeviceManufacturer::PHILIPS). */
 std::unique_ptr<ISessionParser> createPhilipsParser();
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser
 
-#endif // SLEEPLINK_WITH_PHILIPS
+#endif // CPAPDASH_WITH_PHILIPS

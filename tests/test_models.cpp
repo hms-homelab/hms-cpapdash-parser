@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
-#include "sleeplink/parser/Models.h"
+#include "cpapdash/parser/Models.h"
 #include <cmath>
 
-using namespace sleeplink::parser;
+using namespace cpapdash::parser;
 
 // ============================================================================
 //  EventType string conversion tests

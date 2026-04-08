@@ -23,11 +23,11 @@
   - `SleepEvent`, `VitalSample`, `STRDailyRecord`
 - **Unit tests** — synthetic EDF buffer construction, header parsing, signal extraction,
   metrics calculation, desaturation detection, growing file detection
-- **CMake** — static library target `sleeplink_parser`, GTest integration,
+- **CMake** — static library target `cpapdash_parser`, GTest integration,
   consumable via FetchContent
 
 ### Architecture
-- Namespace: `sleeplink::parser`
+- Namespace: `cpapdash::parser`
 - Pure C++17, no external dependencies
 - Memory-buffer API for cloud ingestion (no file I/O required)
 - Extracted from hms-cpap EDFParser.cpp (~1600 lines)

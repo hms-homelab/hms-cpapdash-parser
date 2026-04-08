@@ -6,7 +6,7 @@
 #include <optional>
 #include <map>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 /**
  * Event types for respiratory events
@@ -338,4 +338,4 @@ struct STRDailyRecord {
     bool hasTherapy() const { return duration_minutes > 0; }
 };
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser

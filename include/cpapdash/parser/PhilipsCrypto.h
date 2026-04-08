@@ -1,13 +1,13 @@
 #pragma once
 
-#ifdef SLEEPLINK_WITH_PHILIPS
+#ifdef CPAPDASH_WITH_PHILIPS
 
 #include <cstdint>
 #include <string>
 #include <vector>
 #include <unordered_map>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 /**
  * DS2 encrypted file header (0xCA = 202 bytes).
@@ -59,6 +59,6 @@ private:
     std::unordered_map<std::string, std::vector<uint8_t>> key_cache_;
 };
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser
 
-#endif // SLEEPLINK_WITH_PHILIPS
+#endif // CPAPDASH_WITH_PHILIPS

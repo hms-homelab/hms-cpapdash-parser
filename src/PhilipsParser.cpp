@@ -1,13 +1,13 @@
-#include "sleeplink/parser/PhilipsParser.h"
+#include "cpapdash/parser/PhilipsParser.h"
 
-#ifdef SLEEPLINK_WITH_PHILIPS
+#ifdef CPAPDASH_WITH_PHILIPS
 
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 PhilipsParser::PhilipsParser() = default;
 
@@ -141,6 +141,6 @@ std::unique_ptr<ISessionParser> createPhilipsParser() {
     return std::make_unique<PhilipsParser>();
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser
 
-#endif // SLEEPLINK_WITH_PHILIPS
+#endif // CPAPDASH_WITH_PHILIPS

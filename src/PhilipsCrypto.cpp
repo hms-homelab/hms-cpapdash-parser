@@ -1,6 +1,6 @@
-#include "sleeplink/parser/PhilipsCrypto.h"
+#include "cpapdash/parser/PhilipsCrypto.h"
 
-#ifdef SLEEPLINK_WITH_PHILIPS
+#ifdef CPAPDASH_WITH_PHILIPS
 
 #include <openssl/evp.h>
 #include <openssl/aes.h>
@@ -8,7 +8,7 @@
 #include <fstream>
 #include <functional>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 // OSCAR constants for DS2 decryption
 static const uint8_t OSCAR_KEY[] = "Patient access to their own data";  // 32 bytes + null
@@ -240,6 +240,6 @@ std::vector<uint8_t> PhilipsCrypto::decryptFile(const std::string& filepath) {
     return decrypt(data.data(), data.size());
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser
 
-#endif // SLEEPLINK_WITH_PHILIPS
+#endif // CPAPDASH_WITH_PHILIPS

@@ -1,10 +1,10 @@
-#include "sleeplink/parser/EDFParser.h"
+#include "cpapdash/parser/EDFParser.h"
 #include <iostream>
 #include <cmath>
 #include <algorithm>
 #include <numeric>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
     // Get EDF header timestamp
@@ -421,4 +421,4 @@ void EDFParser::calculateRespiratoryMetrics(
     }
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser

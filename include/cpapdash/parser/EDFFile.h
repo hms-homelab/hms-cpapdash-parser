@@ -5,7 +5,7 @@
 #include <chrono>
 #include <cstdint>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 /**
  * Raw EDF signal descriptor (parsed from header)
@@ -100,4 +100,4 @@ private:
     bool readBytes(long long offset, char* dest, size_t count) const;
 };
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser

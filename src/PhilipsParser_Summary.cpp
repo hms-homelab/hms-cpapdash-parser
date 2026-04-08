@@ -1,10 +1,10 @@
-#include "sleeplink/parser/PhilipsParser.h"
+#include "cpapdash/parser/PhilipsParser.h"
 
-#ifdef SLEEPLINK_WITH_PHILIPS
+#ifdef CPAPDASH_WITH_PHILIPS
 
 #include <cstring>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 // Summary (.001) slice event types for F0V6
 enum class SummarySliceType : uint8_t {
@@ -109,6 +109,6 @@ bool PhilipsParser::parseSummary(
     return true;
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser
 
-#endif // SLEEPLINK_WITH_PHILIPS
+#endif // CPAPDASH_WITH_PHILIPS

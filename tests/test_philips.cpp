@@ -1,15 +1,15 @@
 #include <gtest/gtest.h>
 
-#include "sleeplink/parser/Models.h"
-#include "sleeplink/parser/ISessionParser.h"
+#include "cpapdash/parser/Models.h"
+#include "cpapdash/parser/ISessionParser.h"
 
-#ifdef SLEEPLINK_WITH_PHILIPS
-#include "sleeplink/parser/PhilipsCrypto.h"
-#include "sleeplink/parser/PhilipsChunk.h"
-#include "sleeplink/parser/PhilipsParser.h"
+#ifdef CPAPDASH_WITH_PHILIPS
+#include "cpapdash/parser/PhilipsCrypto.h"
+#include "cpapdash/parser/PhilipsChunk.h"
+#include "cpapdash/parser/PhilipsParser.h"
 #endif
 
-using namespace sleeplink::parser;
+using namespace cpapdash::parser;
 
 // ── Model Extensions ─────────────────────────────────────────────────────────
 
@@ -76,7 +76,7 @@ TEST(ISessionParser, CreateUnknownReturnsNull) {
     EXPECT_EQ(parser, nullptr);
 }
 
-#ifdef SLEEPLINK_WITH_PHILIPS
+#ifdef CPAPDASH_WITH_PHILIPS
 
 TEST(ISessionParser, CreatePhilipsParser) {
     auto parser = createParser(DeviceManufacturer::PHILIPS);
@@ -255,11 +255,11 @@ TEST(PhilipsParser, MetricsCalculationAfterEvents) {
     EXPECT_EQ(session.metrics->total_events, 5);
 }
 
-#else // !SLEEPLINK_WITH_PHILIPS
+#else // !CPAPDASH_WITH_PHILIPS
 
 TEST(ISessionParser, CreatePhilipsReturnsNullWithoutFlag) {
     auto parser = createParser(DeviceManufacturer::PHILIPS);
     EXPECT_EQ(parser, nullptr);
 }
 
-#endif // SLEEPLINK_WITH_PHILIPS
+#endif // CPAPDASH_WITH_PHILIPS

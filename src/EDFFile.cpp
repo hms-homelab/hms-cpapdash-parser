@@ -1,10 +1,10 @@
-#include "sleeplink/parser/EDFFile.h"
+#include "cpapdash/parser/EDFFile.h"
 #include <fstream>
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 std::string EDFFile::trimField(const char* data, int len) {
     std::string s(data, len);
@@ -370,4 +370,4 @@ std::vector<EDFAnnotation> EDFFile::readAnnotations() {
     return annotations;
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser

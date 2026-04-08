@@ -1,10 +1,10 @@
-#include "sleeplink/parser/PhilipsChunk.h"
+#include "cpapdash/parser/PhilipsChunk.h"
 
-#ifdef SLEEPLINK_WITH_PHILIPS
+#ifdef CPAPDASH_WITH_PHILIPS
 
 #include <cstring>
 
-namespace sleeplink::parser {
+namespace cpapdash::parser {
 
 uint8_t PRS1ChunkReader::calcChecksum(const uint8_t* data, size_t len) {
     uint8_t sum = 0;
@@ -143,6 +143,6 @@ PRS1ChunkReader::parseChunks(const uint8_t* data, size_t len) {
     return chunks;
 }
 
-} // namespace sleeplink::parser
+} // namespace cpapdash::parser
 
-#endif // SLEEPLINK_WITH_PHILIPS
+#endif // CPAPDASH_WITH_PHILIPS
