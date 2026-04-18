@@ -14,6 +14,7 @@ add_library(cpapdash_parser STATIC
     src/EDFParser_STR.cpp
     src/ISessionParser.cpp
     src/Models.cpp
+    src/VLDParser.cpp
 )
 
 target_include_directories(cpapdash_parser PUBLIC
@@ -54,6 +55,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         tests/test_edf_file.cpp
         tests/test_models.cpp
         tests/test_philips.cpp
+        tests/test_vld_parser.cpp
     )
     target_link_libraries(run_tests cpapdash_parser GTest::GTest GTest::Main)
     add_test(NAME parser_tests COMMAND run_tests)
