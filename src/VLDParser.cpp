@@ -21,7 +21,11 @@ static uint32_t read_u32(const uint8_t* p) {
 std::string OximetrySession::date_str() const {
     auto tt = std::chrono::system_clock::to_time_t(start_time);
     std::tm tm{};
+#ifdef _WIN32
+    gmtime_s(&tm, &tt);
+#else
     gmtime_r(&tt, &tm);
+#endif
     char buf[9];
     std::strftime(buf, sizeof(buf), "%Y%m%d", &tm);
     return buf;
@@ -53,7 +57,11 @@ std::optional<OximetrySession> VLDParser::parse(
     tm.tm_hour = hour;
     tm.tm_min  = minute;
     tm.tm_sec  = second;
+#ifdef _WIN32
+    time_t epoch = _mkgmtime(&tm);
+#else
     time_t epoch = timegm(&tm);
+#endif
     if (epoch == -1) return std::nullopt;
 
     auto start = std::chrono::system_clock::from_time_t(epoch);
