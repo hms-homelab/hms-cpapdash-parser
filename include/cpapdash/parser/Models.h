@@ -31,7 +31,8 @@ enum class EventType {
 enum class DeviceManufacturer {
     UNKNOWN,
     RESMED,
-    PHILIPS
+    PHILIPS,
+    LOWENSTEIN
 };
 
 std::string eventTypeToString(EventType type);

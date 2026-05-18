@@ -45,18 +45,35 @@ if(CPAPDASH_PARSER_WITH_PHILIPS)
     target_compile_definitions(cpapdash_parser PUBLIC CPAPDASH_WITH_PHILIPS=1)
 endif()
 
+# Lowenstein Prisma parser (optional, no extra dependencies)
+option(CPAPDASH_PARSER_WITH_LOWENSTEIN "Build Lowenstein Prisma parser" OFF)
+
+if(CPAPDASH_PARSER_WITH_LOWENSTEIN)
+    target_sources(cpapdash_parser PRIVATE
+        src/PrismaParser.cpp
+        src/PrismaParser_Events.cpp
+        src/PrismaParser_Signals.cpp
+    )
+    target_compile_definitions(cpapdash_parser PUBLIC CPAPDASH_WITH_LOWENSTEIN=1)
+endif()
+
 # Tests
 option(CPAPDASH_PARSER_BUILD_TESTS "Build tests" OFF)
 if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     enable_testing()
     find_package(GTest REQUIRED)
 
-    add_executable(run_tests
+    set(TEST_SOURCES
         tests/test_edf_file.cpp
         tests/test_models.cpp
         tests/test_philips.cpp
         tests/test_vld_parser.cpp
     )
+    if(CPAPDASH_PARSER_WITH_LOWENSTEIN)
+        list(APPEND TEST_SOURCES tests/test_prisma.cpp)
+    endif()
+
+    add_executable(run_tests ${TEST_SOURCES})
     target_link_libraries(run_tests cpapdash_parser GTest::GTest GTest::Main)
     add_test(NAME parser_tests COMMAND run_tests)
 endif()
