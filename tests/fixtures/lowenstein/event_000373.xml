@@ -1,0 +1,666 @@
+<?xml version="1.0" encoding="utf-8"?>
+<desc>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1003" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1001" NewValue="20170008"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1002" NewValue="27"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1092" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1084" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1083" NewValue="3"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1202" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1203" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1199" NewValue="700"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1128" NewValue="15"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1212" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1003" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1123" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1127" NewValue="15"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1125" NewValue="400"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1213" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1085" NewValue="1200"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1200" NewValue="700"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1201" NewValue="700"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1160" NewValue="3"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1162" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1154" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1158" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1138" NewValue="700"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1139" NewValue="700"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1140" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1141" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1086" NewValue="30"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1157" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1156" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1091" NewValue="22"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1011" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1012" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1014" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1015" NewValue="3"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1016" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1017" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1020" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1208" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1207" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1206" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1150" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1209" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1214" NewValue="500"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1215" NewValue="4000"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1220" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1219" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1217" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1218" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1216" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1223" NewValue="10"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1224" NewValue="0"/>
+<DeviceEvent  DeviceEventID="1" Time="0" ParameterID="257" NewValue="0"/>
+<DeviceEvent  DeviceEventID="1" Time="0" ParameterID="271" NewValue="3"/>
+<RespEvent  RespEventID="1238" EndTime="1" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="1232" EndTime="1" Duration="10" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1230" EndTime="1" Duration="10" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1237" EndTime="11" Duration="10" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1235" EndTime="20" Duration="10" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1234" EndTime="27" Duration="10" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="231" EndTime="1258" Duration="1257" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1233" EndTime="1258" Duration="10" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1234" EndTime="1339" Duration="10" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="131" EndTime="1668" Duration="38" Pressure="0" Strength="6"/>
+<RespEvent  RespEventID="262" EndTime="2526" Duration="0" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1262" EndTime="2526" Duration="0" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="4693" Duration="106" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="131" EndTime="4875" Duration="24" Pressure="0" Strength="5"/>
+<RespEvent  RespEventID="1007" EndTime="4939" Duration="1233" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="131" EndTime="5753" Duration="41" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="1111" EndTime="6882" Duration="58" Pressure="0" Strength="25"/>
+<RespEvent  RespEventID="1101" EndTime="7256" Duration="47" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="7264" Duration="90" Pressure="0" Strength="31"/>
+<RespEvent  RespEventID="121" EndTime="7303" Duration="67" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1129" EndTime="7303" Duration="67" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="2" EndTime="7370" Duration="1224" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="7630" Duration="53" Pressure="0" Strength="46"/>
+<RespEvent  RespEventID="1118" EndTime="7866" Duration="77" Pressure="0" Strength="50"/>
+<RespEvent  RespEventID="131" EndTime="8109" Duration="39" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="1111" EndTime="8319" Duration="94" Pressure="0" Strength="39"/>
+<RespEvent  RespEventID="1126" EndTime="8368" Duration="76" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="8531" Duration="43" Pressure="0" Strength="12"/>
+<RespEvent  RespEventID="1111" EndTime="8545" Duration="94" Pressure="0" Strength="11"/>
+<RespEvent  RespEventID="3" EndTime="8580" Duration="1210" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="121" EndTime="8596" Duration="77" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1129" EndTime="8596" Duration="77" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="9010" Duration="44" Pressure="0" Strength="12"/>
+<RespEvent  RespEventID="1111" EndTime="9022" Duration="71" Pressure="0" Strength="18"/>
+<RespEvent  RespEventID="1126" EndTime="9104" Duration="82" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="131" EndTime="9188" Duration="48" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="1101" EndTime="9362" Duration="68" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="1111" EndTime="9366" Duration="73" Pressure="0" Strength="11"/>
+<RespEvent  RespEventID="2" EndTime="9790" Duration="1210" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="9878" Duration="65" Pressure="0" Strength="30"/>
+<RespEvent  RespEventID="1118" EndTime="9936" Duration="38" Pressure="0" Strength="11"/>
+<RespEvent  RespEventID="1101" EndTime="10267" Duration="76" Pressure="0" Strength="24"/>
+<RespEvent  RespEventID="111" EndTime="10277" Duration="101" Pressure="0" Strength="49"/>
+<RespEvent  RespEventID="1008" EndTime="10279" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="10789" Duration="75" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1" EndTime="10995" Duration="1205" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="11211" Duration="81" Pressure="0" Strength="45"/>
+<RespEvent  RespEventID="1101" EndTime="11445" Duration="35" Pressure="0" Strength="21"/>
+<RespEvent  RespEventID="1111" EndTime="11458" Duration="86" Pressure="0" Strength="40"/>
+<RespEvent  RespEventID="121" EndTime="11509" Duration="78" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1129" EndTime="11509" Duration="78" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="11743" Duration="83" Pressure="0" Strength="27"/>
+<RespEvent  RespEventID="2" EndTime="12215" Duration="1220" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="111" EndTime="12357" Duration="177" Pressure="0" Strength="47"/>
+<RespEvent  RespEventID="1008" EndTime="12359" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="12733" Duration="73" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="112" EndTime="12738" Duration="179" Pressure="0" Strength="50"/>
+<RespEvent  RespEventID="102" EndTime="13006" Duration="146" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1" EndTime="13422" Duration="1207" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="13427" Duration="70" Pressure="0" Strength="12"/>
+<RespEvent  RespEventID="112" EndTime="13439" Duration="216" Pressure="0" Strength="48"/>
+<RespEvent  RespEventID="1111" EndTime="13656" Duration="61" Pressure="0" Strength="42"/>
+<RespEvent  RespEventID="1101" EndTime="13723" Duration="50" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="13730" Duration="69" Pressure="0" Strength="42"/>
+<RespEvent  RespEventID="1101" EndTime="13858" Duration="71" Pressure="0" Strength="6"/>
+<RespEvent  RespEventID="1111" EndTime="13870" Duration="82" Pressure="0" Strength="33"/>
+<RespEvent  RespEventID="1126" EndTime="13931" Duration="85" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="14226" Duration="90" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="112" EndTime="14237" Duration="115" Pressure="0" Strength="19"/>
+<RespEvent  RespEventID="1126" EndTime="14403" Duration="73" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="131" EndTime="14520" Duration="18" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="1007" EndTime="14640" Duration="1218" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="14724" Duration="59" Pressure="0" Strength="25"/>
+<RespEvent  RespEventID="1126" EndTime="14923" Duration="77" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="15163" Duration="109" Pressure="0" Strength="18"/>
+<RespEvent  RespEventID="1111" EndTime="15173" Duration="9" Pressure="0" Strength="16"/>
+<RespEvent  RespEventID="1111" EndTime="15464" Duration="86" Pressure="0" Strength="40"/>
+<RespEvent  RespEventID="1126" EndTime="15514" Duration="80" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="15865" Duration="1225" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="16046" Duration="124" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="16382" Duration="73" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="112" EndTime="16401" Duration="124" Pressure="0" Strength="9"/>
+<RespEvent  RespEventID="1101" EndTime="16633" Duration="60" Pressure="0" Strength="10"/>
+<RespEvent  RespEventID="111" EndTime="16638" Duration="124" Pressure="0" Strength="10"/>
+<RespEvent  RespEventID="1008" EndTime="16641" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="111" EndTime="16817" Duration="103" Pressure="0" Strength="27"/>
+<RespEvent  RespEventID="1008" EndTime="16820" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1" EndTime="17087" Duration="1222" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="17079" Duration="108" Pressure="0" Strength="33"/>
+<RespEvent  RespEventID="1111" EndTime="17093" Duration="13" Pressure="0" Strength="29"/>
+<RespEvent  RespEventID="1101" EndTime="17360" Duration="45" Pressure="0" Strength="18"/>
+<RespEvent  RespEventID="102" EndTime="17626" Duration="158" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="131" EndTime="17777" Duration="44" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="1101" EndTime="17884" Duration="57" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="112" EndTime="17897" Duration="106" Pressure="0" Strength="50"/>
+<RespEvent  RespEventID="106" EndTime="18153" Duration="100" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="1111" EndTime="18191" Duration="38" Pressure="0" Strength="26"/>
+<RespEvent  RespEventID="1007" EndTime="18336" Duration="1249" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="131" EndTime="18387" Duration="51" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="1111" EndTime="18441" Duration="76" Pressure="0" Strength="31"/>
+<RespEvent  RespEventID="102" EndTime="18635" Duration="141" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="18900" Duration="99" Pressure="0" Strength="7"/>
+<RespEvent  RespEventID="112" EndTime="18907" Duration="138" Pressure="0" Strength="42"/>
+<RespEvent  RespEventID="102" EndTime="19161" Duration="114" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="19175" Duration="13" Pressure="0" Strength="40"/>
+<RespEvent  RespEventID="1101" EndTime="19414" Duration="69" Pressure="0" Strength="15"/>
+<RespEvent  RespEventID="112" EndTime="19432" Duration="146" Pressure="0" Strength="36"/>
+<RespEvent  RespEventID="1007" EndTime="19550" Duration="1214" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="19638" Duration="80" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="19937" Duration="102" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="1111" EndTime="19950" Duration="12" Pressure="0" Strength="16"/>
+<RespEvent  RespEventID="1118" EndTime="20135" Duration="66" Pressure="0" Strength="51"/>
+<RespEvent  RespEventID="330" EndTime="20591" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="20597" Duration="70" Pressure="0" Strength="49"/>
+<RespEvent  RespEventID="3" EndTime="20770" Duration="1220" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="20814" Duration="137" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="21114" Duration="130" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="131" EndTime="21289" Duration="73" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="102" EndTime="21473" Duration="170" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="21915" Duration="134" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="22010" Duration="1240" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="22132" Duration="55" Pressure="0" Strength="26"/>
+<RespEvent  RespEventID="1101" EndTime="22232" Duration="65" Pressure="0" Strength="23"/>
+<RespEvent  RespEventID="1111" EndTime="22246" Duration="96" Pressure="0" Strength="10"/>
+<RespEvent  RespEventID="1111" EndTime="22385" Duration="80" Pressure="0" Strength="37"/>
+<RespEvent  RespEventID="330" EndTime="22598" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="23037" Duration="153" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="23210" Duration="1200" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="23410" Duration="89" Pressure="0" Strength="29"/>
+<RespEvent  RespEventID="111" EndTime="23463" Duration="233" Pressure="0" Strength="37"/>
+<RespEvent  RespEventID="1008" EndTime="23467" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="131" EndTime="23627" Duration="47" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="330" EndTime="23663" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="23912" Duration="207" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1118" EndTime="24213" Duration="67" Pressure="0" Strength="51"/>
+<RespEvent  RespEventID="102" EndTime="24385" Duration="126" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1" EndTime="24451" Duration="1240" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="24659" Duration="95" Pressure="0" Strength="47"/>
+<RespEvent  RespEventID="1111" EndTime="24820" Duration="83" Pressure="0" Strength="33"/>
+<RespEvent  RespEventID="112" EndTime="24993" Duration="133" Pressure="0" Strength="45"/>
+<RespEvent  RespEventID="112" EndTime="25507" Duration="167" Pressure="0" Strength="38"/>
+<RespEvent  RespEventID="106" EndTime="25908" Duration="103" Pressure="0" Strength="10"/>
+<RespEvent  RespEventID="330" EndTime="26233" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="26371" Duration="44" Pressure="0" Strength="12"/>
+<RespEvent  RespEventID="111" EndTime="26565" Duration="304" Pressure="0" Strength="30"/>
+<RespEvent  RespEventID="1008" EndTime="26568" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="26826" Duration="58" Pressure="0" Strength="35"/>
+<RespEvent  RespEventID="1" EndTime="26886" Duration="1224" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="181" EndTime="26414" Duration="3452" Pressure="700" Strength="0"/>
+<RespEvent  RespEventID="111" EndTime="26943" Duration="112" Pressure="0" Strength="46"/>
+<RespEvent  RespEventID="1008" EndTime="26946" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="27287" Duration="59" Pressure="0" Strength="43"/>
+<RespEvent  RespEventID="121" EndTime="27379" Duration="123" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1129" EndTime="27379" Duration="123" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="28037" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1" EndTime="28104" Duration="1218" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="28600" Duration="89" Pressure="0" Strength="39"/>
+<RespEvent  RespEventID="131" EndTime="28739" Duration="56" Pressure="0" Strength="6"/>
+<RespEvent  RespEventID="330" EndTime="28740" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="29015" Duration="52" Pressure="0" Strength="5"/>
+<RespEvent  RespEventID="112" EndTime="29020" Duration="120" Pressure="0" Strength="47"/>
+<RespEvent  RespEventID="1126" EndTime="29215" Duration="94" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="29325" Duration="1221" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="29447" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="29780" Duration="123" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="330" EndTime="30131" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="30203" Duration="35" Pressure="0" Strength="9"/>
+<RespEvent  RespEventID="1111" EndTime="30216" Duration="57" Pressure="0" Strength="33"/>
+<RespEvent  RespEventID="1007" EndTime="30566" Duration="1241" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="30983" Duration="82" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="31166" Duration="41" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="31801" Duration="1235" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="304" EndTime="37207" Duration="0" Pressure="0" Strength="0" Visible="0"/>
+<RespEvent  RespEventID="1101" EndTime="38678" Duration="42" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="39337" Duration="41" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="39820" Duration="42" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="40521" Duration="47" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="1101" EndTime="40746" Duration="41" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="40970" Duration="70" Pressure="0" Strength="76"/>
+<RespEvent  RespEventID="305" EndTime="41087" Duration="3880" Pressure="0" Strength="0" Visible="0"/>
+<RespEvent  RespEventID="161" EndTime="41198" Duration="6595" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="41203" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="42624" Duration="66" Pressure="0" Strength="10"/>
+<RespEvent  RespEventID="112" EndTime="42642" Duration="102" Pressure="0" Strength="45"/>
+<RespEvent  RespEventID="1101" EndTime="43099" Duration="51" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="1111" EndTime="43104" Duration="90" Pressure="0" Strength="49"/>
+<RespEvent  RespEventID="1101" EndTime="43547" Duration="31" Pressure="0" Strength="19"/>
+<RespEvent  RespEventID="262" EndTime="43928" Duration="0" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1262" EndTime="43928" Duration="0" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="43950" Duration="71" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="43952" Duration="74" Pressure="0" Strength="10"/>
+<RespEvent  RespEventID="1101" EndTime="44509" Duration="61" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="1101" EndTime="45101" Duration="72" Pressure="0" Strength="7"/>
+<RespEvent  RespEventID="1111" EndTime="45105" Duration="93" Pressure="0" Strength="18"/>
+<RespEvent  RespEventID="1101" EndTime="45557" Duration="41" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="102" EndTime="45944" Duration="144" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="46349" Duration="46" Pressure="0" Strength="5"/>
+<RespEvent  RespEventID="112" EndTime="46409" Duration="107" Pressure="0" Strength="38"/>
+<RespEvent  RespEventID="1007" EndTime="46479" Duration="1236" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="46654" Duration="41" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="1126" EndTime="47726" Duration="84" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="47959" Duration="108" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="47963" Duration="2" Pressure="0" Strength="10"/>
+<RespEvent  RespEventID="1126" EndTime="48572" Duration="74" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="48932" Duration="1220" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="49029" Duration="78" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="49223" Duration="53" Pressure="0" Strength="5"/>
+<RespEvent  RespEventID="1126" EndTime="49558" Duration="128" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="50165" Duration="1233" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="51103" Duration="73" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="51410" Duration="1245" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="51539" Duration="48" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="1101" EndTime="51876" Duration="43" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="52132" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="52315" Duration="136" Pressure="0" Strength="25"/>
+<RespEvent  RespEventID="1101" EndTime="52571" Duration="38" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="52586" Duration="85" Pressure="0" Strength="29"/>
+<RespEvent  RespEventID="3" EndTime="52641" Duration="1231" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="53038" Duration="47" Pressure="0" Strength="16"/>
+<RespEvent  RespEventID="330" EndTime="53742" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="54888" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="55034" Duration="146" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="55130" Duration="1230" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="55350" Duration="82" Pressure="0" Strength="30"/>
+<RespEvent  RespEventID="112" EndTime="55356" Duration="129" Pressure="0" Strength="50"/>
+<RespEvent  RespEventID="330" EndTime="55640" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="55817" Duration="91" Pressure="0" Strength="43"/>
+<RespEvent  RespEventID="1126" EndTime="56187" Duration="125" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="56340" Duration="1210" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="56454" Duration="41" Pressure="0" Strength="8"/>
+<RespEvent  RespEventID="1101" EndTime="57133" Duration="72" Pressure="0" Strength="31"/>
+<RespEvent  RespEventID="111" EndTime="57155" Duration="197" Pressure="0" Strength="45"/>
+<RespEvent  RespEventID="1008" EndTime="57159" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1" EndTime="57549" Duration="1209" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="101" EndTime="57513" Duration="140" Pressure="0" Strength="7"/>
+<RespEvent  RespEventID="1008" EndTime="57553" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="57688" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="57867" Duration="139" Pressure="0" Strength="12"/>
+<RespEvent  RespEventID="1101" EndTime="58158" Duration="17" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="58571" Duration="35" Pressure="0" Strength="24"/>
+<RespEvent  RespEventID="1111" EndTime="58598" Duration="96" Pressure="0" Strength="33"/>
+<RespEvent  RespEventID="1101" EndTime="58691" Duration="43" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="1" EndTime="58781" Duration="1232" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="101" EndTime="59037" Duration="141" Pressure="0" Strength="11"/>
+<RespEvent  RespEventID="1008" EndTime="59052" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="59332" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="59423" Duration="104" Pressure="0" Strength="9"/>
+<RespEvent  RespEventID="1111" EndTime="59433" Duration="9" Pressure="0" Strength="25"/>
+<RespEvent  RespEventID="1101" EndTime="59793" Duration="78" Pressure="0" Strength="11"/>
+<RespEvent  RespEventID="112" EndTime="59873" Duration="167" Pressure="0" Strength="27"/>
+<RespEvent  RespEventID="1" EndTime="60005" Duration="1224" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="60249" Duration="164" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="60526" Duration="62" Pressure="0" Strength="23"/>
+<RespEvent  RespEventID="1101" EndTime="60630" Duration="69" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="111" EndTime="60650" Duration="201" Pressure="0" Strength="40"/>
+<RespEvent  RespEventID="1008" EndTime="60654" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="61006" Duration="59" Pressure="0" Strength="17"/>
+<RespEvent  RespEventID="112" EndTime="61051" Duration="153" Pressure="0" Strength="30"/>
+<RespEvent  RespEventID="1" EndTime="61231" Duration="1226" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="61279" Duration="87" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="181" EndTime="60975" Duration="1601" Pressure="700" Strength="0"/>
+<RespEvent  RespEventID="112" EndTime="61349" Duration="171" Pressure="0" Strength="48"/>
+<RespEvent  RespEventID="1101" EndTime="62883" Duration="45" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="64016" Duration="41" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="64243" Duration="58" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="64334" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="161" EndTime="64337" Duration="767" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="64656" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="64828" Duration="47" Pressure="0" Strength="9"/>
+<RespEvent  RespEventID="1007" EndTime="64891" Duration="1214" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="64985" Duration="55" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1118" EndTime="65093" Duration="96" Pressure="0" Strength="51"/>
+<RespEvent  RespEventID="330" EndTime="65422" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="65551" Duration="132" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="1111" EndTime="65554" Duration="2" Pressure="0" Strength="46"/>
+<RespEvent  RespEventID="1126" EndTime="65722" Duration="74" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="106" EndTime="65996" Duration="149" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="66123" Duration="1232" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="66123" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="66400" Duration="200" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="330" EndTime="66641" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="106" EndTime="66890" Duration="188" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="330" EndTime="67048" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="67331" Duration="1208" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="67332" Duration="104" Pressure="0" Strength="13"/>
+<RespEvent  RespEventID="1101" EndTime="67898" Duration="51" Pressure="0" Strength="21"/>
+<RespEvent  RespEventID="1111" EndTime="67914" Duration="68" Pressure="0" Strength="45"/>
+<RespEvent  RespEventID="102" EndTime="68174" Duration="104" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="1111" EndTime="68191" Duration="16" Pressure="0" Strength="29"/>
+<RespEvent  RespEventID="1101" EndTime="68424" Duration="47" Pressure="0" Strength="7"/>
+<RespEvent  RespEventID="1111" EndTime="68446" Duration="78" Pressure="0" Strength="37"/>
+<RespEvent  RespEventID="3" EndTime="68560" Duration="1229" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="68723" Duration="22" Pressure="0" Strength="15"/>
+<RespEvent  RespEventID="1111" EndTime="68746" Duration="71" Pressure="0" Strength="49"/>
+<RespEvent  RespEventID="1118" EndTime="68851" Duration="83" Pressure="0" Strength="38"/>
+<RespEvent  RespEventID="1101" EndTime="69174" Duration="34" Pressure="0" Strength="5"/>
+<RespEvent  RespEventID="1101" EndTime="69939" Duration="46" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="1101" EndTime="70217" Duration="40" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="1126" EndTime="70452" Duration="81" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="70732" Duration="107" Pressure="0" Strength="6"/>
+<RespEvent  RespEventID="1111" EndTime="70744" Duration="11" Pressure="0" Strength="30"/>
+<RespEvent  RespEventID="1007" EndTime="71004" Duration="1201" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="72939" Duration="82" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="73302" Duration="42" Pressure="0" Strength="8"/>
+<RespEvent  RespEventID="1007" EndTime="73448" Duration="1227" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="73455" Duration="66" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="111" EndTime="73460" Duration="130" Pressure="0" Strength="45"/>
+<RespEvent  RespEventID="1008" EndTime="73463" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="73887" Duration="92" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="121" EndTime="74600" Duration="80" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1129" EndTime="74600" Duration="80" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1" EndTime="74661" Duration="1213" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="74825" Duration="103" Pressure="0" Strength="7"/>
+<RespEvent  RespEventID="111" EndTime="75420" Duration="235" Pressure="0" Strength="47"/>
+<RespEvent  RespEventID="1008" EndTime="75422" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="75791" Duration="122" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="75797" Duration="4" Pressure="0" Strength="25"/>
+<RespEvent  RespEventID="1" EndTime="75908" Duration="1247" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="76268" Duration="80" Pressure="0" Strength="50"/>
+<RespEvent  RespEventID="330" EndTime="76654" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="76903" Duration="77" Pressure="0" Strength="51"/>
+<RespEvent  RespEventID="1126" EndTime="76966" Duration="88" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="77113" Duration="1205" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="77860" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="78001" Duration="69" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="78004" Duration="72" Pressure="0" Strength="9"/>
+<RespEvent  RespEventID="330" EndTime="78744" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="79411" Duration="49" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="1101" EndTime="79924" Duration="49" Pressure="0" Strength="7"/>
+<RespEvent  RespEventID="1101" EndTime="80364" Duration="41" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="304" EndTime="80606" Duration="0" Pressure="0" Strength="0" Visible="0"/>
+<RespEvent  RespEventID="1101" EndTime="82123" Duration="84" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="82566" Duration="51" Pressure="0" Strength="8"/>
+<RespEvent  RespEventID="1101" EndTime="82701" Duration="41" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="83192" Duration="44" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="83575" Duration="41" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="83852" Duration="42" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="84525" Duration="53" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="305" EndTime="84607" Duration="4001" Pressure="0" Strength="0" Visible="0"/>
+<RespEvent  RespEventID="161" EndTime="84618" Duration="5151" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="84634" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="85117" Duration="41" Pressure="0" Strength="5"/>
+<RespEvent  RespEventID="1101" EndTime="85263" Duration="54" Pressure="0" Strength="25"/>
+<RespEvent  RespEventID="1007" EndTime="85678" Duration="1206" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="85697" Duration="45" Pressure="0" Strength="11"/>
+<RespEvent  RespEventID="1111" EndTime="85711" Duration="83" Pressure="0" Strength="27"/>
+<RespEvent  RespEventID="106" EndTime="85864" Duration="127" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="86191" Duration="54" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="1101" EndTime="87148" Duration="81" Pressure="0" Strength="7"/>
+<RespEvent  RespEventID="112" EndTime="87171" Duration="129" Pressure="0" Strength="16"/>
+<RespEvent  RespEventID="1101" EndTime="87383" Duration="38" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="112" EndTime="87395" Duration="117" Pressure="0" Strength="35"/>
+<RespEvent  RespEventID="1101" EndTime="87692" Duration="52" Pressure="0" Strength="18"/>
+<RespEvent  RespEventID="1111" EndTime="87708" Duration="98" Pressure="0" Strength="28"/>
+<RespEvent  RespEventID="1101" EndTime="87795" Duration="73" Pressure="0" Strength="11"/>
+<RespEvent  RespEventID="111" EndTime="87814" Duration="105" Pressure="0" Strength="44"/>
+<RespEvent  RespEventID="1008" EndTime="87817" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1" EndTime="88116" Duration="1220" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="88223" Duration="60" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="1101" EndTime="88440" Duration="83" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="112" EndTime="88464" Duration="168" Pressure="0" Strength="44"/>
+<RespEvent  RespEventID="1101" EndTime="88993" Duration="42" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="1118" EndTime="89477" Duration="90" Pressure="0" Strength="39"/>
+<RespEvent  RespEventID="1126" EndTime="89729" Duration="108" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="89803" Duration="63" Pressure="0" Strength="6"/>
+<RespEvent  RespEventID="1101" EndTime="90061" Duration="41" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="90243" Duration="43" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="90532" Duration="1210" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="90808" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="91811" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="92138" Duration="47" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="1112" EndTime="92402" Duration="128" Pressure="0" Strength="51"/>
+<RespEvent  RespEventID="1101" EndTime="92450" Duration="42" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="161" EndTime="92890" Duration="121" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="92913" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="93956" Duration="94" Pressure="0" Strength="79"/>
+<RespEvent  RespEventID="1111" EndTime="93963" Duration="96" Pressure="0" Strength="28"/>
+<RespEvent  RespEventID="161" EndTime="94122" Duration="262" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="94140" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="94251" Duration="49" Pressure="0" Strength="11"/>
+<RespEvent  RespEventID="1101" EndTime="94367" Duration="47" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="111" EndTime="94387" Duration="118" Pressure="0" Strength="51"/>
+<RespEvent  RespEventID="1008" EndTime="94391" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="94753" Duration="46" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="95124" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1" EndTime="95453" Duration="1247" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="95832" Duration="22" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="95851" Duration="98" Pressure="0" Strength="49"/>
+<RespEvent  RespEventID="1101" EndTime="96228" Duration="92" Pressure="0" Strength="8"/>
+<RespEvent  RespEventID="304" EndTime="96373" Duration="1" Pressure="0" Strength="0" Visible="0"/>
+<RespEvent  RespEventID="113" EndTime="96385" Duration="253" Pressure="0" Strength="20"/>
+<RespEvent  RespEventID="305" EndTime="96505" Duration="133" Pressure="0" Strength="0" Visible="0"/>
+<RespEvent  RespEventID="330" EndTime="96542" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="161" EndTime="96546" Duration="373" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="96963" Duration="134" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="97417" Duration="41" Pressure="0" Strength="15"/>
+<RespEvent  RespEventID="1101" EndTime="97504" Duration="41" Pressure="0" Strength="16"/>
+<RespEvent  RespEventID="1007" EndTime="97896" Duration="1222" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="97946" Duration="74" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1118" EndTime="98136" Duration="93" Pressure="0" Strength="45"/>
+<RespEvent  RespEventID="1126" EndTime="98342" Duration="99" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="98404" Duration="62" Pressure="0" Strength="45"/>
+<RespEvent  RespEventID="1007" EndTime="99132" Duration="1236" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="113" EndTime="99515" Duration="131" Pressure="0" Strength="50"/>
+<RespEvent  RespEventID="330" EndTime="99683" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="99769" Duration="41" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="304" EndTime="100200" Duration="0" Pressure="0" Strength="0" Visible="0"/>
+<RespEvent  RespEventID="1101" EndTime="100186" Duration="42" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="305" EndTime="100414" Duration="214" Pressure="0" Strength="0" Visible="0"/>
+<RespEvent  RespEventID="330" EndTime="100503" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="161" EndTime="100516" Duration="1142" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="100802" Duration="80" Pressure="0" Strength="16"/>
+<RespEvent  RespEventID="111" EndTime="100817" Duration="121" Pressure="0" Strength="9"/>
+<RespEvent  RespEventID="1008" EndTime="100820" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="101020" Duration="46" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="101021" Duration="93" Pressure="0" Strength="50"/>
+<RespEvent  RespEventID="1126" EndTime="101121" Duration="76" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1" EndTime="101570" Duration="1225" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="102098" Duration="88" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="102800" Duration="1230" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="102949" Duration="40" Pressure="0" Strength="6"/>
+<RespEvent  RespEventID="1118" EndTime="103609" Duration="85" Pressure="0" Strength="46"/>
+<RespEvent  RespEventID="1101" EndTime="103723" Duration="73" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="1111" EndTime="103726" Duration="95" Pressure="0" Strength="29"/>
+<RespEvent  RespEventID="1126" EndTime="103810" Duration="86" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="104024" Duration="1224" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1112" EndTime="104266" Duration="105" Pressure="0" Strength="48"/>
+<RespEvent  RespEventID="1118" EndTime="104540" Duration="93" Pressure="0" Strength="51"/>
+<RespEvent  RespEventID="102" EndTime="104745" Duration="105" Pressure="0" Strength="9"/>
+<RespEvent  RespEventID="1111" EndTime="104754" Duration="8" Pressure="0" Strength="31"/>
+<RespEvent  RespEventID="1007" EndTime="105294" Duration="1269" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="105365" Duration="126" Pressure="0" Strength="10"/>
+<RespEvent  RespEventID="1101" EndTime="105884" Duration="44" Pressure="0" Strength="8"/>
+<RespEvent  RespEventID="1101" EndTime="106323" Duration="58" Pressure="0" Strength="24"/>
+<RespEvent  RespEventID="3" EndTime="106523" Duration="1229" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="106748" Duration="61" Pressure="0" Strength="14"/>
+<RespEvent  RespEventID="1111" EndTime="106766" Duration="90" Pressure="0" Strength="48"/>
+<RespEvent  RespEventID="1126" EndTime="108276" Duration="75" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="108836" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="108847" Duration="72" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="109005" Duration="1268" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="109005" Duration="47" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="109281" Duration="66" Pressure="0" Strength="32"/>
+<RespEvent  RespEventID="1126" EndTime="110050" Duration="106" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="110238" Duration="1233" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="110445" Duration="125" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="330" EndTime="110703" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="106" EndTime="110892" Duration="121" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="110893" Duration="0" Pressure="0" Strength="12"/>
+<RespEvent  RespEventID="1111" EndTime="111198" Duration="72" Pressure="0" Strength="41"/>
+<RespEvent  RespEventID="112" EndTime="111309" Duration="104" Pressure="0" Strength="29"/>
+<RespEvent  RespEventID="1007" EndTime="111465" Duration="1227" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="111633" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="111660" Duration="47" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="112" EndTime="111826" Duration="159" Pressure="0" Strength="46"/>
+<RespEvent  RespEventID="330" EndTime="112156" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="112" EndTime="112285" Duration="114" Pressure="0" Strength="44"/>
+<RespEvent  RespEventID="1111" EndTime="112758" Duration="96" Pressure="0" Strength="50"/>
+<RespEvent  RespEventID="1101" EndTime="112818" Duration="46" Pressure="0" Strength="11"/>
+<RespEvent  RespEventID="1118" EndTime="113192" Duration="87" Pressure="0" Strength="39"/>
+<RespEvent  RespEventID="3" EndTime="113895" Duration="1208" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="181" EndTime="112229" Duration="1843" Pressure="700" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="114461" Duration="43" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="330" EndTime="114881" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="115317" Duration="51" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="115288" Duration="0" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="115461" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="115675" Duration="34" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="112" EndTime="115685" Duration="102" Pressure="0" Strength="45"/>
+<RespEvent  RespEventID="1101" EndTime="115938" Duration="71" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="112" EndTime="115971" Duration="104" Pressure="0" Strength="33"/>
+<RespEvent  RespEventID="1101" EndTime="116318" Duration="69" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="116386" Duration="1237" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="116582" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="116581" Duration="44" Pressure="0" Strength="11"/>
+<RespEvent  RespEventID="121" EndTime="116744" Duration="85" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1129" EndTime="116744" Duration="85" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="2" EndTime="117605" Duration="1219" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="118338" Duration="89" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="111" EndTime="118341" Duration="113" Pressure="0" Strength="15"/>
+<RespEvent  RespEventID="1008" EndTime="118344" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1" EndTime="118808" Duration="1203" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="118995" Duration="54" Pressure="0" Strength="7"/>
+<RespEvent  RespEventID="1101" EndTime="119449" Duration="55" Pressure="0" Strength="9"/>
+<RespEvent  RespEventID="1101" EndTime="119609" Duration="47" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="119786" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="120004" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="121" EndTime="121161" Duration="85" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1129" EndTime="121161" Duration="85" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="2" EndTime="121256" Duration="1218" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="121762" Duration="48" Pressure="0" Strength="12"/>
+<RespEvent  RespEventID="1111" EndTime="121781" Duration="82" Pressure="0" Strength="51"/>
+<RespEvent  RespEventID="1111" EndTime="121858" Duration="73" Pressure="0" Strength="46"/>
+<RespEvent  RespEventID="1101" EndTime="121961" Duration="46" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="1101" EndTime="122044" Duration="48" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="122136" Duration="117" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="122375" Duration="45" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="112" EndTime="122429" Duration="100" Pressure="0" Strength="46"/>
+<RespEvent  RespEventID="1007" EndTime="122474" Duration="1218" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="123139" Duration="73" Pressure="0" Strength="18"/>
+<RespEvent  RespEventID="1101" EndTime="123568" Duration="63" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="112" EndTime="123573" Duration="157" Pressure="0" Strength="50"/>
+<RespEvent  RespEventID="1101" EndTime="123845" Duration="51" Pressure="0" Strength="11"/>
+<RespEvent  RespEventID="3" EndTime="124892" Duration="1211" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="3" EndTime="126111" Duration="1219" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="128264" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="128624" Duration="36" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="1111" EndTime="128637" Duration="74" Pressure="0" Strength="42"/>
+<RespEvent  RespEventID="1126" EndTime="128715" Duration="109" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="129066" Duration="25" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="1111" EndTime="129088" Duration="78" Pressure="0" Strength="47"/>
+<RespEvent  RespEventID="1111" EndTime="129209" Duration="59" Pressure="0" Strength="47"/>
+<RespEvent  RespEventID="330" EndTime="129412" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="129782" Duration="1209" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="102" EndTime="129784" Duration="134" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="130284" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="130865" Duration="41" Pressure="0" Strength="15"/>
+<RespEvent  RespEventID="3" EndTime="131011" Duration="1229" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="131780" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="131888" Duration="59" Pressure="0" Strength="15"/>
+<RespEvent  RespEventID="1101" EndTime="132471" Duration="46" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="134289" Duration="40" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="137317" Duration="61" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="137407" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="161" EndTime="137411" Duration="1242" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="137905" Duration="43" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="304" EndTime="138227" Duration="0" Pressure="0" Strength="0" Visible="0"/>
+<RespEvent  RespEventID="113" EndTime="138279" Duration="141" Pressure="0" Strength="44"/>
+<RespEvent  RespEventID="1007" EndTime="138328" Duration="1234" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="138462" Duration="44" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="139006" Duration="40" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="139513" Duration="41" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="139751" Duration="40" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="262" EndTime="140532" Duration="0" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1262" EndTime="140532" Duration="0" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="141817" Duration="48" Pressure="0" Strength="5"/>
+<RespEvent  RespEventID="1101" EndTime="142051" Duration="42" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="142709" Duration="43" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="142984" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="305" EndTime="142985" Duration="4758" Pressure="0" Strength="0" Visible="0"/>
+<RespEvent  RespEventID="161" EndTime="142986" Duration="4989" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="143770" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="143828" Duration="41" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="111" EndTime="143960" Duration="106" Pressure="0" Strength="37"/>
+<RespEvent  RespEventID="1008" EndTime="143963" Duration="20" Pressure="100" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="144249" Duration="46" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="1" EndTime="144496" Duration="1233" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="144832" Duration="84" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1111" EndTime="145097" Duration="71" Pressure="0" Strength="43"/>
+<RespEvent  RespEventID="330" EndTime="145300" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="145617" Duration="94" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="112" EndTime="145621" Duration="108" Pressure="0" Strength="49"/>
+<RespEvent  RespEventID="1007" EndTime="145716" Duration="1219" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="145893" Duration="91" Pressure="0" Strength="4"/>
+<RespEvent  RespEventID="262" EndTime="145944" Duration="0" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1262" EndTime="145944" Duration="0" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="112" EndTime="145961" Duration="167" Pressure="0" Strength="32"/>
+<RespEvent  RespEventID="1101" EndTime="146281" Duration="52" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="146459" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1118" EndTime="146604" Duration="64" Pressure="0" Strength="50"/>
+<RespEvent  RespEventID="1101" EndTime="146709" Duration="43" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="146778" Duration="34" Pressure="0" Strength="28"/>
+<RespEvent  RespEventID="1111" EndTime="146787" Duration="67" Pressure="0" Strength="43"/>
+<RespEvent  RespEventID="330" EndTime="147277" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="147990" Duration="47" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="113" EndTime="148067" Duration="187" Pressure="0" Strength="42"/>
+<RespEvent  RespEventID="1101" EndTime="148425" Duration="46" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="304" EndTime="148529" Duration="0" Pressure="0" Strength="0" Visible="0"/>
+<RespEvent  RespEventID="1101" EndTime="148675" Duration="56" Pressure="0" Strength="14"/>
+<RespEvent  RespEventID="1101" EndTime="148867" Duration="63" Pressure="0" Strength="16"/>
+<RespEvent  RespEventID="1101" EndTime="149095" Duration="44" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="305" EndTime="149601" Duration="1072" Pressure="0" Strength="0" Visible="0"/>
+<RespEvent  RespEventID="330" EndTime="149614" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="161" EndTime="149622" Duration="1636" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="150265" Duration="45" Pressure="0" Strength="8"/>
+<RespEvent  RespEventID="1101" EndTime="150621" Duration="52" Pressure="0" Strength="6"/>
+<RespEvent  RespEventID="330" EndTime="151747" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="151753" Duration="46" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="1111" EndTime="154316" Duration="83" Pressure="0" Strength="45"/>
+<RespEvent  RespEventID="1126" EndTime="154659" Duration="71" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="154837" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="155322" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="155475" Duration="1209" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="155535" Duration="45" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="156045" Duration="58" Pressure="0" Strength="54"/>
+<RespEvent  RespEventID="1101" EndTime="156901" Duration="66" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="156924" Duration="140" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="157097" Duration="45" Pressure="0" Strength="3"/>
+<RespEvent  RespEventID="1101" EndTime="157335" Duration="43" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="157735" Duration="65" Pressure="0" Strength="19"/>
+<RespEvent  RespEventID="1007" EndTime="157921" Duration="1203" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="158135" Duration="116" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="158161" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="159074" Duration="73" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="159127" Duration="1206" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="159478" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="330" EndTime="159791" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1126" EndTime="160096" Duration="116" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1007" EndTime="160333" Duration="1206" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="106" EndTime="160399" Duration="117" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="330" EndTime="160545" Duration="100" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1101" EndTime="161903" Duration="44" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="102" EndTime="162078" Duration="132" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="1111" EndTime="162083" Duration="4" Pressure="0" Strength="34"/>
+<RespEvent  RespEventID="1007" EndTime="162778" Duration="1211" Pressure="0" Strength="0"/>
+<DeviceEvent  DeviceEventID="1" Time="162944" ParameterID="271" NewValue="2"/>
+<DeviceEvent  DeviceEventID="1" Time="162944" ParameterID="271" NewValue="2"/>
+<RespEvent  RespEventID="1238" EndTime="162944" Duration="10" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="1231" EndTime="162944" Duration="10" Pressure="0" Strength="1"/>
+</desc>

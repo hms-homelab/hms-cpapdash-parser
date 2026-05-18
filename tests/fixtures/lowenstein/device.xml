@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?weinmann version="1.1" type="dde-tpg"?>
+<DeviceID>
+<DeviceType value="27"/>
+<DeviceSerialNumber value="30167534"/>
+<MainboardSerialNumber value="220106786"/>
+<BlowerIndex value="0"/>
+<FWVersion value="5.05"/>
+<FWRevision value="0022"/>
+<FWBuild value="2022-0118-1647-Eyra"/>
+<FWGITHASH value="cd37170"/>
+<KernelGITHASH value="c662cf81e54dc1abbb06b8f7ff79f3d69c6cf532"/>
+<BuildrootGITHASH value="78a3ff9b40a59def49e09e369495250d40c82589"/>
+<PMVersion value="2.17.8"/>
+<StatisticVersion value="2.4.1"/>
+<NotificationVersion value="00.00.01"/>
+<LoggerVersion value="00.01.02"/>
+<MCVersion value="cd371705.1.0"/>
+<MainboardHWVersion value="11"/>
+<DisplayHWVersion value="24"/>
+<DeviceVariant value="0"/>
+<DeviceBranding value="2"/>
+</DeviceID>

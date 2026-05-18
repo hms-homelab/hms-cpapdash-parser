@@ -116,6 +116,16 @@ std::unique_ptr<ISessionParser> createParser(const std::string& data_dir) {
 #endif
     }
 
+    // Lowenstein Prisma: look for event_*.xml + signal_*.wmedf
+    if (hasFileWithExtension(data_dir, ".wmedf") &&
+        hasFileWithExtension(data_dir, ".xml")) {
+#ifdef CPAPDASH_WITH_LOWENSTEIN
+        return createParser(DeviceManufacturer::LOWENSTEIN);
+#else
+        return nullptr;
+#endif
+    }
+
     // ResMed: look for .edf files or DATALOG/ directory
     if (hasSubdirCaseInsensitive(data_dir, "DATALOG") ||
         hasFileWithExtension(data_dir, ".edf")) {
@@ -136,6 +146,14 @@ std::unique_ptr<ISessionParser> createParser(DeviceManufacturer manufacturer) {
             // Forward declaration resolved at link time
             extern std::unique_ptr<ISessionParser> createPhilipsParser();
             return createPhilipsParser();
+#else
+            return nullptr;
+#endif
+
+        case DeviceManufacturer::LOWENSTEIN:
+#ifdef CPAPDASH_WITH_LOWENSTEIN
+            extern std::unique_ptr<ISessionParser> createLowensteinParser();
+            return createLowensteinParser();
 #else
             return nullptr;
 #endif

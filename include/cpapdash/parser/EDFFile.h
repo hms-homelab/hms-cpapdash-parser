@@ -19,6 +19,8 @@ struct EDFSignal {
     int dig_min = 0;
     int dig_max = 0;
     int samples_per_record = 0;
+    std::string reserved;
+    int bytes_per_sample = 2;  // 2 = standard EDF (16-bit), 1 = WMEDF (8-bit)
     // Computed scaling: physical = digital * scale + offset
     double scale = 1.0;
     double offset = 0.0;

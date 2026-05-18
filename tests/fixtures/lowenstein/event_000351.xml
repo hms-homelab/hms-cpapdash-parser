@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<desc>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1003" NewValue="2"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1001" NewValue="20170008"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1002" NewValue="27"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1092" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1084" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1083" NewValue="3"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1202" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1203" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1199" NewValue="1000"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1128" NewValue="15"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1212" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1003" NewValue="2"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1123" NewValue="3"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1127" NewValue="15"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1125" NewValue="400"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1213" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1085" NewValue="1200"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1200" NewValue="600"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1201" NewValue="600"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1160" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1162" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1154" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1158" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1138" NewValue="600"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1139" NewValue="1000"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1140" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1141" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1086" NewValue="30"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1157" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1156" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1091" NewValue="22"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1011" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1012" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1014" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1015" NewValue="3"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1016" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1017" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1020" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1208" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1207" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1206" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1150" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1209" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1214" NewValue="500"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1215" NewValue="4000"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1220" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1219" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1217" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1218" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1216" NewValue="0"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1223" NewValue="10"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1224" NewValue="0"/>
+<DeviceEvent  DeviceEventID="1" Time="0" ParameterID="257" NewValue="0"/>
+<DeviceEvent  DeviceEventID="1" Time="0" ParameterID="271" NewValue="0"/>
+<RespEvent  RespEventID="1238" EndTime="1" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="1232" EndTime="1" Duration="10" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1230" EndTime="1" Duration="10" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1237" EndTime="11" Duration="10" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1234" EndTime="10" Duration="10" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="161" EndTime="152" Duration="91" Pressure="0" Strength="0"/>
+<DeviceEvent  DeviceEventID="1" Time="169" ParameterID="271" NewValue="0"/>
+<RespEvent  RespEventID="231" EndTime="170" Duration="169" Pressure="0" Strength="0"/>
+<RespEvent  RespEventID="1238" EndTime="170" Duration="10" Pressure="0" Strength="1"/>
+<RespEvent  RespEventID="1231" EndTime="170" Duration="10" Pressure="0" Strength="1"/>
+</desc>

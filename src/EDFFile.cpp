@@ -131,7 +131,16 @@ bool EDFFile::parseHeader(const char* raw, long long file_size) {
         signals[i].samples_per_record = std::atoi(std::string(sig_hdr + pos, 8).c_str());
         pos += 8;
     }
-    // reserved (32 x ns) -- skip
+    // reserved (32 x ns) -- WMEDF uses this to encode bit depth per signal
+    for (int i = 0; i < num_signals; ++i) {
+        signals[i].reserved = trimField(sig_hdr + pos, 32);
+        if (signals[i].reserved.find("#1") != std::string::npos) {
+            signals[i].bytes_per_sample = 1;
+        } else {
+            signals[i].bytes_per_sample = 2;
+        }
+        pos += 32;
+    }
 
     // Compute scaling for each signal
     // physical = (digital - dig_min) * scale + phys_min
@@ -144,10 +153,10 @@ bool EDFFile::parseHeader(const char* raw, long long file_size) {
         }
     }
 
-    // Compute record size in bytes (each sample = 2 bytes for EDF)
+    // Compute record size in bytes (2 bytes for standard EDF, 1 byte for WMEDF 8-bit)
     record_size_bytes = 0;
     for (auto& sig : signals) {
-        record_size_bytes += sig.samples_per_record * 2;
+        record_size_bytes += sig.samples_per_record * sig.bytes_per_sample;
     }
 
     // How many complete data records are actually in the data?
@@ -251,25 +260,40 @@ int EDFFile::readSignal(int signal_idx, std::vector<double>& out) {
     // Compute byte offset of this signal within each data record
     int sig_offset_in_record = 0;
     for (int i = 0; i < signal_idx; ++i) {
-        sig_offset_in_record += signals[i].samples_per_record * 2;
+        sig_offset_in_record += signals[i].samples_per_record * signals[i].bytes_per_sample;
     }
 
     int sample_out = 0;
-    std::vector<int16_t> raw(sig.samples_per_record);
+    size_t read_size = sig.samples_per_record * sig.bytes_per_sample;
+    std::vector<char> raw_bytes(read_size);
 
     for (int rec = 0; rec < actual_records; ++rec) {
         long long record_start = header_bytes + (long long)rec * record_size_bytes;
         long long read_offset = record_start + sig_offset_in_record;
-        size_t read_size = sig.samples_per_record * 2;
 
-        if (!readBytes(read_offset, reinterpret_cast<char*>(raw.data()), read_size)) {
-            // Incomplete record -- stop here
+        if (!readBytes(read_offset, raw_bytes.data(), read_size)) {
             out.resize(sample_out);
             return sample_out;
         }
 
-        for (int s = 0; s < sig.samples_per_record; ++s) {
-            out[sample_out++] = raw[s] * sig.scale + sig.offset;
+        if (sig.bytes_per_sample == 1) {
+            // WMEDF 8-bit: signed or unsigned based on digital range
+            if (sig.dig_min >= 0) {
+                auto* u8 = reinterpret_cast<const uint8_t*>(raw_bytes.data());
+                for (int s = 0; s < sig.samples_per_record; ++s) {
+                    out[sample_out++] = u8[s] * sig.scale + sig.offset;
+                }
+            } else {
+                auto* s8 = reinterpret_cast<const int8_t*>(raw_bytes.data());
+                for (int s = 0; s < sig.samples_per_record; ++s) {
+                    out[sample_out++] = s8[s] * sig.scale + sig.offset;
+                }
+            }
+        } else {
+            auto* s16 = reinterpret_cast<const int16_t*>(raw_bytes.data());
+            for (int s = 0; s < sig.samples_per_record; ++s) {
+                out[sample_out++] = s16[s] * sig.scale + sig.offset;
+            }
         }
     }
 
@@ -290,12 +314,12 @@ std::vector<EDFAnnotation> EDFFile::readAnnotations() {
     if (annot_idx < 0) return annotations;
 
     const auto& sig = signals[annot_idx];
-    int annot_bytes_per_record = sig.samples_per_record * 2;
+    int annot_bytes_per_record = sig.samples_per_record * sig.bytes_per_sample;
 
     // Compute byte offset of annotation signal in each record
     int sig_offset = 0;
     for (int i = 0; i < annot_idx; ++i) {
-        sig_offset += signals[i].samples_per_record * 2;
+        sig_offset += signals[i].samples_per_record * signals[i].bytes_per_sample;
     }
 
     std::vector<char> buf(annot_bytes_per_record);
