@@ -1,6 +1,7 @@
 # hms-cpapdash-parser
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-%23FFDD00.svg?logo=buy-me-a-coffee)](https://www.buymeacoffee.com/aamat09)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 Shared C++ library for parsing CPAP therapy data into a unified, OSCAR-compatible session model. It is the single source of truth for parsing across the CpapDash stack — consumed by both [hms-cpap](https://github.com/hms-homelab/hms-cpap) (Home Assistant data collection) and the [CpapDash](https://www.cpapdash.com/opensource) apps, so a fix in one place benefits both.
 
