@@ -7,7 +7,7 @@
 
 ## Problem
 
-A user asked for OSCAR-style charts: apnea-event overlays on the flow trace, SpO2 desaturation plots, and breath-level detail (Flow Limitation, Snore, breath-by-breath). Auditing the stack against OSCAR surfaced three gaps. All three are fundamentally **data-layer** gaps, and this library is the single source of truth that every downstream consumer parses with. Fixing them here means each consumer inherits the capability instead of divergent re-implementations.
+A user asked for advanced clinical charts: apnea-event overlays on the flow trace, SpO2 desaturation plots, and breath-level detail (Flow Limitation, Snore, breath-by-breath). Auditing the stack against established CPAP tools surfaced three gaps. All three are fundamentally **data-layer** gaps, and this library is the single source of truth that every downstream consumer parses with. Fixing them here means each consumer inherits the capability instead of divergent re-implementations.
 
 Current state in this library:
 
@@ -23,7 +23,7 @@ Three additive changes to the unified output model in `Models.h`. All are opt-in
 
 No structural change. We **document and test** the invariant that `SleepEvent.duration_seconds` is the machine-reported event length in seconds (0 when the manufacturer omits it), and that `timestamp` is the event *onset* (already true: `EDFParser_EVE.cpp:48-52` uses `start_time + onset_sec`). Consumers compute the span as `[timestamp, timestamp + duration_seconds]`.
 
-> Note on convention: OSCAR stores `time(i)` as the event *end* and `data(i)` as duration. We deliberately diverge — `timestamp` is the **onset**. Consumers must not copy OSCAR's "subtract duration" math.
+> Note on convention: some loaders store `time(i)` as the event *end* and `data(i)` as duration. We deliberately use `timestamp` as the **onset**. Consumers must not copy a "subtract duration" convention.
 
 ### F2 — Desaturation events from machine SpO2
 
@@ -38,7 +38,7 @@ struct DesatParams {
     double drop_pct      = 3.0;    // % below rolling baseline to open an event
     double recover_pct   = 1.0;    // % below baseline to close an event
     double baseline_secs = 120.0;  // rolling baseline window (max SpO2 in window)
-    double min_secs      = 8.0;    // minimum sustained duration to record (OSCAR uses 8s)
+    double min_secs      = 8.0;    // minimum sustained duration to record (8s is a common clinical minimum)
 };
 
 struct DesatEvent {
@@ -115,8 +115,8 @@ Storage cost is modest — a night is ~7–9k breaths (≈4 doubles + a timestam
 
 ## Open questions
 
-- Default `drop_pct`: 3% (AASM 2012 / OSCAR-VLD default) vs 4% (CMS). Shipping 3% to match the existing VLD behavior; expose `DesatParams` so a consumer can switch.
-- Should `flow_limitation` per breath be smoothed (OSCAR applies a moving average)? Deferred — ship raw per-breath value, smooth in the UI if noisy.
+- Default `drop_pct`: 3% (AASM 2012 default) vs 4% (CMS). Shipping 3% to match the existing VLD behavior; expose `DesatParams` so a consumer can switch.
+- Should `flow_limitation` per breath be smoothed (some tools apply a moving average)? Deferred — ship raw per-breath value, smooth in the UI if noisy.
 
 ## Migration
 

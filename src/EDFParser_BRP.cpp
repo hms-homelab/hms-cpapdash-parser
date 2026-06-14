@@ -86,7 +86,7 @@ bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
             summary.min_pressure = *std::min_element(p_begin, p_end);
         }
 
-        // Calculate OSCAR-style respiratory metrics (RR, TV, MV, Ti/Te, I:E, FL, percentiles)
+        // Calculate calculated respiratory metrics (RR, TV, MV, Ti/Te, I:E, FL, percentiles)
         calculateRespiratoryMetrics(flow_data, press_data, sample_rate, min, summary);
 
         session.breathing_summary.push_back(summary);
@@ -171,7 +171,7 @@ void EDFParser::detectFlowBasedSessionBoundaries(
 }
 
 // ============================================================================
-//  Respiratory Metrics Calculation (OSCAR-style)
+//  Respiratory Metrics Calculation (calculated)
 // ============================================================================
 
 double EDFParser::calculatePercentile(

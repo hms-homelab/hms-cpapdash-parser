@@ -81,7 +81,7 @@ struct DesatEvent {
 
 /**
  * BreathingSummary - Summary statistics for breathing waveforms (from BRP.edf)
- * Includes OSCAR-style calculated metrics
+ * Includes calculated respiratory metrics
  */
 struct BreathingSummary {
     std::chrono::system_clock::time_point timestamp;
@@ -94,7 +94,7 @@ struct BreathingSummary {
     double max_pressure = 0;
     double min_pressure = 0;
 
-    // Calculated respiratory metrics (OSCAR-style)
+    // Calculated respiratory metrics
     std::optional<double> respiratory_rate;      // Breaths per minute
     std::optional<double> tidal_volume;          // mL per breath (avg)
     std::optional<double> minute_ventilation;    // L/min (RR x TV)
@@ -125,7 +125,7 @@ struct BreathingSummary {
  * Breath - A single detected breath cycle (from BRP flow, zero-crossing).
  *
  * The per-minute BreathingSummary aggregates these; this is the breath-level
- * detail OSCAR exposes for breath-by-breath inspection. Populated only when
+ * per-breath detail for breath-by-breath inspection. Populated only when
  * raw flow is available; empty for summary-only sessions.
  */
 struct Breath {
@@ -137,7 +137,7 @@ struct Breath {
 };
 
 /**
- * SessionMetrics - Aggregated metrics for a CPAP session (OSCAR-compatible)
+ * SessionMetrics - Aggregated metrics for a CPAP session (standards-based)
  */
 struct SessionMetrics {
     // ===== EVENT METRICS =====
