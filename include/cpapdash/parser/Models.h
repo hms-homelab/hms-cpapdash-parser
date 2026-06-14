@@ -32,7 +32,6 @@ enum class EventType {
 enum class DeviceManufacturer {
     UNKNOWN,
     RESMED,
-    PHILIPS,
     LOWENSTEIN
 };
 
@@ -226,7 +225,7 @@ struct DeviceSettings {
     std::optional<double> max_pressure;     // cmH2O (Auto range)
     std::optional<double> ipap;             // cmH2O (BiPAP/ASV)
     std::optional<double> epap;             // cmH2O (BiPAP/ASV)
-    std::optional<int> flex_mode;           // Philips: 0=Off, 1=Flex, 2=AFlex, 3=Rise, 4=BiFlex
+    std::optional<int> flex_mode;           // Exhalation-relief mode: 0=Off, 1=Flex, 2=AFlex, 3=Rise, 4=BiFlex
     std::optional<int> flex_level;          // 1-3
     std::optional<int> ramp_time;           // minutes
     std::optional<double> ramp_pressure;    // cmH2O

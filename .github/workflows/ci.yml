@@ -42,7 +42,6 @@ jobs:
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCPAPDASH_PARSER_WITH_LOWENSTEIN=ON \
-            -DCPAPDASH_PARSER_WITH_PHILIPS=ON \
             -DCPAPDASH_PARSER_BUILD_TESTS=ON
 
       - name: Build

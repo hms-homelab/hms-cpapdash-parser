@@ -49,7 +49,6 @@ bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
     }
 
     // ResMed stores flow in L/sec - convert to L/min (multiply by 60)
-    // Reference: OSCAR resmed_loader.cpp line 3121
     for (double& val : flow_data) {
         val *= 60.0;
     }

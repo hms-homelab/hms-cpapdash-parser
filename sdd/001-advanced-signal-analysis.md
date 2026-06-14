@@ -93,7 +93,7 @@ struct Breath {
     double expiratory_time;   // s
     double flow_limitation;   // 0..1
 };
-std::vector<Breath> breaths;   // empty unless raw flow was available (BRP / Prisma / Philips)
+std::vector<Breath> breaths;   // empty unless raw flow was available (BRP / Prisma)
 ```
 
 `detectBreaths()` returns sample-index-based `BreathCycle`s per minute. We map indices → absolute time using the BRP record start + `sample_rate`, and append to `session.breaths`. This is done once over the full flow series (not per-minute) to avoid double-counting breaths straddling a minute boundary.
@@ -122,5 +122,5 @@ Storage cost is modest — a night is ~7–9k breaths (≈4 doubles + a timestam
 
 1. Add `EventType::DESATURATION` + `Breath`/`DesatEvent` structs + `breaths`/`odi` fields (additive).
 2. Add `DesatDetector.{h,cpp}` + CMake entry; refactor VLD to use it.
-3. Append breaths in the BRP assembly path; mirror for Prisma/Philips where raw flow exists.
+3. Append breaths in the BRP assembly path; mirror for Prisma where raw flow exists.
 4. Tests green (`ctest`), tag a minor release. Consumers pick it up via FetchContent on next build.
