@@ -14,6 +14,7 @@ add_library(cpapdash_parser STATIC
     src/EDFParser_STR.cpp
     src/ISessionParser.cpp
     src/Models.cpp
+    src/DesatDetector.cpp
     src/VLDParser.cpp
 )
 
@@ -68,6 +69,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         tests/test_models.cpp
         tests/test_philips.cpp
         tests/test_vld_parser.cpp
+        tests/test_desat_detector.cpp
     )
     if(CPAPDASH_PARSER_WITH_LOWENSTEIN)
         list(APPEND TEST_SOURCES tests/test_prisma.cpp)

@@ -93,6 +93,26 @@ bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
         session.breathing_summary.push_back(summary);
     }
 
+    // Persist breath-by-breath detail: run zero-crossing detection once over
+    // the full flow series (not per-minute, to avoid double-counting breaths
+    // that straddle a minute boundary) and map sample indices to absolute time.
+    // Base on session_start so breaths line up with the per-minute summaries.
+    {
+        auto breath_base = session.session_start.value();
+        auto breaths = detectBreaths(flow_data, sample_rate);
+        session.breaths.reserve(breaths.size());
+        for (const auto& b : breaths) {
+            Breath out;
+            out.onset = breath_base + std::chrono::microseconds(
+                static_cast<long long>(b.start_idx / sample_rate * 1e6));
+            out.tidal_volume = b.tidal_volume;
+            out.inspiratory_time = b.inspiratory_time;
+            out.expiratory_time = b.expiratory_time;
+            out.flow_limitation = b.flow_limitation;
+            session.breaths.push_back(out);
+        }
+    }
+
     // Detect flow-based session boundaries (actual mask on/off times)
     std::optional<std::chrono::system_clock::time_point> actual_start, actual_end;
     bool session_active = false;

@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **DesatDetector** — SpO2 desaturation detection from a time-ordered vitals
+  series (`detectDesaturations`), generalizing the O2Ring/VLD ODI rule to the
+  SAD/machine-SpO2 path: rolling 120 s baseline, 3% drop, 1% recovery, 8 s
+  minimum. Returns `DesatEvent{onset, duration, nadir, depth}`.
+- **`ParsedSession::desaturations`** — detected desats, kept separate from
+  `events` so they never inflate `total_events`/AHI.
+- **`ParsedSession::breaths`** — breath-by-breath detail (`Breath{onset, tidal
+  volume, Ti, Te, flow limitation}`) persisted from the existing BRP
+  zero-crossing detection (previously computed per-minute then discarded).
+- **`SessionMetrics::odi`** — Oxygen Desaturation Index (desats/hour).
+- **`EventType::DESATURATION`** + `eventTypeToString` entry.
+
+### Changed
+- `calculateMetrics()` now populates `spo2_drops`/`odi` from the rolling-baseline
+  `DesatDetector` instead of the previous naive consecutive-sample 4% diff.
+
 ## [2026.1.0] - 2026-04-02
 
 ### Added

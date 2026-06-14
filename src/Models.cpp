@@ -1,4 +1,5 @@
 #include "cpapdash/parser/Models.h"
+#include "cpapdash/parser/DesatDetector.h"
 #include <numeric>
 #include <algorithm>
 #include <sstream>
@@ -20,6 +21,7 @@ std::string eventTypeToString(EventType type) {
         case EventType::PERIODIC_BREATHING: return "Periodic Breathing";
         case EventType::LARGE_LEAK: return "Large Leak";
         case EventType::VIBRATORY_SNORE: return "Vibratory Snore";
+        case EventType::DESATURATION: return "Desaturation";
         default: return "Unknown";
     }
 }
@@ -274,14 +276,18 @@ void ParsedSession::calculateMetrics() {
             metrics->spo2_p95 = calculatePercentileHelper(spo2_values, 95.0);
             metrics->spo2_p50 = calculatePercentileHelper(spo2_values, 50.0);
 
-            // Count desaturations (drops >= 4% from baseline)
-            int drops = 0;
-            for (size_t i = 1; i < spo2_values.size(); ++i) {
-                if (spo2_values[i-1] - spo2_values[i] >= 4.0) {
-                    drops++;
-                }
-            }
-            metrics->spo2_drops = drops;
+            // Desaturation events via rolling-baseline detector (OSCAR-style),
+            // replacing the old naive consecutive-sample diff. Kept out of
+            // `events` so AHI/total_events are unaffected.
+            desaturations = detectDesaturations(vitals);
+            metrics->spo2_drops = static_cast<int>(desaturations.size());
+
+            // ODI = desaturations per hour. Prefer therapy hours; fall back to
+            // the SpO2 sample span (vitals are 1 Hz on the SAD path).
+            double odi_hours = metrics->usage_hours.value_or(0.0);
+            if (odi_hours <= 0.0) odi_hours = spo2_values.size() / 3600.0;
+            if (odi_hours > 0.0)
+                metrics->odi = desaturations.size() / odi_hours;
         }
 
         // Heart rate statistics

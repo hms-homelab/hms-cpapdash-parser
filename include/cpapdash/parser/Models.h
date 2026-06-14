@@ -22,7 +22,8 @@ enum class EventType {
     FLOW_LIMITATION,
     PERIODIC_BREATHING,
     LARGE_LEAK,
-    VIBRATORY_SNORE
+    VIBRATORY_SNORE,
+    DESATURATION   // SpO2 desaturation (detected from vitals, NOT counted toward AHI)
 };
 
 /**
@@ -65,6 +66,21 @@ struct VitalSample {
 };
 
 /**
+ * DesatEvent - SpO2 desaturation event detected from vitals.
+ *
+ * Kept separate from SleepEvent so it never inflates total_events / AHI.
+ * Consumers may surface these alongside respiratory events (e.g. an
+ * "events" table row with type "Desaturation"), but the parser keeps the
+ * AHI math clean by detecting them independently.
+ */
+struct DesatEvent {
+    std::chrono::system_clock::time_point onset;  // start of the drop
+    double duration_seconds = 0;                  // onset -> recovery
+    double nadir = 0;                             // lowest SpO2 reached (%)
+    double depth = 0;                             // baseline_at_open - nadir (%)
+};
+
+/**
  * BreathingSummary - Summary statistics for breathing waveforms (from BRP.edf)
  * Includes OSCAR-style calculated metrics
  */
@@ -104,6 +120,21 @@ struct BreathingSummary {
         : timestamp(ts),
           avg_flow_rate(0), max_flow_rate(0), min_flow_rate(0),
           avg_pressure(0), max_pressure(0), min_pressure(0) {}
+};
+
+/**
+ * Breath - A single detected breath cycle (from BRP flow, zero-crossing).
+ *
+ * The per-minute BreathingSummary aggregates these; this is the breath-level
+ * detail OSCAR exposes for breath-by-breath inspection. Populated only when
+ * raw flow is available; empty for summary-only sessions.
+ */
+struct Breath {
+    std::chrono::system_clock::time_point onset;  // inspiration start (absolute)
+    double tidal_volume = 0;      // mL
+    double inspiratory_time = 0;  // s
+    double expiratory_time = 0;   // s
+    double flow_limitation = 0;   // 0..1
 };
 
 /**
@@ -168,6 +199,7 @@ struct SessionMetrics {
     std::optional<double> spo2_p95;               // 95th percentile %
     std::optional<double> spo2_p50;               // Median %
     std::optional<int> spo2_drops;                // Count of desaturations
+    std::optional<double> odi;                    // Oxygen Desaturation Index (desats/hour)
 
     // ===== HEART RATE METRICS =====
     std::optional<int> avg_heart_rate;            // bpm
@@ -251,6 +283,8 @@ struct ParsedSession {
     std::vector<SleepEvent> events;
     std::vector<VitalSample> vitals;
     std::vector<BreathingSummary> breathing_summary;
+    std::vector<DesatEvent> desaturations;  // SpO2 desats (kept out of events/AHI)
+    std::vector<Breath> breaths;            // breath-by-breath detail (empty if no raw flow)
 
     // Aggregated metrics
     std::optional<SessionMetrics> metrics;
