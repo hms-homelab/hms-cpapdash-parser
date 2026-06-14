@@ -30,22 +30,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VER
     target_link_libraries(cpapdash_parser PUBLIC c++fs)
 endif()
 
-# Philips DreamStation 2 parser (optional, requires OpenSSL for AES-256-GCM decryption)
-option(CPAPDASH_PARSER_WITH_PHILIPS "Build Philips DreamStation parser (requires OpenSSL)" OFF)
-
-if(CPAPDASH_PARSER_WITH_PHILIPS)
-    find_package(OpenSSL REQUIRED)
-    target_sources(cpapdash_parser PRIVATE
-        src/PhilipsCrypto.cpp
-        src/PhilipsChunk.cpp
-        src/PhilipsParser.cpp
-        src/PhilipsParser_Summary.cpp
-        src/PhilipsParser_Events.cpp
-    )
-    target_link_libraries(cpapdash_parser PUBLIC OpenSSL::Crypto)
-    target_compile_definitions(cpapdash_parser PUBLIC CPAPDASH_WITH_PHILIPS=1)
-endif()
-
 # Lowenstein Prisma parser (optional, no extra dependencies)
 option(CPAPDASH_PARSER_WITH_LOWENSTEIN "Build Lowenstein Prisma parser" OFF)
 
@@ -67,7 +51,6 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
     set(TEST_SOURCES
         tests/test_edf_file.cpp
         tests/test_models.cpp
-        tests/test_philips.cpp
         tests/test_vld_parser.cpp
         tests/test_desat_detector.cpp
     )

@@ -15,8 +15,8 @@ namespace cpapdash::parser {
  * ISessionParser - Abstract interface for CPAP session parsing.
  *
  * Implementations:
- *   ResMedParser  - wraps EDFParser (EDF+ files from ResMed AirSense 10/11)
- *   PhilipsParser - PRS1 binary files from Philips DreamStation 2 (requires CPAPDASH_WITH_PHILIPS)
+ *   ResMedParser     - wraps EDFParser (EDF+ files from ResMed AirSense 10/11)
+ *   LowensteinParser - Prisma Smart/Line (WMEDF signals + XML events; requires CPAPDASH_WITH_LOWENSTEIN)
  */
 class ISessionParser {
 public:
@@ -62,7 +62,7 @@ public:
  * Create a parser by auto-detecting the device type from directory contents.
  *
  * Detection:
- *   - P-SERIES/ folder -> Philips (returns PhilipsParser if CPAPDASH_WITH_PHILIPS, else nullptr)
+ *   - .wmedf + .xml files -> Lowenstein Prisma (if CPAPDASH_WITH_LOWENSTEIN, else nullptr)
  *   - .edf files or DATALOG/ -> ResMed
  *
  * @param data_dir  Root of SD card or data directory

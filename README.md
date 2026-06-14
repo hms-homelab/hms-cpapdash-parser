@@ -11,7 +11,7 @@ Shared C++ library for parsing CPAP therapy data into a unified, OSCAR-compatibl
 - Parse from disk **or** from in-memory buffers (no temp files needed)
 - Auto-detect the manufacturer from a session directory
 - Unified output model: events, vitals, breathing summaries, settings, and derived metrics (AHI, etc.)
-- Minimal dependencies — header + static lib, C++17, filesystem only (OpenSSL only if the Philips parser is enabled)
+- Minimal dependencies — header + static lib, C++17, filesystem only
 
 ## Supported Formats
 
@@ -19,7 +19,6 @@ Shared C++ library for parsing CPAP therapy data into a unified, OSCAR-compatibl
 |--------------|---------|-------|------------|
 | ResMed | AirSense 10 / 11 | EDF+ (`BRP`, `PLD`, `SAD`, `EVE`, `STR`) | on by default |
 | Lowenstein | Prisma | WMEDF + event XML (`VLD`) | `CPAPDASH_PARSER_WITH_LOWENSTEIN` |
-| Philips | DreamStation 2 | PRS1 binary | `CPAPDASH_PARSER_WITH_PHILIPS` (needs OpenSSL) |
 
 ## Quick Start
 
@@ -30,7 +29,7 @@ Shared C++ library for parsing CPAP therapy data into a unified, OSCAR-compatibl
 using namespace cpapdash::parser;
 
 int main() {
-    // Auto-detects ResMed / Lowenstein / Philips from the directory contents
+    // Auto-detects ResMed / Lowenstein from the directory contents
     auto parser = createParser("/path/to/session_dir");
     if (!parser) return 1;
 
@@ -62,13 +61,11 @@ make -j$(nproc)
 | Option | Default | Description |
 |--------|---------|-------------|
 | `CPAPDASH_PARSER_WITH_LOWENSTEIN` | OFF | Build the Lowenstein Prisma parser |
-| `CPAPDASH_PARSER_WITH_PHILIPS` | OFF | Build the Philips DreamStation parser (requires OpenSSL) |
 | `CPAPDASH_PARSER_BUILD_TESTS` | OFF | Build unit tests (requires GTest) |
 
 ### Dependencies
 
 - C++17 compiler (uses `<filesystem>`)
-- OpenSSL (libssl-dev) — only when `CPAPDASH_PARSER_WITH_PHILIPS=ON`
 - GTest (libgtest-dev) — tests only
 
 ## Use as a Shared Library
@@ -90,7 +87,6 @@ FetchContent_MakeAvailable(cpapdash_parser)
 
 # Optional manufacturer parsers:
 # set(CPAPDASH_PARSER_WITH_LOWENSTEIN ON CACHE BOOL "" FORCE)
-# set(CPAPDASH_PARSER_WITH_PHILIPS ON CACHE BOOL "" FORCE)
 
 target_link_libraries(your_target PRIVATE cpapdash_parser)
 ```

@@ -107,15 +107,6 @@ public:
 // ── Factory functions ────────────────────────────────────────────────────────
 
 std::unique_ptr<ISessionParser> createParser(const std::string& data_dir) {
-    // Philips: look for P-SERIES/ directory (case-insensitive)
-    if (hasSubdirCaseInsensitive(data_dir, "P-SERIES")) {
-#ifdef CPAPDASH_WITH_PHILIPS
-        return createParser(DeviceManufacturer::PHILIPS);
-#else
-        return nullptr;  // Philips support not compiled in
-#endif
-    }
-
     // Lowenstein Prisma: look for event_*.xml + signal_*.wmedf
     if (hasFileWithExtension(data_dir, ".wmedf") &&
         hasFileWithExtension(data_dir, ".xml")) {
@@ -139,16 +130,6 @@ std::unique_ptr<ISessionParser> createParser(DeviceManufacturer manufacturer) {
     switch (manufacturer) {
         case DeviceManufacturer::RESMED:
             return std::make_unique<ResMedParser>();
-
-        case DeviceManufacturer::PHILIPS:
-#ifdef CPAPDASH_WITH_PHILIPS
-            // Will be implemented in PhilipsParser.cpp
-            // Forward declaration resolved at link time
-            extern std::unique_ptr<ISessionParser> createPhilipsParser();
-            return createPhilipsParser();
-#else
-            return nullptr;
-#endif
 
         case DeviceManufacturer::LOWENSTEIN:
 #ifdef CPAPDASH_WITH_LOWENSTEIN
