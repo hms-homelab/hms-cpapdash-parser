@@ -199,26 +199,29 @@ TEST(ModelsTest, CalculateMetricsWithVitals) {
 
 TEST(ModelsTest, CalculateMetricsWithDesaturationDrop) {
     ParsedSession session;
-    session.duration_seconds = 10;
+    session.duration_seconds = 90;
 
     auto now = std::chrono::system_clock::now();
 
-    // Simulate a desaturation: 97, 97, 92 (drop of 5%)
-    session.vitals.push_back(VitalSample(now));
-    session.vitals.back().spo2 = 97.0;
-    session.vitals.push_back(VitalSample(now + std::chrono::seconds(1)));
-    session.vitals.back().spo2 = 97.0;
-    session.vitals.push_back(VitalSample(now + std::chrono::seconds(2)));
-    session.vitals.back().spo2 = 92.0;  // 5% drop from previous
-    session.vitals.push_back(VitalSample(now + std::chrono::seconds(3)));
-    session.vitals.back().spo2 = 96.0;
+    // Sustained desaturation: 30s baseline at 97, then a 5% drop to 92 held
+    // for 12s (>= the 8s minimum), then recovery. The rolling-baseline detector
+    // (DesatDetector) reports exactly one event. (A single-sample blip, as the
+    // old naive diff counted, is correctly ignored now.)
+    auto push = [&](int sec, double spo2) {
+        VitalSample v(now + std::chrono::seconds(sec));
+        v.spo2 = spo2;
+        session.vitals.push_back(v);
+    };
+    for (int s = 0; s < 30; ++s) push(s, 97.0);
+    for (int s = 30; s < 42; ++s) push(s, 92.0);
+    for (int s = 42; s < 72; ++s) push(s, 97.0);
 
     session.calculateMetrics();
     ASSERT_TRUE(session.metrics.has_value());
 
-    // Should detect 1 desaturation (97 -> 92 = 5% drop >= 4% threshold)
     EXPECT_TRUE(session.metrics->spo2_drops.has_value());
     EXPECT_EQ(session.metrics->spo2_drops.value(), 1);
+    EXPECT_EQ(session.desaturations.size(), 1u);
 }
 
 TEST(ModelsTest, CalculateMetricsEmptySession) {
