@@ -276,7 +276,7 @@ void ParsedSession::calculateMetrics() {
             metrics->spo2_p95 = calculatePercentileHelper(spo2_values, 95.0);
             metrics->spo2_p50 = calculatePercentileHelper(spo2_values, 50.0);
 
-            // Desaturation events via rolling-baseline detector (OSCAR-style),
+            // Desaturation events via rolling-baseline detector (calculated),
             // replacing the old naive consecutive-sample diff. Kept out of
             // `events` so AHI/total_events are unaffected.
             desaturations = detectDesaturations(vitals);
