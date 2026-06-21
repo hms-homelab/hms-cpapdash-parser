@@ -106,8 +106,9 @@ TEST(ModelsTest, CalculateMetricsWithEvents) {
     EXPECT_EQ(m.reras, 1);
     EXPECT_EQ(m.clear_airway_apneas, 0);
 
-    // AHI = 6 events / 2 hours = 3.0
-    EXPECT_NEAR(m.ahi, 3.0, 0.01);
+    // AHI counts apneas + hypopneas only (2 OA + 1 CA + 2 H = 5), NOT the RERA.
+    // 5 / 2 hours = 2.5
+    EXPECT_NEAR(m.ahi, 2.5, 0.01);
 
     // Event duration stats
     EXPECT_TRUE(m.avg_event_duration.has_value());

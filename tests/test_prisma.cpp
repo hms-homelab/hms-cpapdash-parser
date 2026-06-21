@@ -161,6 +161,34 @@ TEST(PrismaParser, ParseEventXmlSmall) {
     EXPECT_GT(session.events.size(), 0u);
 }
 
+// SMART max writes RespEvent attributes spaced out (RespEventID = "101"); the
+// extractor must handle both that and the tight DeviceEvent form in one file.
+TEST(PrismaParser, ParseEventXmlSpacedAttributes) {
+    auto tmp = fs::temp_directory_path() / "prisma_spaced_event.xml";
+    {
+        std::ofstream out(tmp);
+        out << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<desc>\n"
+            << "<DeviceEvent  DeviceEventID=\"0\" Time=\"0\" ParameterID=\"1003\" NewValue=\"2\"/>\n"
+            << "<RespEvent RespEventID = \"101\" EndTime = \"120\" Duration = \"15\"/>\n"
+            << "<RespEvent RespEventID = \"102\" EndTime = \"240\" Duration = \"12\"/>\n"
+            << "<RespEvent RespEventID = \"111\" EndTime = \"360\" Duration = \"20\"/>\n"
+            << "<RespEvent RespEventID = \"121\" EndTime = \"480\" Duration = \"8\"/>\n"
+            << "<RespEvent RespEventID = \"1230\" EndTime = \"1\" Duration = \"10\"/>\n"
+            << "</desc>\n";
+    }
+    ParsedSession session;
+    auto now = std::chrono::system_clock::now();
+    ASSERT_TRUE(PrismaParser::parseEventXml(tmp.string(), session, now));
+
+    // 4 clinical events parsed (OA, CA, hypopnea, RERA); 1230 is unmapped → skipped.
+    EXPECT_EQ(session.events.size(), 4u);
+    // DeviceEvent (tight form) still parsed in the same file.
+    ASSERT_TRUE(session.settings.has_value());
+    EXPECT_TRUE(session.settings->therapy_mode.has_value());
+
+    fs::remove(tmp);
+}
+
 // ── Full session parse ──────────────────────────────────────────────────────
 
 TEST(PrismaParser, FullSessionParse) {

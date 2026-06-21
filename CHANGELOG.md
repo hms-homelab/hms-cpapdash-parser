@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [2026.1.3] - 2026-06-21
+
+### Fixed
+- **Löwenstein event XML: tolerate spaced attributes.** SMART max (fw 3.17)
+  writes `RespEvent` attributes spaced out (`RespEventID = "101"`) while
+  `DeviceEvent` uses the tight form; the extractor now handles both, so SMART
+  max respiratory events parse (was 0 events) — with a left-boundary check so an
+  attr name embedded in a longer one (e.g. `Time` in `EndTime`) isn't matched.
+- **AHI counts apneas + hypopneas only.** Was `total_events / hours`, which
+  over-counted RERA, flow limitation, vibratory snore, and large leak — badly on
+  devices that flag many flow-limitation events (e.g. SMART max). Those are still
+  recorded for display; ResMed is unaffected (uses the official STR AHI).
+
 ### Added
 - **DesatDetector** — SpO2 desaturation detection from a time-ordered vitals
   series (`detectDesaturations`), generalizing the O2Ring/VLD ODI rule to the

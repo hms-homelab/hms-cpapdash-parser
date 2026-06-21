@@ -58,6 +58,7 @@ void ParsedSession::calculateMetrics() {
     metrics->total_events = static_cast<int>(events.size());
 
     // Event breakdown by type
+    int apnea_other = 0;  // generic apneas (not OA/CA/clear-airway) — count toward AHI
     for (const auto& event : events) {
         switch (event.event_type) {
             case EventType::OBSTRUCTIVE:
@@ -75,15 +76,23 @@ void ParsedSession::calculateMetrics() {
             case EventType::CLEAR_AIRWAY:
                 metrics->clear_airway_apneas++;
                 break;
+            case EventType::APNEA:
+                apnea_other++;
+                break;
             default:
                 break;
         }
     }
 
-    // Calculate AHI (events per hour)
+    // AHI = (apneas + hypopneas) per hour. RERA, flow limitation, vibratory
+    // snore, and large leak are recorded for display but are NOT part of AHI —
+    // using total_events here over-counted it (badly, on devices that flag many
+    // flow-limitation events such as the Löwenstein Prisma SMART max).
     if (duration_seconds.has_value() && duration_seconds.value() > 0) {
         double hours = duration_seconds.value() / 3600.0;
-        metrics->ahi = metrics->total_events / hours;
+        int apnea_hypopnea = metrics->obstructive_apneas + metrics->central_apneas
+                           + metrics->clear_airway_apneas + metrics->hypopneas + apnea_other;
+        metrics->ahi = apnea_hypopnea / hours;
     }
 
     // Event duration statistics
