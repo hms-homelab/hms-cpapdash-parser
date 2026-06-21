@@ -5,6 +5,7 @@
 #include <iostream>
 #include <regex>
 #include <cstdlib>
+#include <cctype>
 
 namespace cpapdash::parser {
 
@@ -31,14 +32,30 @@ std::optional<EventType> PrismaParser::mapRespEventId(int id) {
 
 namespace {
 
+// Extract attr="value", tolerating optional whitespace around '=' and after the
+// opening quote. Löwenstein SMART max writes RespEvent attributes spaced out
+// (RespEventID = "1230") while DeviceEvent uses the tight form, so we accept
+// both. A left-boundary check avoids matching an attr name embedded in a longer
+// one (e.g. "Time" inside "EndTime").
 std::string extractAttr(const std::string& line, const std::string& attr) {
-    std::string pattern = attr + "=\"";
-    auto pos = line.find(pattern);
-    if (pos == std::string::npos) return "";
-    pos += pattern.size();
-    auto end = line.find("\"", pos);
-    if (end == std::string::npos) return "";
-    return line.substr(pos, end - pos);
+    size_t pos = 0;
+    while ((pos = line.find(attr, pos)) != std::string::npos) {
+        bool left_ok = (pos == 0) || !std::isalnum(static_cast<unsigned char>(line[pos - 1]));
+        size_t k = pos + attr.size();
+        while (k < line.size() && std::isspace(static_cast<unsigned char>(line[k]))) k++;
+        if (left_ok && k < line.size() && line[k] == '=') {
+            k++;
+            while (k < line.size() && std::isspace(static_cast<unsigned char>(line[k]))) k++;
+            if (k < line.size() && line[k] == '"') {
+                k++;
+                auto end = line.find('"', k);
+                if (end != std::string::npos) return line.substr(k, end - k);
+            }
+            return "";
+        }
+        pos += 1;
+    }
+    return "";
 }
 
 } // anonymous namespace
