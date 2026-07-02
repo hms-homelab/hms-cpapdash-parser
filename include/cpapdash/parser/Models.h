@@ -27,12 +27,17 @@ enum class EventType {
 };
 
 /**
- * Device manufacturer identifier
+ * Device manufacturer identifier. PHILIPS and BMC are DETECT-only: named by
+ * detectManufacturer() so a foreign card is labeled and rejected cleanly, but
+ * createParser() has no parser for them (returns nullptr) -- detection is
+ * broader than parse support.
  */
 enum class DeviceManufacturer {
     UNKNOWN,
     RESMED,
-    LOWENSTEIN
+    LOWENSTEIN,
+    PHILIPS,
+    BMC
 };
 
 std::string eventTypeToString(EventType type);
