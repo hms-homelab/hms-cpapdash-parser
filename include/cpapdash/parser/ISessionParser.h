@@ -8,6 +8,7 @@
 #include <map>
 #include <utility>
 #include <cstdint>
+#include <vector>
 
 namespace cpapdash::parser {
 
@@ -59,14 +60,32 @@ public:
 };
 
 /**
- * Create a parser by auto-detecting the device type from directory contents.
+ * Detect the machine brand from a set of filenames/paths. Filename/path pattern
+ * matching ONLY -- no file content is read. Ordered unambiguous-first, first match
+ * wins:
+ *   1. LOWENSTEIN -- any filename ends ".wmedf"
+ *   2. BMC        -- any filename matches the serial-named identity file
+ *                    "\d\dC\d{5}.usr" (React Health/3B Luna share this format)
+ *   3. PHILIPS    -- any filename is "properties.txt" (the Properties.txt
+ *                    identity manifest; gated on this, not on .001/.002, which
+ *                    collide with BMC's raw-data numbering)
+ *   4. RESMED     -- "STR.edf" present, or a DATALOG subdir, or any .edf file
+ *   5. else UNKNOWN
  *
- * Detection:
- *   - .wmedf + .xml files -> Lowenstein Prisma (if CPAPDASH_WITH_LOWENSTEIN, else nullptr)
- *   - .edf files or DATALOG/ -> ResMed
+ * Detection is broader than parse support: PHILIPS and BMC are named here even
+ * though createParser() has no parser for them (returns nullptr for both).
+ */
+DeviceManufacturer detectManufacturer(const std::vector<std::string>& filenames);
+
+/** Directory-walk overload: collects filenames under data_dir, then detects. */
+DeviceManufacturer detectManufacturer(const std::string& data_dir);
+
+/**
+ * Create a parser by auto-detecting the device type from directory contents
+ * (via detectManufacturer(data_dir), then createParser(DeviceManufacturer)).
  *
  * @param data_dir  Root of SD card or data directory
- * @return Parser instance, or nullptr if unrecognized
+ * @return Parser instance, or nullptr if unrecognized or not parse-supported
  */
 std::unique_ptr<ISessionParser> createParser(const std::string& data_dir);
 
@@ -74,6 +93,7 @@ std::unique_ptr<ISessionParser> createParser(const std::string& data_dir);
  * Create a parser for a known manufacturer.
  *
  * @return Parser instance, or nullptr if the manufacturer is not compiled in
+ *         or has no parser (PHILIPS, BMC, UNKNOWN)
  */
 std::unique_ptr<ISessionParser> createParser(DeviceManufacturer manufacturer);
 
