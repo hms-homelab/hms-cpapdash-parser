@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [2026.1.4] - 2026-07-02
+
+### Added
+- **`detectManufacturer()`** (SDD-022 slice 3), broad, detect-only-capable brand
+  identification, separate from parse support. Extended `DeviceManufacturer` with
+  `PHILIPS` and `BMC` (React Health/3B Luna share the BMC on-card format); both are
+  detected but have no parser (`createParser()` still returns `nullptr` for them,
+  same as before: detection is broader than parsing). Ordered, unambiguous-first
+  signature match: Löwenstein (`.wmedf`), BMC (serial-named `\d\dC\d{5}.usr`),
+  Philips (`Properties.txt` identity manifest), ResMed (`STR.edf`/`DATALOG`/`.edf`),
+  else `UNKNOWN`. Two overloads: `detectManufacturer(filenames)` (pure, no disk
+  I/O) and `detectManufacturer(data_dir)` (directory-walk). `createParser(data_dir)`
+  now delegates to `detectManufacturer(data_dir)` internally, behavior-preserving
+  for ResMed/Löwenstein (the existing `FactoryAutoDetectsFromDir` test still
+  passes); the Löwenstein directory gate relaxed from requiring both `.wmedf` AND
+  `.xml` to `.wmedf` alone (the unambiguous signal per the on-card format research;
+  a real Prisma night always pairs the two anyway).
+
 ## [2026.1.3] - 2026-06-21
 
 ### Fixed

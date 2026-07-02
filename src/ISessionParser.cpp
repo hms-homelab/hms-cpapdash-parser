@@ -47,7 +47,79 @@ bool hasFileWithExtension(const std::string& dir_path, const std::string& ext) {
     return false;
 }
 
+std::string toLower(const std::string& s) {
+    std::string out = s;
+    std::transform(out.begin(), out.end(), out.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    return out;
+}
+
+std::string basenameOf(const std::string& path) {
+    auto slash = path.find_last_of("/\\");
+    return slash == std::string::npos ? path : path.substr(slash + 1);
+}
+
+bool endsWithCI(const std::string& s, const std::string& suffix_lower) {
+    if (s.size() < suffix_lower.size()) return false;
+    return toLower(s.substr(s.size() - suffix_lower.size())) == suffix_lower;
+}
+
+// BMC / React Health-3B Luna identity file: a serial-named basename matching
+// "\d\dC\d{5}.usr" (e.g. "16C01034.usr").
+bool isBmcUsrFilename(const std::string& filename) {
+    std::string base = basenameOf(filename);
+    if (base.size() != 12) return false;  // NNCNNNNN.usr
+    if (!std::isdigit(static_cast<unsigned char>(base[0])) ||
+        !std::isdigit(static_cast<unsigned char>(base[1]))) return false;
+    if (std::tolower(static_cast<unsigned char>(base[2])) != 'c') return false;
+    for (int i = 3; i <= 7; ++i)
+        if (!std::isdigit(static_cast<unsigned char>(base[i]))) return false;
+    if (base[8] != '.') return false;
+    return toLower(base.substr(9)) == "usr";
+}
+
+// Philips Respironics identity manifest.
+bool isPropertiesTxtFilename(const std::string& filename) {
+    return toLower(basenameOf(filename)) == "properties.txt";
+}
+
+// Directory-scoped version of a per-filename predicate (shallow, non-recursive --
+// matches the existing hasFileWithExtension/hasSubdirCaseInsensitive scope).
+bool hasMatchingFilename(const std::string& dir_path, bool (*pred)(const std::string&)) {
+    std::error_code ec;
+    if (!fs::is_directory(dir_path, ec)) return false;
+    for (const auto& entry : fs::directory_iterator(dir_path, ec)) {
+        if (!entry.is_regular_file(ec)) continue;
+        if (pred(entry.path().filename().string())) return true;
+    }
+    return false;
+}
+
 } // anonymous namespace
+
+DeviceManufacturer detectManufacturer(const std::vector<std::string>& filenames) {
+    bool has_wmedf = false, has_bmc_usr = false, has_properties = false, has_edf = false;
+    for (const auto& f : filenames) {
+        if (!has_wmedf && endsWithCI(f, ".wmedf")) has_wmedf = true;
+        if (!has_bmc_usr && isBmcUsrFilename(f)) has_bmc_usr = true;
+        if (!has_properties && isPropertiesTxtFilename(f)) has_properties = true;
+        if (!has_edf && endsWithCI(basenameOf(f), ".edf")) has_edf = true;
+    }
+    if (has_wmedf) return DeviceManufacturer::LOWENSTEIN;
+    if (has_bmc_usr) return DeviceManufacturer::BMC;
+    if (has_properties) return DeviceManufacturer::PHILIPS;
+    if (has_edf) return DeviceManufacturer::RESMED;
+    return DeviceManufacturer::UNKNOWN;
+}
+
+DeviceManufacturer detectManufacturer(const std::string& data_dir) {
+    if (hasFileWithExtension(data_dir, ".wmedf")) return DeviceManufacturer::LOWENSTEIN;
+    if (hasMatchingFilename(data_dir, isBmcUsrFilename)) return DeviceManufacturer::BMC;
+    if (hasMatchingFilename(data_dir, isPropertiesTxtFilename)) return DeviceManufacturer::PHILIPS;
+    if (hasSubdirCaseInsensitive(data_dir, "DATALOG") || hasFileWithExtension(data_dir, ".edf"))
+        return DeviceManufacturer::RESMED;
+    return DeviceManufacturer::UNKNOWN;
+}
 
 /**
  * ResMedParser - Wraps the static EDFParser API behind ISessionParser.
@@ -107,23 +179,7 @@ public:
 // ── Factory functions ────────────────────────────────────────────────────────
 
 std::unique_ptr<ISessionParser> createParser(const std::string& data_dir) {
-    // Lowenstein Prisma: look for event_*.xml + signal_*.wmedf
-    if (hasFileWithExtension(data_dir, ".wmedf") &&
-        hasFileWithExtension(data_dir, ".xml")) {
-#ifdef CPAPDASH_WITH_LOWENSTEIN
-        return createParser(DeviceManufacturer::LOWENSTEIN);
-#else
-        return nullptr;
-#endif
-    }
-
-    // ResMed: look for .edf files or DATALOG/ directory
-    if (hasSubdirCaseInsensitive(data_dir, "DATALOG") ||
-        hasFileWithExtension(data_dir, ".edf")) {
-        return std::make_unique<ResMedParser>();
-    }
-
-    return nullptr;
+    return createParser(detectManufacturer(data_dir));
 }
 
 std::unique_ptr<ISessionParser> createParser(DeviceManufacturer manufacturer) {
