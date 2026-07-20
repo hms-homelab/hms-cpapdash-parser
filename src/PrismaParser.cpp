@@ -1,6 +1,7 @@
 #ifdef CPAPDASH_WITH_LOWENSTEIN
 
 #include "cpapdash/parser/PrismaParser.h"
+#include "ParseNum.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -19,6 +20,9 @@ std::unique_ptr<ISessionParser> createLowensteinParser() {
 
 // ── device.xml parsing ──────────────────────────────────────────────────────
 
+// device.xml is user-supplied (it rides along inside an uploaded zip), so its
+// numeric fields go through parseIntOr — a malformed value leaves the field at
+// its default instead of throwing. See src/ParseNum.h.
 PrismaDeviceInfo PrismaParser::parseDeviceXml(const std::string& filepath) {
     PrismaDeviceInfo info;
     std::ifstream f(filepath);
@@ -39,11 +43,11 @@ PrismaDeviceInfo PrismaParser::parseDeviceXml(const std::string& filepath) {
 
     info.serial_number = extract("DeviceSerialNumber");
     std::string dt = extract("DeviceType");
-    if (!dt.empty()) info.device_type = std::stoi(dt);
+    if (!dt.empty()) info.device_type = parseIntOr(dt, info.device_type);
     info.fw_version = extract("FWVersion");
     info.fw_build = extract("FWBuild");
     std::string hw = extract("MainboardHWVersion");
-    if (!hw.empty()) info.hw_version = std::stoi(hw);
+    if (!hw.empty()) info.hw_version = parseIntOr(hw, info.hw_version);
 
     return info;
 }

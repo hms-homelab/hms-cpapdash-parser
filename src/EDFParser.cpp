@@ -1,4 +1,5 @@
 #include "cpapdash/parser/EDFParser.h"
+#include "ParseNum.h"
 #include <iostream>
 #include <filesystem>
 #include <regex>
@@ -19,11 +20,13 @@ bool EDFParser::parseDeviceInfo(EDFFile& edf,
     if (std::regex_search(rec, m, std::regex("SRN=(\\d+)"))) {
         serial_number = m[1].str();
     }
+    // \d+ matches arbitrarily long digit runs, which overflow a plain stoi —
+    // parseIntOr keeps the existing value instead of throwing (src/ParseNum.h).
     if (std::regex_search(rec, m, std::regex("MID=(\\d+)"))) {
-        model_id = std::stoi(m[1].str());
+        model_id = parseIntOr(m[1].str(), model_id);
     }
     if (std::regex_search(rec, m, std::regex("VID=(\\d+)"))) {
-        version_id = std::stoi(m[1].str());
+        version_id = parseIntOr(m[1].str(), version_id);
     }
 
     return true;
@@ -159,16 +162,29 @@ std::unique_ptr<ParsedSession> EDFParser::parseSessionFromBuffers(
     session->device_name = device_name;
 
     // Parse session_start_str if provided ("YYYYMMDD_HHMMSS")
+    // The length check above says nothing about the characters being digits —
+    // this string comes from an uploaded filename. Parse every field
+    // non-throwing (src/ParseNum.h) and drop the timestamp entirely if any
+    // component is unusable, rather than recording a garbage date.
     if (!session_start_str.empty() && session_start_str.size() >= 15) {
-        std::tm t = {};
-        t.tm_year = std::stoi(session_start_str.substr(0, 4)) - 1900;
-        t.tm_mon  = std::stoi(session_start_str.substr(4, 2)) - 1;
-        t.tm_mday = std::stoi(session_start_str.substr(6, 2));
-        t.tm_hour = std::stoi(session_start_str.substr(9, 2));
-        t.tm_min  = std::stoi(session_start_str.substr(11, 2));
-        t.tm_sec  = std::stoi(session_start_str.substr(13, 2));
-        t.tm_isdst = -1;
-        session->session_start = std::chrono::system_clock::from_time_t(std::mktime(&t));
+        const int year = parseIntOr(session_start_str.substr(0, 4), -1);
+        const int mon  = parseIntOr(session_start_str.substr(4, 2), -1);
+        const int mday = parseIntOr(session_start_str.substr(6, 2), -1);
+        const int hour = parseIntOr(session_start_str.substr(9, 2), -1);
+        const int min  = parseIntOr(session_start_str.substr(11, 2), -1);
+        const int sec  = parseIntOr(session_start_str.substr(13, 2), -1);
+
+        if (year >= 0 && mon >= 0 && mday >= 0 && hour >= 0 && min >= 0 && sec >= 0) {
+            std::tm t = {};
+            t.tm_year = year - 1900;
+            t.tm_mon  = mon - 1;
+            t.tm_mday = mday;
+            t.tm_hour = hour;
+            t.tm_min  = min;
+            t.tm_sec  = sec;
+            t.tm_isdst = -1;
+            session->session_start = std::chrono::system_clock::from_time_t(std::mktime(&t));
+        }
     }
 
     // Parse BRP

@@ -6,6 +6,7 @@
 #include "cpapdash/parser/ISessionParser.h"
 #include <filesystem>
 #include <fstream>
+#include <unistd.h>
 
 namespace cpapdash::parser {
 
@@ -33,6 +34,38 @@ TEST(PrismaParser, ParseDeviceXml) {
     EXPECT_EQ(info.device_type, 27);
     EXPECT_EQ(info.fw_version, "5.05");
     EXPECT_EQ(info.hw_version, 11);
+}
+
+// A device.xml is attacker-controlled: it arrives verbatim inside a user's
+// uploaded zip. Numeric fields must never be parsed with a throwing conversion —
+// in cpapdash-api parseDeviceXml runs on a detached background thread, so an
+// escaping exception calls std::terminate and takes the whole service down.
+// Non-numeric and out-of-range values must degrade to the struct defaults.
+TEST(PrismaParser, ParseDeviceXmlMalformedNumbersDoNotThrow) {
+    auto tmp = fs::temp_directory_path() /
+               ("prisma_bad_devxml_" + std::to_string(::getpid()));
+    fs::create_directories(tmp);
+    auto path = (tmp / "device.xml").string();
+    {
+        std::ofstream f(path);
+        f << "<Device>\n"
+             "  <DeviceSerialNumber value=\"30167534\"/>\n"
+             "  <DeviceType value=\"not-a-number\"/>\n"
+             "  <FWVersion value=\"5.05\"/>\n"
+             "  <MainboardHWVersion value=\"99999999999999999999\"/>\n"
+             "</Device>\n";
+    }
+
+    PrismaDeviceInfo info;
+    EXPECT_NO_THROW({ info = PrismaParser::parseDeviceXml(path); });
+
+    // The good fields still parse; the malformed numerics fall back to defaults.
+    EXPECT_EQ(info.serial_number, "30167534");
+    EXPECT_EQ(info.fw_version, "5.05");
+    EXPECT_EQ(info.device_type, 0);   // "not-a-number"        -> invalid_argument
+    EXPECT_EQ(info.hw_version, 0);    // 20-digit value        -> out_of_range
+
+    fs::remove_all(tmp);
 }
 
 // ── RespEventID mapping ─────────────────────────────────────────────────────
