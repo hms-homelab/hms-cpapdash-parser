@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include "cpapdash/parser/EDFFile.h"
+#include "cpapdash/parser/EDFParser.h"
 #include <cstring>
+#include <memory>
 #include <vector>
 #include <cstdint>
 
@@ -275,4 +277,72 @@ TEST(EDFFileTest, IsEDFPlusDetectsCorrectly) {
     EDFFile edf_plus;
     ASSERT_TRUE(edf_plus.open(buf.data(), buf.size()));
     EXPECT_TRUE(edf_plus.isEDFPlus());
+}
+
+// ── Malformed-input hardening ───────────────────────────────────────────────
+//
+// Both cases below reach a throwing std::stoi from data an uploader controls.
+// In cpapdash-api this parse runs on a detached background thread, where an
+// escaping exception is a std::terminate of the entire service rather than one
+// failed session — so malformed input must degrade, never throw.
+
+// buildMinimalEDF labels its one signal "TestSig"; the BRP parser requires a
+// signal named "Flow" before it will return a session. Signal labels live at
+// offset 256, 16 bytes each.
+void labelFirstSignalFlow(std::vector<uint8_t>& buf) {
+    const std::string label = "Flow";
+    for (int i = 0; i < 16; i++)
+        buf[256 + i] = (i < static_cast<int>(label.size())) ? label[i] : ' ';
+}
+
+// session_start_str comes from an uploaded filename ("YYYYMMDD_HHMMSS"). The
+// only guard is a length check (>= 15), which says nothing about the characters
+// being digits.
+TEST(EDFParserHardening, NonNumericSessionStartDoesNotThrow) {
+    auto brp = buildMinimalEDF(1, 4, {100, 200, 300, 400});
+    labelFirstSignalFlow(brp);
+
+    std::unique_ptr<ParsedSession> session;
+    EXPECT_NO_THROW({
+        session = EDFParser::parseSessionFromBuffers(
+            brp.data(), brp.size(),
+            nullptr, 0, nullptr, 0, nullptr, 0,
+            "dev", "Test Device",
+            "abcdefgh_ijklmn");  // 15 chars: passes the length guard, not numeric
+    });
+
+    // The session still parses. The unusable filename timestamp is skipped, and
+    // the BRP header's own start date (01-MAR-2026 23:30, from buildMinimalEDF)
+    // supplies session_start instead — so no garbage date is recorded.
+    ASSERT_NE(session, nullptr);
+    ASSERT_TRUE(session->session_start.has_value());
+    const auto tt = std::chrono::system_clock::to_time_t(*session->session_start);
+    std::tm tm_start{};
+    localtime_r(&tt, &tm_start);
+    EXPECT_EQ(tm_start.tm_year + 1900, 2026);
+    EXPECT_EQ(tm_start.tm_mon + 1, 3);
+    EXPECT_EQ(tm_start.tm_mday, 1);
+}
+
+// A digit run long enough to overflow int ("MID=99999999999") satisfies the
+// \d+ regex in parseDeviceInfo but overflows std::stoi -> std::out_of_range.
+TEST(EDFParserHardening, OverlongModelIdDoesNotThrow) {
+    auto brp = buildMinimalEDF(1, 4, {1, 2, 3, 4});
+    labelFirstSignalFlow(brp);
+    // EDF recording field: 80 bytes at offset 88.
+    const std::string rec =
+        "Startdate 01-MAR-2026 SRN=23243570851 MID=99999999999 VID=99999999999";
+    for (int i = 0; i < 80; i++)
+        brp[88 + i] = (i < static_cast<int>(rec.size())) ? rec[i] : ' ';
+
+    std::unique_ptr<ParsedSession> session;
+    EXPECT_NO_THROW({
+        session = EDFParser::parseSessionFromBuffers(
+            brp.data(), brp.size(),
+            nullptr, 0, nullptr, 0, nullptr, 0,
+            "dev", "Test Device", "");
+    });
+
+    ASSERT_NE(session, nullptr);
+    EXPECT_EQ(session->serial_number, "23243570851");  // a string — unaffected
 }
