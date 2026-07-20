@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [2026.1.5] - 2026-07-20
+
+### Fixed
+- **Malformed numeric fields no longer throw out of the parsers.** Every integer
+  field the parsers read comes from a file an uploader supplies, and `std::stoi`
+  throws on non-numeric input and on overflow. cpapdash-api runs these parsers on
+  a detached thread, where an escaping exception calls `std::terminate` — so one
+  malformed upload could take down the entire API. Three reachable throws, each
+  reproduced before fixing: `PrismaParser::parseDeviceXml` on `<DeviceType>` /
+  `<MainboardHWVersion>` from an uploaded `device.xml` (runs *before* the WMEDF
+  parse, so the `.wmedf` need not even be valid); `EDFParser::parseDeviceInfo` on
+  overlong `MID=` / `VID=` digit runs; and the `YYYYMMDD_HHMMSS` session-start
+  parse, whose only guard was a length check that says nothing about the
+  characters being digits. New internal `src/ParseNum.h` provides `parseIntOr` —
+  exactly `std::stoi`'s conversion minus the throw, deliberately keeping stoi's
+  leading-prefix behaviour (`"27abc"` → 27, `"5.05"` → 5), so any value that
+  parses today parses to the same number. Behaviour changes only for input that
+  currently crashes. An unusable session-start now drops the timestamp rather
+  than recording a garbage date; the BRP header's own start date supplies it
+  instead. Latent hardening — not observed in production.
+
 ## [2026.1.4] - 2026-07-02
 
 ### Added
