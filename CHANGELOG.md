@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [2026.1.6] - 2026-07-20
+
+### Fixed
+- **`project(VERSION)` now tracks the release version.** It had been stale at
+  `1.0.0` since the repo was created, through every `2026.1.x` tag, so
+  `cpapdash_parser_VERSION` reported `1.0.0` to every CMake consumer. Consumers
+  pin this repo by git tag via `FetchContent` (`hms-cpap` uses
+  `GIT_TAG v2026.1.3` when no local sibling checkout is present), so the
+  declared version and the tag need to agree. No code change.
+
 ## [2026.1.5] - 2026-07-20
 
 ### Fixed
