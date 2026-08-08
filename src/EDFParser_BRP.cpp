@@ -28,9 +28,17 @@ bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
     session.extra_records = edf.extra_records;
     session.growing = edf.growing;
 
-    // Find Flow and Pressure signals
+    // Find Flow and Pressure signals.
+    //
+    // Pressure is matched on the label PREFIX first: findSignal() is a substring
+    // match, so on any file that carries both a mask and a therapy channel it
+    // returns whichever comes first, and "MaskPress..." contains "Press". A
+    // ResMed BRP only holds Press.40ms today so the two agree, but the fallback
+    // keeps a device that labels its BRP pressure differently working exactly as
+    // before rather than losing the channel.
     int flow_idx = edf.findSignal("Flow");
-    int press_idx = edf.findSignal("Press");
+    int press_idx = edf.findSignalPrefix("Press");
+    if (press_idx < 0) press_idx = edf.findSignal("Press");
 
     if (flow_idx < 0) {
         std::cerr << "Parser: Flow signal not found in BRP" << std::endl;

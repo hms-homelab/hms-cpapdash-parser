@@ -8,8 +8,20 @@ namespace cpapdash::parser {
 bool EDFParser::parsePLDFile(EDFFile& edf, ParsedSession& session) {
     auto start_time = edf.getStartTime();
 
-    // Find PLD signals by label
+    // Find PLD signals by label.
+    //
+    // A ResMed PLD carries THREE pressure channels, in this order: MaskPress.2s
+    // (measured at the mask), Press.2s (the therapy pressure the machine delivers)
+    // and EprPress.2s (the expiratory set-point, exactly Press minus the EPR level).
+    // Press.2s is the one OSCAR and SleepHQ plot as "Pressure"; without it we were
+    // reporting mask pressure under that name and reading roughly 0.8 cmH2O low.
+    //
+    // It MUST be matched on the prefix. findSignal() is a substring search returning
+    // the first hit in signal order, and "MaskPress.2s" contains "Press", so
+    // findSignal("Press") silently hands back mask pressure. No substring fallback
+    // here for that reason -- on this file a fallback would reintroduce the bug.
     int mask_press_idx = edf.findSignal("MaskPress");
+    int press_idx = edf.findSignalPrefix("Press");
     int epr_press_idx = edf.findSignal("EprPress");
     int leak_idx = edf.findSignal("Leak");
     int rr_idx = edf.findSignal("RespRate");
@@ -25,10 +37,11 @@ bool EDFParser::parsePLDFile(EDFFile& edf, ParsedSession& session) {
     }
 
     // Read all available signals
-    std::vector<double> mask_press_data, epr_press_data, leak_data;
+    std::vector<double> mask_press_data, press_data, epr_press_data, leak_data;
     std::vector<double> rr_data, tv_data, mv_data, snore_data, fl_data, tgt_vent_data;
 
     if (mask_press_idx >= 0) edf.readSignal(mask_press_idx, mask_press_data);
+    if (press_idx >= 0) edf.readSignal(press_idx, press_data);
     if (epr_press_idx >= 0) edf.readSignal(epr_press_idx, epr_press_data);
     if (leak_idx >= 0) edf.readSignal(leak_idx, leak_data);
     if (rr_idx >= 0) edf.readSignal(rr_idx, rr_data);
@@ -52,6 +65,23 @@ bool EDFParser::parsePLDFile(EDFFile& edf, ParsedSession& session) {
     // Group into per-minute summaries to match BRP's BreathingSummary cadence
     const size_t SAMPLES_PER_MINUTE = 30;
     size_t n_minutes = (n_samples + SAMPLES_PER_MINUTE - 1) / SAMPLES_PER_MINUTE;
+
+    // Keep the samples at the machine's own 0.5 Hz, alongside the per-minute rows
+    // built below. calculateMetrics() takes the published mean/median/95th/max from
+    // these, because a percentile of 30-sample means is not a percentile of the
+    // signal: it puts leak's 95th at 8.68 L/min where the samples (and the machine's
+    // own STR summary) say 8.4, and it flattens a real 87.6 L/min blow-out to 10.8.
+    {
+        auto& nsamp = session.native_samples;
+        auto take = [](const std::vector<double>& src, std::vector<double>& dst, double scale) {
+            if (src.empty()) return;
+            dst.reserve(dst.size() + src.size());
+            for (double x : src) dst.push_back(x * scale);
+        };
+        take(leak_data, nsamp.leak, 60.0);      // L/s -> L/min
+        take(press_data, nsamp.therapy, 1.0);
+        take(mask_press_data, nsamp.mask, 1.0);
+    }
 
     // Helper to compute average of a range
     auto avg_range = [](const std::vector<double>& data, size_t start, size_t end) -> double {
@@ -92,6 +122,9 @@ bool EDFParser::parsePLDFile(EDFFile& edf, ParsedSession& session) {
         }
 
         // PLD-exclusive fields (always set from PLD)
+        if (!press_data.empty()) {
+            target->therapy_pressure = avg_range(press_data, start, end);
+        }
         if (!mask_press_data.empty()) {
             target->mask_pressure = avg_range(mask_press_data, start, end);
         }
@@ -108,6 +141,16 @@ bool EDFParser::parsePLDFile(EDFFile& edf, ParsedSession& session) {
         // PLD overwrites BRP-derived values (machine's calculations are authoritative)
         if (!leak_data.empty()) {
             target->leak_rate = avg_range(leak_data, start, end) * 60.0;  // L/s -> L/min
+            // Keep the minute's extremes too. The mean alone hides blow-outs: one
+            // 1.46 L/s sample inside a minute of otherwise-zero leak is a real
+            // 87.6 L/min event that averages down to 4.8 and disappears.
+            size_t lo = std::min(start, leak_data.size());
+            size_t hi = std::min(end, leak_data.size());
+            if (lo < hi) {
+                auto mm = std::minmax_element(leak_data.begin() + lo, leak_data.begin() + hi);
+                target->leak_min = *mm.first * 60.0;
+                target->leak_max = *mm.second * 60.0;
+            }
         }
         if (!rr_data.empty()) {
             target->respiratory_rate = avg_range(rr_data, start, end);

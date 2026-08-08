@@ -2,6 +2,47 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Therapy pressure is read at last, so pressure now agrees with OSCAR and
+  SleepHQ.** A ResMed PLD carries three pressure channels: `MaskPress.2s`
+  measured at the mask, `Press.2s` the pressure the machine actually delivers,
+  and `EprPress.2s` the expiratory set-point exactly one EPR level below
+  `Press.2s`. Only the first two of those were ever read, and mask pressure was
+  what got reported as a night's pressure. On a real AutoSet night that put the
+  median at 9.10 cmH2O where OSCAR and SleepHQ show 9.88, and the 95th at 9.93
+  against their 10.72: a consistent 0.8 cmH2O low read, about 8% of the therapy.
+
+  `Press.2s` now lands in `BreathingSummary::therapy_pressure` and aggregates
+  into `avg/min/max_therapy_pressure` and `therapy_pressure_p95/p50`. Mask
+  pressure is untouched and stays its own signal.
+
+- **A percentile of per-minute means is no longer published as a percentile of
+  the signal.** `breathing_summary` is one row per minute, so a 95th taken over
+  it averaged away exactly the spikes it was meant to describe. Leak's 95th came
+  out 8.68 L/min where the machine's own STR summary says 8.4, and a real 87.6
+  L/min blow-out inside one minute of otherwise-zero leak was filed as 4.8,
+  leaving the night's peak reading 10.8 instead of 87.6.
+
+  The PLD parser now keeps the samples at the machine's own 0.5 Hz in
+  `ParsedSession::native_samples`, and the published mean, median, 95th and max
+  are computed from those. Samples rather than precomputed statistics because a
+  night is often several recordings merged into one session, and percentiles do
+  not merge. Leak also carries its within-minute `leak_min`/`leak_max` now, so a
+  peak survives in stored per-minute data. Parsers that keep no native samples
+  (Prisma, Philips) fall straight through and their numbers are unchanged.
+
+### Added
+- **`EDFFile::findSignalPrefix()`**, matching a signal label by prefix rather
+  than substring. `findSignal()` returns the first substring hit in signal
+  order, which cannot distinguish a label that is a suffix of another one on the
+  same file: `"MaskPress.2s"` contains `"Press"`, so `findSignal("Press")`
+  silently hands back mask pressure and looks like it worked. That is the exact
+  mismatch above. The PLD parser matches therapy pressure by prefix with no
+  substring fallback, since a fallback there would reintroduce the bug; the BRP
+  parser prefers the prefix and keeps the old substring match as a fallback, so
+  a device labelling its BRP pressure differently does not lose the channel.
+  Two tests pin the distinction, one of which documents the trap directly.
+
 ## [2026.1.6] - 2026-07-20
 
 ### Fixed
