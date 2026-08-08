@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [2026.1.7] - 2026-08-08
+
 ### Fixed
 - **Therapy pressure is read at last, so pressure now agrees with OSCAR and
   SleepHQ.** A ResMed PLD carries three pressure channels: `MaskPress.2s`
