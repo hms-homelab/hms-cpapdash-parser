@@ -119,6 +119,7 @@ void ParsedSession::calculateMetrics() {
         std::vector<double> pressure_vals, leak_vals, flow_vals;
         std::vector<double> rr_vals, tv_vals, mv_vals, ti_vals, te_vals, ie_vals, fl_vals;
         std::vector<double> mask_press_vals, epr_press_vals, snore_vals, tgt_vent_vals;
+        std::vector<double> therapy_press_vals;
 
         for (const auto& breath : breathing_summary) {
             // Pressure
@@ -154,6 +155,9 @@ void ParsedSession::calculateMetrics() {
             if (breath.flow_limitation.has_value()) {
                 fl_vals.push_back(breath.flow_limitation.value());
             }
+            if (breath.therapy_pressure.has_value()) {
+                therapy_press_vals.push_back(breath.therapy_pressure.value());
+            }
             if (breath.mask_pressure.has_value()) {
                 mask_press_vals.push_back(breath.mask_pressure.value());
             }
@@ -176,6 +180,20 @@ void ParsedSession::calculateMetrics() {
             metrics->max_pressure = *std::max_element(pressure_vals.begin(), pressure_vals.end());
             metrics->pressure_p95 = calculatePercentileHelper(pressure_vals, 95.0);
             metrics->pressure_p50 = calculatePercentileHelper(pressure_vals, 50.0);
+        }
+
+        // Therapy pressure statistics (PLD Press.2s). This is what OSCAR and SleepHQ
+        // plot as "Pressure"; the pressure_* fields above are the measured mask
+        // waveform and read about 0.8 cmH2O lower on a ResMed with EPR on.
+        if (!therapy_press_vals.empty()) {
+            double sum = std::accumulate(therapy_press_vals.begin(), therapy_press_vals.end(), 0.0);
+            metrics->avg_therapy_pressure = sum / therapy_press_vals.size();
+            metrics->min_therapy_pressure =
+                *std::min_element(therapy_press_vals.begin(), therapy_press_vals.end());
+            metrics->max_therapy_pressure =
+                *std::max_element(therapy_press_vals.begin(), therapy_press_vals.end());
+            metrics->therapy_pressure_p95 = calculatePercentileHelper(therapy_press_vals, 95.0);
+            metrics->therapy_pressure_p50 = calculatePercentileHelper(therapy_press_vals, 50.0);
         }
 
         // Leak statistics
@@ -260,6 +278,38 @@ void ParsedSession::calculateMetrics() {
             double sum = std::accumulate(tgt_vent_vals.begin(), tgt_vent_vals.end(), 0.0);
             metrics->avg_target_ventilation = sum / tgt_vent_vals.size();
         }
+    }
+
+    // ===== NATIVE-RESOLUTION OVERRIDES =====
+    // Everything above is derived from breathing_summary, which is one row per minute,
+    // so a percentile taken over it is a percentile of 30-sample means rather than of
+    // the signal. For a spiky channel that is materially wrong: the 95th of the leak
+    // samples is 8.4 L/min (matching the machine's own STR summary exactly) where the
+    // 95th of the minute means comes out 8.68, and the night's real 87.6 L/min peak
+    // averages down to 10.8 and vanishes. Recompute from the samples where the parser
+    // kept them. Parsers that keep none (Prisma, Philips) fall straight through, so
+    // their numbers are exactly as before.
+    {
+        auto mean_of = [](const std::vector<double>& v) {
+            return std::accumulate(v.begin(), v.end(), 0.0) / static_cast<double>(v.size());
+        };
+        const auto& leak = native_samples.leak;
+        if (!leak.empty()) {
+            metrics->avg_leak_rate = mean_of(leak);
+            metrics->max_leak_rate = *std::max_element(leak.begin(), leak.end());
+            metrics->leak_p95 = calculatePercentileHelper(leak, 95.0);
+            metrics->leak_p50 = calculatePercentileHelper(leak, 50.0);
+        }
+        const auto& tp = native_samples.therapy;
+        if (!tp.empty()) {
+            metrics->avg_therapy_pressure = mean_of(tp);
+            metrics->min_therapy_pressure = *std::min_element(tp.begin(), tp.end());
+            metrics->max_therapy_pressure = *std::max_element(tp.begin(), tp.end());
+            metrics->therapy_pressure_p95 = calculatePercentileHelper(tp, 95.0);
+            metrics->therapy_pressure_p50 = calculatePercentileHelper(tp, 50.0);
+        }
+        if (!native_samples.mask.empty())
+            metrics->avg_mask_pressure = mean_of(native_samples.mask);
     }
 
     // ===== SPO2 METRICS =====

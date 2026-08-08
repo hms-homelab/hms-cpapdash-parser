@@ -86,6 +86,18 @@ public:
     /** Find signal index whose label matches exactly (after trimming). -1 if not found. */
     int findSignalExact(const std::string& label) const;
 
+    /**
+     * Find signal index whose label STARTS WITH prefix (-1 if not found).
+     *
+     * findSignal() is a substring match that returns the first hit in signal
+     * order, which makes it unusable for a label that is a suffix of another
+     * one on the same file. A ResMed PLD carries MaskPress.2s, Press.2s and
+     * EprPress.2s in that order, so findSignal("Press") hands back the MASK
+     * pressure and looks like it worked. Anchoring at the start separates them:
+     * only Press.2s begins with "Press".
+     */
+    int findSignalPrefix(const std::string& prefix) const;
+
     bool isEDFPlus() const { return reserved.find("EDF+") != std::string::npos; }
 
 private:

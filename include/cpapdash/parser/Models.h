@@ -110,10 +110,22 @@ struct BreathingSummary {
     std::optional<double> leak_rate;             // Unintentional leak L/min
 
     // PLD-derived metrics (machine's own calculations)
+    std::optional<double> therapy_pressure;    // cmH2O (PLD Press.2s) -- the DELIVERED
+                                               // therapy pressure, which is what OSCAR and
+                                               // SleepHQ plot as "Pressure". Distinct from
+                                               // mask_pressure below, which is the measured
+                                               // pressure at the mask and reads ~0.8 lower.
     std::optional<double> mask_pressure;       // cmH2O (PLD MaskPress.2s)
     std::optional<double> epr_pressure;        // cmH2O (PLD EprPress.2s)
     std::optional<double> snore_index;         // 0-5 (PLD Snore.2s)
     std::optional<double> target_ventilation;  // L/min (PLD TgtVent.2s, ASV only)
+
+    // Leak spread WITHIN this minute. The per-minute mean alone flattens blow-outs:
+    // a real 87.6 L/min spike inside one minute of mostly-zero leak averages to 4.8,
+    // so the night's peak reads an order of magnitude low. Carrying the extremes keeps
+    // the peak recoverable from stored data.
+    std::optional<double> leak_min;            // L/min
+    std::optional<double> leak_max;            // L/min
 
     // Percentile statistics
     std::optional<double> flow_p95;              // 95th percentile flow
@@ -189,6 +201,15 @@ struct SessionMetrics {
     std::optional<double> avg_flow_limitation;    // 0-1 score
 
     // ===== PLD-DERIVED METRICS =====
+    // Therapy pressure (PLD Press.2s). The pressure* fields above describe the
+    // measured mask waveform; these describe what the machine actually delivered,
+    // and are the OSCAR/SleepHQ-comparable numbers.
+    std::optional<double> avg_therapy_pressure;    // cmH2O
+    std::optional<double> min_therapy_pressure;    // cmH2O
+    std::optional<double> max_therapy_pressure;    // cmH2O
+    std::optional<double> therapy_pressure_p95;    // cmH2O
+    std::optional<double> therapy_pressure_p50;    // cmH2O
+
     std::optional<double> avg_mask_pressure;       // cmH2O
     std::optional<double> avg_epr_pressure;        // cmH2O
     std::optional<double> avg_snore;               // 0-5 average
@@ -289,6 +310,37 @@ struct ParsedSession {
     std::vector<BreathingSummary> breathing_summary;
     std::vector<DesatEvent> desaturations;  // SpO2 desats (kept out of events/AHI)
     std::vector<Breath> breaths;            // breath-by-breath detail (empty if no raw flow)
+
+    /**
+     * Signal samples at the rate the machine actually wrote them, kept alongside the
+     * per-minute rows.
+     *
+     * breathing_summary is one row per minute, so a percentile taken over it is a
+     * percentile of 30-sample means rather than of the signal. For a spiky channel
+     * that is materially wrong: on a real night the 95th of the leak samples is
+     * 8.4 L/min (matching the machine's own STR summary to the decimal) where the
+     * 95th of the minute means comes out 8.68, and a 87.6 L/min blow-out averages
+     * down to 10.8 and disappears from the night's peak entirely.
+     *
+     * Samples rather than precomputed statistics because a night is often several
+     * recordings merged into one session, and percentiles do not merge -- appending
+     * the samples and taking the percentile once over the whole night does.
+     *
+     * Already in display units (leak L/min, pressures cmH2O). Empty for parsers that
+     * do not populate it (Prisma, Philips), which leaves their numbers unchanged.
+     */
+    struct NativeSamples {
+        std::vector<double> leak;     // L/min
+        std::vector<double> therapy;  // cmH2O (ResMed PLD Press.2s)
+        std::vector<double> mask;     // cmH2O (ResMed PLD MaskPress.2s)
+
+        void append(const NativeSamples& o) {
+            leak.insert(leak.end(), o.leak.begin(), o.leak.end());
+            therapy.insert(therapy.end(), o.therapy.begin(), o.therapy.end());
+            mask.insert(mask.end(), o.mask.begin(), o.mask.end());
+        }
+    };
+    NativeSamples native_samples;
 
     // Aggregated metrics
     std::optional<SessionMetrics> metrics;

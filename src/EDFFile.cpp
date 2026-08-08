@@ -248,6 +248,15 @@ int EDFFile::findSignalExact(const std::string& label) const {
     return -1;
 }
 
+int EDFFile::findSignalPrefix(const std::string& prefix) const {
+    for (int i = 0; i < num_signals; ++i) {
+        if (signals[i].label.compare(0, prefix.size(), prefix) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 int EDFFile::readSignal(int signal_idx, std::vector<double>& out) {
     if (signal_idx < 0 || signal_idx >= num_signals || actual_records <= 0) {
         return 0;

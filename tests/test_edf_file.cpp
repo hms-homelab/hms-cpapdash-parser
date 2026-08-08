@@ -111,6 +111,52 @@ std::vector<uint8_t> buildMinimalEDF(
     return buf;
 }
 
+// Multi-signal EDF carrying the given labels in the given order, one sample per
+// signal per record. Needed to reproduce label sets where one label is a suffix of
+// another, which is the ResMed PLD case.
+std::vector<uint8_t> buildLabelledEDF(const std::vector<std::string>& labels) {
+    int ns = static_cast<int>(labels.size());
+    int header_bytes = 256 + 256 * ns;
+    int total_size = header_bytes + ns * 2;   // 1 record, 1 sample per signal
+
+    std::vector<uint8_t> buf(total_size, ' ');
+    auto writeField = [&](int offset, int len, const std::string& val) {
+        for (int i = 0; i < len; i++)
+            buf[offset + i] = (i < static_cast<int>(val.size())) ? val[i] : ' ';
+    };
+
+    writeField(0, 8, "0");
+    writeField(8, 80, "TestPatient");
+    writeField(88, 80, "Startdate 01-MAR-2026");
+    writeField(168, 8, "01.03.26");
+    writeField(176, 8, "23.30.00");
+    writeField(184, 8, std::to_string(header_bytes));
+    writeField(192, 44, "");
+    writeField(236, 8, "1");
+    writeField(244, 8, "1");
+    writeField(252, 4, std::to_string(ns));
+
+    // Signal-header fields are stored field-major: all labels, then all transducers...
+    int base = 256;
+    auto block = [&](int width, const std::string& val) {
+        for (int i = 0; i < ns; ++i) writeField(base + i * width, width, val);
+        base += ns * width;
+    };
+    for (int i = 0; i < ns; ++i) writeField(base + i * 16, 16, labels[i]);
+    base += ns * 16;
+    block(80, "");         // transducer
+    block(8, "cmH2O");     // physical dimension
+    block(8, "0");         // physical min
+    block(8, "100");       // physical max
+    block(8, "0");         // digital min
+    block(8, "32767");     // digital max
+    block(80, "");         // prefiltering
+    block(8, "1");         // samples per record
+    block(32, "");         // reserved
+
+    return buf;
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -194,6 +240,43 @@ TEST(EDFFileTest, FindSignalExact) {
     EXPECT_EQ(edf.findSignalExact("TestSig"), 0);
     EXPECT_EQ(edf.findSignalExact("Test"), -1);     // partial match should fail
     EXPECT_EQ(edf.findSignalExact("testsig"), -1);   // case-sensitive
+}
+
+TEST(EDFFileTest, FindSignalPrefixAnchorsAtStart) {
+    auto buf = buildLabelledEDF({"TestSig"});
+
+    EDFFile edf;
+    ASSERT_TRUE(edf.open(buf.data(), buf.size()));
+
+    EXPECT_EQ(edf.findSignalPrefix("Test"), 0);
+    EXPECT_EQ(edf.findSignalPrefix("TestSig"), 0);
+    EXPECT_EQ(edf.findSignalPrefix("Sig"), -1);      // substring, not a prefix
+    EXPECT_EQ(edf.findSignalPrefix("TestSignal"), -1);  // longer than the label
+    EXPECT_EQ(edf.findSignalPrefix("NotHere"), -1);
+}
+
+// A ResMed PLD carries three pressure channels and the therapy one is a SUFFIX of
+// the mask one, so a substring search silently returns mask pressure where therapy
+// pressure was asked for. That mismatch shipped: CpapDash reported mask pressure as
+// "Pressure" and read ~0.8 cmH2O below OSCAR and SleepHQ. Pin the distinction.
+TEST(EDFFileTest, PressPrefixPicksTherapyNotMaskPressure) {
+    auto buf = buildLabelledEDF({"MaskPress.2s", "Press.2s", "EprPress.2s", "Leak.2s"});
+
+    EDFFile edf;
+    ASSERT_TRUE(edf.open(buf.data(), buf.size()));
+
+    // The trap, documented: substring search hands back the WRONG channel.
+    EXPECT_EQ(edf.findSignal("Press"), 0);
+    EXPECT_EQ(edf.signals[0].label, "MaskPress.2s");
+
+    // Prefix search is anchored, so it can only match the therapy channel.
+    ASSERT_EQ(edf.findSignalPrefix("Press"), 1);
+    EXPECT_EQ(edf.signals[1].label, "Press.2s");
+
+    // The other two stay reachable by their own distinct prefixes.
+    EXPECT_EQ(edf.findSignalPrefix("MaskPress"), 0);
+    EXPECT_EQ(edf.findSignalPrefix("EprPress"), 2);
+    EXPECT_EQ(edf.findSignalPrefix("Leak"), 3);
 }
 
 TEST(EDFFileTest, DetectsGrowingFile) {
