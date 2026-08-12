@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cpapdash_parser VERSION 2026.1.7 LANGUAGES CXX)
+project(cpapdash_parser VERSION 2026.1.8 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -50,6 +50,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
 
     set(TEST_SOURCES
         tests/test_edf_file.cpp
+        tests/test_brp_checkpoints.cpp
         tests/test_models.cpp
         tests/test_vld_parser.cpp
         tests/test_desat_detector.cpp
