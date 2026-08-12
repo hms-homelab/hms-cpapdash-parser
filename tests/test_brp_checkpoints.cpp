@@ -213,3 +213,103 @@ TEST_F(BrpCheckpoints, HeaderIsUsedWhenThereIsNoFilename) {
     ASSERT_EQ(sp->breathing_summary.size(), 2u);
     EXPECT_EQ(hhmm(sp->breathing_summary[0].timestamp), "22:00:00");
 }
+
+// ── PLD claims the NEAREST BRP minute, not the first one in tolerance ───────
+//
+// A machine writes BRP and PLD a second or two apart, so with several
+// checkpoints in a night more than one BRP row can sit inside the 30s window.
+// Taking the first one claimed the wrong row and left the right one empty, and
+// coverage came out alternating: on one real night 119 of 863 minutes had no
+// leak or respiratory rate while flow, which comes from BRP, ran unbroken. The
+// spacing between holes was ALWAYS even — 2, 4, 6, 8, never odd — which is what
+// alternating claims look like, and what absent data does not. Ticket 67.
+//
+// Written against the public parseSession, so it exercises the real BRP+PLD
+// interaction rather than the matcher in isolation.
+
+// A PLD-shaped EDF: the ten ResMed 0.5 Hz channels, one record per minute.
+std::vector<uint8_t> buildPLD(const std::string& ddmmyy, const std::string& hhmmss,
+                              int num_records) {
+    const std::vector<std::string> labels = {
+        "MaskPress.2s", "Press.2s", "EprPress.2s", "Leak.2s", "RespRate.2s",
+        "TidVol.2s", "MinVent.2s", "Snore.2s", "FlowLim.2s", "Crc16"};
+    const int ns = static_cast<int>(labels.size());
+    const int per_rec = 30;                       // 0.5 Hz x 60 s
+    const int header_bytes = 256 + 256 * ns;
+    const int rec_vals = per_rec * (ns - 1) + 1;  // Crc16 carries one
+    const int total = header_bytes + num_records * rec_vals * 2;
+
+    std::vector<uint8_t> buf(total, ' ');
+    auto field = [&](int off, int len, const std::string& v) {
+        for (int i = 0; i < len; ++i)
+            buf[off + i] = (i < static_cast<int>(v.size())) ? v[i] : ' ';
+    };
+    field(0, 8, "0");
+    field(8, 80, "TestPatient");
+    field(88, 80, "Startdate");
+    field(168, 8, ddmmyy);
+    field(176, 8, hhmmss);
+    field(184, 8, std::to_string(header_bytes));
+    field(192, 44, "");
+    field(236, 8, std::to_string(num_records));
+    field(244, 8, "60");
+    field(252, 4, std::to_string(ns));
+
+    int base = 256;
+    for (int i = 0; i < ns; ++i) field(base + i * 16, 16, labels[i]);
+    base += ns * 16;
+    auto block = [&](int width, const std::string& v) {
+        for (int i = 0; i < ns; ++i) field(base + i * width, width, v);
+        base += ns * width;
+    };
+    block(80, "");                       // transducer
+    block(8, "L/s");                     // dimension
+    block(8, "0"); block(8, "2");        // physical min/max
+    block(8, "0"); block(8, "100");      // digital min/max
+    block(80, "");                       // prefilter
+    for (int i = 0; i < ns; ++i)
+        field(base + i * 8, 8, std::to_string(i == ns - 1 ? 1 : per_rec));
+    base += ns * 8;
+    block(32, "");
+
+    for (int i = 0; i < num_records * rec_vals; ++i) {
+        int16_t v = static_cast<int16_t>(20 + (i % 5));
+        buf[header_bytes + i * 2]     = static_cast<uint8_t>(v & 0xFF);
+        buf[header_bytes + i * 2 + 1] = static_cast<uint8_t>((v >> 8) & 0xFF);
+    }
+    return buf;
+}
+
+TEST_F(BrpCheckpoints, EveryBrpMinuteGetsItsPldValues) {
+    // Two checkpoints, PLD written a second after BRP the way a machine does it.
+    writeCheckpoint(dir_, "20260701_220000", "01.07.26", "22.00.00", 4);
+    {
+        const std::string p = (dir_ / "20260701_220001_PLD.edf").string();
+        auto buf = buildPLD("01.07.26", "22.00.01", 4);
+        std::ofstream f(p, std::ios::binary);
+        f.write(reinterpret_cast<const char*>(buf.data()),
+                static_cast<std::streamsize>(buf.size()));
+    }
+    writeCheckpoint(dir_, "20260701_221000", "01.07.26", "22.10.00", 3);
+    {
+        const std::string p = (dir_ / "20260701_221001_PLD.edf").string();
+        auto buf = buildPLD("01.07.26", "22.10.01", 3);
+        std::ofstream f(p, std::ios::binary);
+        f.write(reinterpret_cast<const char*>(buf.data()),
+                static_cast<std::streamsize>(buf.size()));
+    }
+
+    auto sp = parseDir();
+    ASSERT_TRUE(sp != nullptr);
+
+    // Every minute that has flow must also have carried its PLD values across.
+    // A first-match matcher leaves some of them empty, in an even-spaced pattern.
+    int with_flow = 0, with_leak = 0;
+    for (const auto& b : sp->breathing_summary) {
+        if (b.avg_flow_rate != 0.0) ++with_flow;
+        if (b.leak_rate.has_value()) ++with_leak;
+    }
+    EXPECT_GT(with_flow, 0);
+    EXPECT_EQ(with_leak, static_cast<int>(sp->breathing_summary.size()))
+        << "every minute should carry PLD values; missing ones are the alternating-claim bug";
+}

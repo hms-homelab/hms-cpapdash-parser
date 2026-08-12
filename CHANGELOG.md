@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [2026.1.9] - 2026-08-12
+
+### Fixed
+- **A PLD minute merges onto the nearest flow minute within its tolerance, not
+  the first one it finds inside it.** The match took the first row within 30
+  seconds and stopped looking; where more than one row sits inside that window
+  the first is not necessarily the closest, so the wrong minute could be claimed
+  while the one that should have carried those values kept none.
+
+  Honest about the scope: this is a correctness fix, not a fix for the reported
+  chart gaps. It was written while chasing those gaps and does not explain them.
+  On the night investigated the flow checkpoints were hours apart, so only one
+  row was ever in range and the old and new matchers behave identically —
+  confirmed by reverting the change and watching the test still pass. Those gaps
+  line up with checkpoints the machine never wrote a PLD for at all (five flow
+  files, three PLD), which no matching strategy can invent, and which the
+  nightly summary cannot fill either since it carries one row per night rather
+  than one per minute.
+
 ## [2026.1.8] - 2026-08-12
 
 ### Fixed
