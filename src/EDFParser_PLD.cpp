@@ -104,14 +104,31 @@ bool EDFParser::parsePLDFile(EDFFile& edf, ParsedSession& session) {
         // Timestamp for this minute
         auto minute_ts = start_time + std::chrono::seconds(min_idx * 60);
 
-        // Find matching BRP BreathingSummary by timestamp (within 30s tolerance)
+        // The NEAREST BRP minute within 30s, not merely the first one inside it.
+        //
+        // This took the first row within tolerance and broke out. When more than
+        // one BRP row sits inside a 30-second window the first is not necessarily
+        // the closest, so the wrong minute could be claimed while the one that
+        // should have had these values kept none.
+        //
+        // Whether that has ever happened in the field is NOT established. It was
+        // written while chasing the chart gaps in ticket 67 and does not explain
+        // them: on the night investigated the BRP checkpoints were hours apart,
+        // so only one row was ever in range and both matchers behave identically.
+        // Those gaps line up with checkpoints the machine simply never wrote a
+        // PLD for — five BRP, three PLD — which no matcher can invent, and which
+        // STR cannot fill either since it carries one row per night rather than
+        // per minute. This is a correctness fix on its own terms, not that fix.
         BreathingSummary* target = nullptr;
+        long best = 31;   // strictly outside the tolerance, so 30 still wins
         for (auto& bs : session.breathing_summary) {
-            auto diff = std::chrono::duration_cast<std::chrono::seconds>(
-                minute_ts - bs.timestamp).count();
-            if (std::abs(diff) <= 30) {
+            const long diff = std::labs(
+                static_cast<long>(std::chrono::duration_cast<std::chrono::seconds>(
+                    minute_ts - bs.timestamp).count()));
+            if (diff < best) {
+                best = diff;
                 target = &bs;
-                break;
+                if (diff == 0) break;   // nothing can beat an exact hit
             }
         }
 
