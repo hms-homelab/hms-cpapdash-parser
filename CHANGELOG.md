@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+## [2026.1.8] - 2026-08-12
+
+### Fixed
+- **Every BRP checkpoint is placed on the clock by its own start, so a night
+  with a break in it finally looks like one.** A night is not one file: the
+  machine opens a fresh checkpoint every few minutes and again after any
+  mask-off break, so a session routinely arrives as several files separated by
+  real gaps. Each of them was being anchored to the session's start, which
+  stacked them all from the same instant — the break vanished because every
+  segment restarted at the beginning, and the series finished early by the total
+  of the gaps it had swallowed.
+
+  That is hms-cpap issue #21: a 2:20am bathroom break that never appeared, and a
+  flow chart that stopped around 4am while the summary metrics, which come from
+  STR, covered the whole night. Reproduced on a real card whose night carried six
+  checkpoints, four of them header-only: 70 minutes of genuine flow were written
+  at the *empty* first checkpoint's timestamp, 2m21s early and a minute short.
+  They now land on the file's own 20:15:36 → 21:24:36.
+
+  The name is trusted ahead of the header, because an AirSense 10 was observed
+  writing header date 29.06.26 into `20260706_195339_BRP.edf`, a full week
+  behind. Buffer-mode reads have no name and keep using the header.
+
+- **The end of a session is the latest checkpoint's end**, rather than whichever
+  file happened to be parsed last, so re-reading an earlier checkpoint can no
+  longer pull the end backwards over a later one.
+
 ## [2026.1.7] - 2026-08-08
 
 ### Fixed

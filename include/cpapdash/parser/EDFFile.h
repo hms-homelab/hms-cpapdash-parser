@@ -100,6 +100,17 @@ public:
 
     bool isEDFPlus() const { return reserved.find("EDF+") != std::string::npos; }
 
+    /**
+     * Path this file was opened from, empty when it came from a buffer.
+     *
+     * Exposed because a ResMed checkpoint's NAME is a more reliable clock than
+     * its header: an AirSense 10 was observed writing header date 29.06.26 into
+     * 20260706_195339_BRP.edf, a full week behind. Anything that needs to place
+     * a file on a timeline should prefer the name and keep the header as the
+     * fallback for buffer-mode reads, which have no name to read.
+     */
+    const std::string& filepath() const { return filepath_; }
+
 private:
     std::string filepath_;
     std::vector<uint8_t> buffer_;  // For memory-buffer mode

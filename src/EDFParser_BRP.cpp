@@ -3,26 +3,82 @@
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+#include <optional>
+#include <string>
+#include <ctime>
 
 namespace cpapdash::parser {
 
-bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
-    // Get EDF header timestamp
-    auto file_start = edf.getStartTime();
+// Start time carried by a "YYYYMMDD_HHMMSS_TYPE.edf" name, if it has one.
+//
+// The name beats the header. An AirSense 10 was observed writing header date
+// 29.06.26 into 20260706_195339_BRP.edf, a week behind, and anchoring to that
+// would drop a night's data a week away from the session it belongs to.
+static std::optional<std::chrono::system_clock::time_point>
+startFromFilename(const std::string& path) {
+    if (path.empty()) return std::nullopt;
+    auto slash = path.find_last_of("/\\");
+    std::string name = (slash == std::string::npos) ? path : path.substr(slash + 1);
+    if (name.size() < 15 || name[8] != '_') return std::nullopt;
 
-    // Set timestamps from EDF header only if not already set (from filename)
+    auto num = [&](std::size_t off, std::size_t len, int lo, int hi) -> int {
+        int v = 0;
+        for (std::size_t i = 0; i < len; ++i) {
+            char c = name[off + i];
+            if (c < '0' || c > '9') return -1;
+            v = v * 10 + (c - '0');
+        }
+        return (v >= lo && v <= hi) ? v : -1;
+    };
+    const int Y = num(0, 4, 1970, 2999), Mo = num(4, 2, 1, 12), D = num(6, 2, 1, 31);
+    const int h = num(9, 2, 0, 23), mi = num(11, 2, 0, 59), s = num(13, 2, 0, 60);
+    if (Y < 0 || Mo < 0 || D < 0 || h < 0 || mi < 0 || s < 0) return std::nullopt;
+
+    // mktime, matching EDFFile::getStartTime() exactly. A card writes wall-clock
+    // local time in both the name and the header, and the two must land on the
+    // same instant: interpreting the name as UTC while the header stays local
+    // would shift every path-opened file by the machine's UTC offset — invisible
+    // in a UTC test environment and hours wrong everywhere else.
+    std::tm t{};
+    t.tm_year = Y - 1900; t.tm_mon = Mo - 1; t.tm_mday = D;
+    t.tm_hour = h; t.tm_min = mi; t.tm_sec = s;
+    t.tm_isdst = -1;
+    const std::time_t e = std::mktime(&t);
+    if (e == static_cast<std::time_t>(-1)) return std::nullopt;
+    return std::chrono::system_clock::from_time_t(e);
+}
+
+bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
+    // Where THIS checkpoint sits on the clock. Every sample it holds is placed
+    // relative to this, never to the session's start.
+    //
+    // A night is not one file. ResMed writes a checkpoint every few minutes and
+    // opens a fresh one after any mask-off break, so a session routinely arrives
+    // as several BRPs separated by real gaps. Anchoring each of them to
+    // session_start stacked them all from the same instant: the break was erased
+    // because every segment restarted at the beginning, and the series ended
+    // early by the total of the gaps it had swallowed. That is issue #21 — a
+    // 2:20am break that never appeared and a flow chart that stopped at 4am
+    // while the summary metrics, which come from STR, covered the whole night.
+    const auto header_start = edf.getStartTime();
+    const auto file_start = startFromFilename(edf.filepath()).value_or(header_start);
+
+    // Session start still comes from the first file, and only if nobody set it
+    // from the folder name already.
     if (!session.session_start.has_value()) {
         session.session_start = file_start;
     }
 
-    // Track this BRP's end time (EDF start + data duration).
-    // For multi-BRP sessions, the last BRP's end is the session end.
-    auto brp_end = file_start + std::chrono::seconds(
+    // MAX, not last-one-wins. Checkpoints are parsed in name order, but a merge
+    // that re-parsed an earlier one would otherwise pull the session end
+    // backwards over a later checkpoint that had already extended it.
+    const auto brp_end = file_start + std::chrono::seconds(
         static_cast<int>(edf.actual_records * edf.record_duration));
-    session.session_end = brp_end;
+    if (!session.session_end.has_value() || brp_end > session.session_end.value())
+        session.session_end = brp_end;
     session.duration_seconds = static_cast<int>(
         std::chrono::duration_cast<std::chrono::seconds>(
-            brp_end - session.session_start.value()).count());
+            session.session_end.value() - session.session_start.value()).count());
     session.data_records = edf.actual_records;
     session.file_complete = edf.complete;
     session.extra_records = edf.extra_records;
@@ -76,7 +132,7 @@ bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
         auto flow_begin = flow_data.begin() + start;
         auto flow_end   = flow_data.begin() + end;
 
-        BreathingSummary summary(session.session_start.value() + std::chrono::minutes(min));
+        BreathingSummary summary(file_start + std::chrono::minutes(min));
 
         // Basic flow statistics
         double sum = std::accumulate(flow_begin, flow_end, 0.0);
@@ -103,9 +159,10 @@ bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
     // Persist breath-by-breath detail: run zero-crossing detection once over
     // the full flow series (not per-minute, to avoid double-counting breaths
     // that straddle a minute boundary) and map sample indices to absolute time.
-    // Base on session_start so breaths line up with the per-minute summaries.
+    // Base on THIS file's start, the same anchor the per-minute summaries use, so
+    // breaths stay lined up with them across a multi-checkpoint night.
     {
-        auto breath_base = session.session_start.value();
+        auto breath_base = file_start;
         auto breaths = detectBreaths(flow_data, sample_rate);
         session.breaths.reserve(breaths.size());
         for (const auto& b : breaths) {
