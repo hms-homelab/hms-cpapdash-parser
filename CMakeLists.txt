@@ -58,6 +58,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
     )
     if(CPAPDASH_PARSER_WITH_LOWENSTEIN)
         list(APPEND TEST_SOURCES tests/test_prisma.cpp)
+        list(APPEND TEST_SOURCES tests/test_prisma_channels.cpp)
     endif()
 
     add_executable(run_tests ${TEST_SOURCES})

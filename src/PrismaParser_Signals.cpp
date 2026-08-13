@@ -38,6 +38,31 @@ struct SignalData {
     std::vector<double> epap;
     std::vector<double> ipap;
     std::vector<double> eepap;
+    std::vector<double> mask_pressure;
+};
+
+// Channel spellings, per quantity, in preference order.
+//
+// Löwenstein does not use one naming scheme. Two firmwares seen in the wild
+// disagree on nearly half the set:
+//
+//   Prisma (18 ch)  Pressure EEPAPsoll IPAPsoll EPAPsoll RespFlow rAMV
+//                   BreathVolume BreathFrequency LeakFlowBreath ObstructLevel
+//                   SpO2 HeartFrequency SPRstatus InspExpirRel MV
+//                   rMVFluctuation TotalLeakage RSBI
+//   SMART max (12)  RespFlow LeakFlowBreath ObstructLevel Pressure CPAPPressure
+//                   PressureMeasured FlowFull rRMV SPRStatus IPAP EPAP
+//                   rMVFluctuation
+//
+// Matching is EXACT and confined to this table. It used to fall back to a
+// substring search, which is silently dangerous on labels this short: with no
+// exact "MV" on a SMART max, `MV` matched **rRMV** — a 0-255 relative
+// percentage — and it would have been stored as minute ventilation in L/min.
+// A wrong therapy number is worse than a missing one, so an unrecognised
+// spelling now yields nothing and a new firmware is added here deliberately.
+struct ChannelAliases {
+    std::vector<double> SignalData::*field;
+    std::vector<const char*> labels;
 };
 
 } // anonymous namespace
@@ -59,27 +84,34 @@ bool PrismaParser::parseSignalWmedf(const std::string& filepath, ParsedSession& 
             std::chrono::seconds(total_seconds);
     }
 
-    // Read all available signals
+    // Read all available signals, by exact label only (see ChannelAliases).
     SignalData sig;
-    auto readChannel = [&](const std::string& label, std::vector<double>& out) {
-        int idx = edf.findSignalExact(label);
-        if (idx < 0) idx = edf.findSignal(label);
-        if (idx >= 0) edf.readSignal(idx, out);
+    static const ChannelAliases kChannels[] = {
+        {&SignalData::pressure,       {"Pressure"}},
+        {&SignalData::resp_flow,      {"RespFlow"}},
+        {&SignalData::leak,           {"LeakFlowBreath"}},
+        {&SignalData::breath_freq,    {"BreathFrequency"}},
+        {&SignalData::breath_vol,     {"BreathVolume"}},
+        {&SignalData::minute_vent,    {"MV"}},
+        {&SignalData::ie_ratio,       {"InspExpirRel"}},
+        {&SignalData::obstruct_level, {"ObstructLevel"}},
+        {&SignalData::spo2,           {"SpO2"}},
+        {&SignalData::heart_rate,     {"HeartFrequency"}},
+        // SMART max drops the "soll" (setpoint) suffix.
+        {&SignalData::epap,           {"EPAPsoll", "EPAP"}},
+        {&SignalData::ipap,           {"IPAPsoll", "IPAP"}},
+        {&SignalData::eepap,          {"EEPAPsoll"}},
+        // The pressure actually measured at the mask, as opposed to the
+        // setpoint. Only SMART max reports it, and it was going unread while
+        // avg_mask_pressure sat empty (hms-cpap issue 15).
+        {&SignalData::mask_pressure,  {"PressureMeasured"}},
     };
-
-    readChannel("Pressure", sig.pressure);
-    readChannel("RespFlow", sig.resp_flow);
-    readChannel("LeakFlowBreath", sig.leak);
-    readChannel("BreathFrequency", sig.breath_freq);
-    readChannel("BreathVolume", sig.breath_vol);
-    readChannel("MV", sig.minute_vent);
-    readChannel("InspExpirRel", sig.ie_ratio);
-    readChannel("ObstructLevel", sig.obstruct_level);
-    readChannel("SpO2", sig.spo2);
-    readChannel("HeartFrequency", sig.heart_rate);
-    readChannel("EPAPsoll", sig.epap);
-    readChannel("IPAPsoll", sig.ipap);
-    readChannel("EEPAPsoll", sig.eepap);
+    for (const auto& ch : kChannels) {
+        for (const char* label : ch.labels) {
+            int idx = edf.findSignalExact(label);
+            if (idx >= 0) { edf.readSignal(idx, sig.*(ch.field)); break; }
+        }
+    }
 
     // Aggregate into per-minute BreathingSummary
     // Most signals are 1 sample/second (except Pressure at 5/s and RespFlow at 10/s)
@@ -166,6 +198,24 @@ bool PrismaParser::parseSignalWmedf(const std::string& filepath, ParsedSession& 
         // EPAP as mask/epr pressure
         auto ep = avgRange(sig.epap, rec_start, rec_end);
         if (ep) bs.epr_pressure = *ep * HPA_TO_CMH2O;
+
+        // Measured mask pressure. Carried at the same multi-sample-per-record
+        // rate as Pressure, so index it by its own rate rather than by record.
+        if (!sig.mask_pressure.empty()) {
+            int mp_spr = 1;
+            int midx = edf.findSignalExact("PressureMeasured");
+            if (midx >= 0) mp_spr = edf.signals[midx].samples_per_record;
+
+            int ms = rec_start * mp_spr;
+            int me = std::min(rec_end * mp_spr,
+                              static_cast<int>(sig.mask_pressure.size()));
+            double sum = 0;
+            int n = 0;
+            for (int i = ms; i < me; ++i) {
+                if (sig.mask_pressure[i] != 0) { sum += sig.mask_pressure[i]; ++n; }
+            }
+            if (n > 0) bs.mask_pressure = (sum / n) * HPA_TO_CMH2O;
+        }
 
         session.breathing_summary.push_back(std::move(bs));
     }
