@@ -1,5 +1,34 @@
 # Changelog
 
+## [2026.1.10] - 2026-08-13
+
+### Fixed
+- **Löwenstein channels are bound by exact name, from an explicit table.**
+  Two Prisma firmwares in the field disagree on nearly half their channel
+  names: one writes `EPAPsoll`/`IPAPsoll`/`BreathVolume`/`BreathFrequency`/
+  `MV`/`InspExpirRel`, a SMART max writes `EPAP`/`IPAP`/`PressureMeasured`/
+  `CPAPPressure`/`FlowFull`/`rRMV` and none of the others.
+
+  Binding used to fall back to a substring search, which is silently dangerous
+  on labels this short. A SMART max has no exact `MV`, so the minute-ventilation
+  read matched **`rRMV`** — a 0-255 relative percentage — and it would have been
+  served as minute ventilation in L/min, on 808 of 814 minutes of a real night.
+  A wrong therapy number is worse than a missing one, so matching is now exact
+  and confined to the table; an unrecognised spelling yields nothing, and a new
+  firmware is added deliberately.
+
+### Added
+- **`PressureMeasured` and the unsuffixed `EPAP`/`IPAP` are now read.** The
+  first is the pressure at the mask on a SMART max — the `avg_mask_pressure`
+  that hms-cpap issue 15 reports as always zero — and reading it also unblocks
+  the per-minute row its consumers gate on. The second is why EPR came out
+  empty on exactly the machine the issue was filed about.
+
+  What these machines do NOT record, and this release does not invent: a Prisma
+  declares `SpO2`, `HeartFrequency`, `BreathVolume`, `BreathFrequency`,
+  `InspExpirRel` and `MV` and writes zero to every sample, and a SMART max does
+  not declare them at all. Neither has a snore channel.
+
 ## [Unreleased]
 
 ## [2026.1.9] - 2026-08-12
