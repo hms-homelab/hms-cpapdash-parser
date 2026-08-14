@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cpapdash_parser VERSION 2026.1.12 LANGUAGES CXX)
+project(cpapdash_parser VERSION 2026.1.13 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -11,6 +11,7 @@ add_library(cpapdash_parser STATIC
     src/EDFParser_PLD.cpp
     src/EDFParser_SAD.cpp
     src/EDFParser_EVE.cpp
+    src/OximetryCsv.cpp
     src/EDFParser_STR.cpp
     src/ISessionParser.cpp
     src/Models.cpp

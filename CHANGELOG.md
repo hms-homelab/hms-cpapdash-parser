@@ -1,5 +1,20 @@
 # Changelog
 
+## [2026.1.13] - 2026-08-14
+
+### Added
+- **`writeO2RingCsv` / `o2RingCsvFilename`**, the Wellue/Viatom CSV writer
+  SleepHQ accepts for oximetry. It lives here because hms-cpap and
+  hms-cpapdash-api both have to produce this exact file, and two copies of a
+  format definition drift. The readers stay per-consumer, since each has its
+  own upload path.
+
+  Real exports come in two dialects; this writes the unquoted 24-hour one and
+  only that. Timestamps render as UTC because that is the clock the readers
+  parse them in. Unreadable samples are written as the 255 sentinel rather than
+  skipped, so a stretch with the ring off the finger stays a gap instead of
+  quietly shortening the night.
+
 ## [2026.1.12] - 2026-08-14
 
 ### Added

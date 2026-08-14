@@ -13,6 +13,7 @@
 #include "cpapdash/parser/EDFParser.h"
 #include "cpapdash/parser/EDFFile.h"
 #include "cpapdash/parser/Models.h"
+#include "cpapdash/parser/OximetryCsv.h"
 
 #include <filesystem>
 #include <fstream>
@@ -377,4 +378,71 @@ TEST_F(EveMultiBlock, SeveralCslBuffersStillMeanHasSummary) {
     auto s = EDFParser::parseSessionFromBuffers(b, "dev", "ResMed");
     ASSERT_NE(s, nullptr);
     EXPECT_TRUE(s->has_summary);
+}
+
+// ── The O2 Ring CSV writer, shared so both consumers emit the same file ─────
+//
+// hms-cpap and hms-cpapdash-api both have to produce this exact format for
+// SleepHQ. Two copies of a format definition drift, so the writer lives here.
+// The consumers keep their own readers, because each has its own upload path.
+
+TEST(OximetryCsv, HeaderAndRowsMatchARealExport) {
+    OximetrySession s;
+    std::tm tm{};
+    tm.tm_year = 126; tm.tm_mon = 5; tm.tm_mday = 19;
+    tm.tm_hour = 23; tm.tm_min = 20; tm.tm_sec = 29;
+    auto t0 = std::chrono::system_clock::from_time_t(timegm(&tm));
+
+    for (int i = 0; i < 3; ++i) {
+        OximetrySample smp{};
+        smp.timestamp  = t0 + std::chrono::seconds(i * 2);
+        smp.spo2       = static_cast<uint8_t>(95 + i);
+        smp.heart_rate = static_cast<uint8_t>(60 + i);
+        smp.motion     = static_cast<uint8_t>(i * 7);
+        s.samples.push_back(smp);
+    }
+    s.start_time = t0;
+
+    const std::string csv = writeO2RingCsv(s);
+    EXPECT_EQ(csv.substr(0, csv.find("\r\n")),
+              "Time,Oxygen Level,Pulse Rate,Motion,O2 Reminder,PR Reminder");
+    EXPECT_NE(csv.find("23:20:29 Jun 19 2026,95,60,0,0,0"), std::string::npos)
+        << "timestamps must render as UTC, the clock the readers parse in";
+    EXPECT_NE(csv.find(",97,62,14,0,0"), std::string::npos)
+        << "motion is data, carried through";
+}
+
+// A sample the ring could not read is a GAP, not a missing row. Dropping it
+// would heal the timeline over and fool the interval detector on re-import.
+TEST(OximetryCsv, UnreadableSamplesAreWrittenAsSentinels) {
+    OximetrySession s;
+    OximetrySample bad{};
+    bad.timestamp = std::chrono::system_clock::now();
+    bad.spo2 = 0xFF; bad.heart_rate = 0xFF; bad.invalid_flag = 1;
+    s.samples.push_back(bad);
+    s.start_time = bad.timestamp;
+
+    EXPECT_NE(writeO2RingCsv(s).find(",255,255,0,0,0"), std::string::npos);
+}
+
+TEST(OximetryCsv, FilenameFollowsTheRingsOwnConvention) {
+    OximetrySession s;
+    std::tm tm{};
+    tm.tm_year = 126; tm.tm_mon = 5; tm.tm_mday = 19;
+    tm.tm_hour = 23; tm.tm_min = 20; tm.tm_sec = 29;
+    s.start_time = std::chrono::system_clock::from_time_t(timegm(&tm));
+
+    EXPECT_EQ(o2RingCsvFilename(s, "O2Ring S"), "O2Ring S_20260619232029.csv");
+    EXPECT_EQ(o2RingCsvFilename(s), "O2Ring_20260619232029.csv");
+    // The device name can come from a database, so it cannot escape a filename.
+    const std::string evil = o2RingCsvFilename(s, "a/b\\c\"d");
+    EXPECT_EQ(evil.find('/'), std::string::npos);
+    EXPECT_EQ(evil.find('\\'), std::string::npos);
+    EXPECT_EQ(evil.find('"'), std::string::npos);
+}
+
+TEST(OximetryCsv, AnEmptySessionIsAHeaderAndNothingElse) {
+    OximetrySession empty;
+    EXPECT_EQ(writeO2RingCsv(empty),
+              "Time,Oxygen Level,Pulse Rate,Motion,O2 Reminder,PR Reminder\r\n");
 }
