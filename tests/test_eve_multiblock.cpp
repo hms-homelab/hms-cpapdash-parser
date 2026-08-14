@@ -214,3 +214,167 @@ TEST_F(EveMultiBlock, SeveralCslFilesStillMeanHasSummary) {
     ASSERT_NE(session, nullptr);
     EXPECT_TRUE(session->has_summary);
 }
+
+// ── The buffer form takes every EVE too ─────────────────────────────────────
+//
+// A caller that reads files itself (hms-cpapdash-api does) never touches the
+// directory form, so fixing that one alone left the cloud handing over a single
+// EVE buffer and losing the rest of the night's events.
+//
+// This matters most when there is NO STR.edf: the machine's own daily record
+// wins when present, and when it is absent these parsed events ARE the summary
+// and the dashboard. Counting one file's worth understates the night.
+
+TEST_F(EveMultiBlock, TheBufferFormUnionsEveryEve) {
+    auto brp  = buildBRP("12.08.25", "23:34:27");
+    auto eve1 = buildEVE("12.08.25", "23:34:27", {});                       // empty stub
+    auto eve2 = buildEVE("12.08.25", "23:53:19", {{10.0, "Obstructive Apnea"},
+                                                  {70.0, "Hypopnea"}});
+    auto eve3 = buildEVE("13.08.25", "03:46:16", {{5.0, "Central Apnea"}});
+
+    std::vector<EDFParser::ByteView> eves = {
+        {eve1.data(), eve1.size()},
+        {eve2.data(), eve2.size()},
+        {eve3.data(), eve3.size()},
+    };
+
+    auto s = EDFParser::parseSessionFromBuffers(
+        brp.data(), brp.size(), nullptr, 0, nullptr, 0, eves, "dev", "ResMed");
+    ASSERT_NE(s, nullptr);
+    EXPECT_EQ(s->events.size(), 3u)
+        << "the buffer form kept one EVE and dropped the rest of the night";
+    EXPECT_TRUE(s->has_events);
+}
+
+TEST_F(EveMultiBlock, TheBufferEventsAreOrderedAcrossBuffers) {
+    auto brp  = buildBRP("12.08.25", "23:34:27");
+    auto late = buildEVE("13.08.25", "03:46:16", {{0.0, "Central Apnea"}});
+    auto early= buildEVE("12.08.25", "23:53:19", {{0.0, "Hypopnea"}});
+
+    // Handed over out of order on purpose.
+    std::vector<EDFParser::ByteView> eves = {
+        {late.data(), late.size()}, {early.data(), early.size()}};
+
+    auto s = EDFParser::parseSessionFromBuffers(
+        brp.data(), brp.size(), nullptr, 0, nullptr, 0, eves, "dev", "ResMed");
+    ASSERT_NE(s, nullptr);
+    ASSERT_EQ(s->events.size(), 2u);
+    EXPECT_LE(s->events[0].timestamp, s->events[1].timestamp);
+}
+
+// The single-EVE overload still exists and still behaves, because callers that
+// genuinely have one file should not have to build a vector.
+TEST_F(EveMultiBlock, TheSingleBufferOverloadStillWorks) {
+    auto brp = buildBRP("12.08.25", "23:34:27");
+    auto eve = buildEVE("12.08.25", "23:53:19", {{10.0, "Obstructive Apnea"}});
+
+    auto s = EDFParser::parseSessionFromBuffers(
+        brp.data(), brp.size(), nullptr, 0, nullptr, 0,
+        eve.data(), eve.size(), "dev", "ResMed");
+    ASSERT_NE(s, nullptr);
+    EXPECT_EQ(s->events.size(), 1u);
+}
+
+// No EVE at all is a valid night, not a parse failure.
+TEST_F(EveMultiBlock, TheBufferFormAcceptsNoEveAtAll) {
+    auto brp = buildBRP("12.08.25", "23:34:27");
+    auto s = EDFParser::parseSessionFromBuffers(
+        brp.data(), brp.size(), nullptr, 0, nullptr, 0,
+        std::vector<EDFParser::ByteView>{}, "dev", "ResMed");
+    ASSERT_NE(s, nullptr);
+    EXPECT_TRUE(s->events.empty());
+    EXPECT_FALSE(s->has_events);
+}
+
+// ── Every type, not just EVE, and nothing header-only ───────────────────────
+//
+// hms-cpapdash-api kept only the LARGEST file of each type, so a night lost
+// every BRP checkpoint but one as well as every EVE but one. The directory form
+// has always collected all of them; the buffer form now does too.
+
+TEST_F(EveMultiBlock, TheBufferFormParsesEveryBrpNotJustOne) {
+    auto brp1 = buildBRP("12.08.25", "23:34:27");   // 1 record each
+    auto brp2 = buildBRP("12.08.25", "23:44:27");
+    auto brp3 = buildBRP("12.08.25", "23:54:27");
+
+    EDFParser::SessionBuffers one, all;
+    one.brp = {{brp1.data(), brp1.size()}};
+    all.brp = {{brp1.data(), brp1.size()},
+               {brp2.data(), brp2.size()},
+               {brp3.data(), brp3.size()}};
+
+    auto s_one = EDFParser::parseSessionFromBuffers(one, "dev", "ResMed");
+    auto s_all = EDFParser::parseSessionFromBuffers(all, "dev", "ResMed");
+    ASSERT_NE(s_one, nullptr);
+    ASSERT_NE(s_all, nullptr);
+
+    EXPECT_GT(s_all->breathing_summary.size(), s_one->breathing_summary.size())
+        << "keeping one BRP loses the rest of the night's flow";
+}
+
+// Header-only files are routine on a real card and must contribute nothing.
+// Feeding one to the parsers adds no samples but does add its timestamp, which
+// is how a night once got anchored to an empty checkpoint and came out short.
+TEST_F(EveMultiBlock, HeaderOnlyFilesAreSkipped) {
+    auto real  = buildBRP("12.08.25", "23:34:27");
+    auto empty = buildBRP("12.08.25", "22:00:00");
+    // Truncate to the header: 256 + 256*1 bytes, zero data records.
+    empty.resize(256 + 256);
+
+    EDFParser::SessionBuffers b;
+    b.brp = {{empty.data(), empty.size()}, {real.data(), real.size()}};
+
+    auto s = EDFParser::parseSessionFromBuffers(b, "dev", "ResMed");
+    ASSERT_NE(s, nullptr);
+    EXPECT_FALSE(s->breathing_summary.empty()) << "the real checkpoint was lost";
+
+    // Same session parsed without the empty file: identical sample count.
+    EDFParser::SessionBuffers only_real;
+    only_real.brp = {{real.data(), real.size()}};
+    auto s2 = EDFParser::parseSessionFromBuffers(only_real, "dev", "ResMed");
+    ASSERT_NE(s2, nullptr);
+    EXPECT_EQ(s->breathing_summary.size(), s2->breathing_summary.size())
+        << "the header-only file contributed something it should not have";
+}
+
+// An empty EVE stub is not "has events".
+TEST_F(EveMultiBlock, AHeaderOnlyEveDoesNotCountAsHavingEvents) {
+    auto brp = buildBRP("12.08.25", "23:34:27");
+    auto stub = buildEVE("12.08.25", "23:34:27", {});
+    stub.resize(256 + 256);                       // header only
+
+    EDFParser::SessionBuffers b;
+    b.brp = {{brp.data(), brp.size()}};
+    b.eve = {{stub.data(), stub.size()}};
+
+    auto s = EDFParser::parseSessionFromBuffers(b, "dev", "ResMed");
+    ASSERT_NE(s, nullptr);
+    EXPECT_TRUE(s->events.empty());
+    EXPECT_FALSE(s->has_events);
+}
+
+// A null or zero-length buffer in the list is skipped, not a crash.
+TEST_F(EveMultiBlock, NullAndEmptyBuffersAreIgnored) {
+    auto brp = buildBRP("12.08.25", "23:34:27");
+    EDFParser::SessionBuffers b;
+    b.brp = {{nullptr, 0}, {brp.data(), brp.size()}, {brp.data(), 0}};
+    b.eve = {{nullptr, 0}};
+    b.pld = {{nullptr, 5}};                      // non-null, bogus length
+
+    auto s = EDFParser::parseSessionFromBuffers(b, "dev", "ResMed");
+    ASSERT_NE(s, nullptr);
+    EXPECT_FALSE(s->breathing_summary.empty());
+}
+
+// CSL presence is a flag and several of them do not turn it off.
+TEST_F(EveMultiBlock, SeveralCslBuffersStillMeanHasSummary) {
+    auto brp = buildBRP("12.08.25", "23:34:27");
+    auto csl = buildEVE("12.08.25", "23:34:27", {});
+    EDFParser::SessionBuffers b;
+    b.brp = {{brp.data(), brp.size()}};
+    b.csl = {{csl.data(), csl.size()}, {csl.data(), csl.size()}};
+
+    auto s = EDFParser::parseSessionFromBuffers(b, "dev", "ResMed");
+    ASSERT_NE(s, nullptr);
+    EXPECT_TRUE(s->has_summary);
+}
