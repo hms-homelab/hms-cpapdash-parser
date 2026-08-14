@@ -1,5 +1,23 @@
 # Changelog
 
+## [2026.1.11] - 2026-08-14
+
+### Fixed
+- **A session keeps every EVE and CSL it has, not just one.** A ResMed night is
+  several mask-on blocks and each writes its own pair, but `parseSession` held a
+  single `eve_file` beside its BRP/PLD/SAD vectors, so the last file
+  `directory_iterator` happened to yield won and the rest were dropped.
+  Iteration order is unspecified, so which one survived was not even stable
+  between runs.
+
+  The cost, from hms-cpap issue 22: a card whose first block is a seconds-long
+  mask-fit check carrying the empty 832-byte EVE stub reported AHI 0.0 for the
+  night, while OSCAR read 2.84 off the same bytes.
+
+  EVE and CSL are now vectors, sorted with the same comparator the checkpoints
+  use, and every EVE is parsed. The events are sorted by timestamp afterwards,
+  because the concatenation is otherwise only ordered within each block.
+
 ## [2026.1.10] - 2026-08-13
 
 ### Fixed
