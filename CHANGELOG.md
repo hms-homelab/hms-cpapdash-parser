@@ -1,5 +1,28 @@
 # Changelog
 
+## [2026.1.12] - 2026-08-14
+
+### Added
+- **`parseSessionFromBuffers` takes every file a session has**, not one per
+  type. A caller that reads files itself now hands over `SessionBuffers` with a
+  vector per type, matching what the directory form has always collected.
+
+  hms-cpapdash-api kept only the LARGEST file of each type, so a night lost
+  every BRP checkpoint but one and every EVE but one. The previous fix in
+  2026.1.11 did not reach it, because that fixed the DIRECTORY form and the
+  cloud never calls it. The old signatures remain and delegate.
+
+### Fixed
+- **Header-only files are skipped rather than parsed.** ResMed leaves these
+  behind routinely -- a card night can hold six BRP files with four of them
+  header-only. Such a file contributes no samples but does contribute its
+  timestamp, which is how a night once had 70 minutes of genuine flow anchored
+  to an empty checkpoint and came out early and short. Now that callers are
+  asked to hand over everything they found, the parser refuses the empties
+  itself rather than trusting each caller to filter them. An EVE with no
+  records also no longer counts as "has events": that is the 832-byte stub a
+  mask-fit check leaves behind.
+
 ## [2026.1.11] - 2026-08-14
 
 ### Fixed

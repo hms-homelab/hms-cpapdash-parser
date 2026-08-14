@@ -42,6 +42,56 @@ public:
      * Any buffer may be nullptr/0 if that file type is unavailable.
      * brp is required; others are optional.
      */
+    /// A borrowed byte range. The caller owns the memory.
+    struct ByteView {
+        const uint8_t* data = nullptr;
+        size_t size = 0;
+    };
+
+    /**
+     * Every file a session is made of, in buffer form.
+     *
+     * A ResMed night is several mask-on blocks and EVERY type arrives as more
+     * than one file: BRP/PLD/SAD checkpoints during the night, and an EVE/CSL
+     * pair per block. A caller that reads files itself has to hand over all of
+     * them, exactly as the directory form collects all of them.
+     *
+     * Keeping only one file per type -- the largest, say -- silently shortens
+     * the night: the flow series loses every checkpoint but one, and the events
+     * lose every block but one.
+     *
+     * ORDER MATTERS for the signal types. There are no filenames here to sort
+     * by, so pass BRP/PLD/SAD in chronological order; the directory form sorts
+     * them by name for the same reason. Events carry absolute timestamps and
+     * are sorted after parsing regardless.
+     */
+    struct SessionBuffers {
+        std::vector<ByteView> brp;   ///< chronological
+        std::vector<ByteView> pld;   ///< chronological
+        std::vector<ByteView> sad;   ///< chronological
+        std::vector<ByteView> eve;   ///< any order
+        std::vector<ByteView> csl;   ///< presence only, sets has_summary
+    };
+
+    static std::unique_ptr<ParsedSession> parseSessionFromBuffers(
+        const SessionBuffers& buffers,
+        const std::string& device_id,
+        const std::string& device_name,
+        const std::string& session_start_str = ""
+    );
+
+    /// Multi-EVE convenience overload, single BRP/PLD/SAD. Delegates.
+    static std::unique_ptr<ParsedSession> parseSessionFromBuffers(
+        const uint8_t* brp, size_t brp_len,
+        const uint8_t* pld, size_t pld_len,
+        const uint8_t* sad, size_t sad_len,
+        const std::vector<ByteView>& eves,
+        const std::string& device_id,
+        const std::string& device_name,
+        const std::string& session_start_str = ""
+    );
+
+    /// Single-EVE convenience overload. Delegates to the vector form.
     static std::unique_ptr<ParsedSession> parseSessionFromBuffers(
         const uint8_t* brp, size_t brp_len,
         const uint8_t* pld, size_t pld_len,
