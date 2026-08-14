@@ -51,6 +51,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
     set(TEST_SOURCES
         tests/test_edf_file.cpp
         tests/test_brp_checkpoints.cpp
+        tests/test_eve_multiblock.cpp
         tests/test_models.cpp
         tests/test_vld_parser.cpp
         tests/test_desat_detector.cpp
