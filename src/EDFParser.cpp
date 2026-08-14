@@ -234,6 +234,7 @@ std::unique_ptr<ParsedSession> EDFParser::parseSessionFromBuffers(
     auto hasRecords = [](const EDFFile& edf) { return edf.actual_records > 0; };
 
     bool device_info_read = false;
+    bool any_brp_parsed = false;
     for (const auto& v : buffers.brp) {
         if (!v.data || v.size == 0) continue;
         EDFFile edf;
@@ -246,7 +247,20 @@ std::unique_ptr<ParsedSession> EDFParser::parseSessionFromBuffers(
             session->version_id = vid;
             device_info_read = true;
         }
-        parseBRPFile(edf, *session);
+        if (parseBRPFile(edf, *session)) any_brp_parsed = true;
+    }
+
+    // NO usable flow at all means NO session, which is the contract this form
+    // has always had: the single-buffer version returned nullptr when its one
+    // BRP failed to parse, and callers rely on that to tell a benign empty
+    // night (header-only file, no records) from a parsed one. Taking every file
+    // must not turn "nothing readable" into "an empty session that parsed
+    // fine" -- that would mark the night done and stop anyone looking again.
+    //
+    // The difference from before is only that ONE bad file among several no
+    // longer condemns the night: the good checkpoints still count.
+    if (!any_brp_parsed) {
+        return nullptr;
     }
 
     for (const auto& v : buffers.sad) {
