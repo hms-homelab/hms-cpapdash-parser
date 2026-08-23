@@ -51,6 +51,31 @@ std::vector<STRDailyRecord> EDFParser::parseSTRInternal(
         return data;
     };
 
+    // SDD-064: establish the machine FAMILY from the signal set before reading any
+    // setting, because the mode enum means different things in different families
+    // and the model code cannot separate them (an AirSense and an AirCurve both
+    // report MID=46). A machine only writes the settings its family has.
+    auto hasPrefix = [&](const std::string& prefix) {
+        for (const auto& s : edf.signals)
+            if (s.label.rfind(prefix, 0) == 0) return true;
+        return false;
+    };
+    STRDailyRecord::Family family = STRDailyRecord::Family::Unknown;
+    if (hasPrefix("S.AV.") || hasPrefix("S.AA."))      family = STRDailyRecord::Family::Asv;
+    else if (hasPrefix("S.VA.") || hasPrefix("S.S."))  family = STRDailyRecord::Family::BiLevel;
+    else if (hasPrefix("S.AS."))                       family = STRDailyRecord::Family::AutoSet;
+    else if (hasPrefix("S.C."))                        family = STRDailyRecord::Family::Cpap;
+
+    // Bi-level settings. Read UNCONDITIONALLY rather than gated on a mode number:
+    // the whole defect was trusting the mode to decide which settings exist. A
+    // machine that does not have these simply has no such signals and readSig
+    // returns empty.
+    auto bl_max_ipap_data = readSig("S.VA.MaxIPAP");
+    auto bl_min_epap_data = readSig("S.VA.MinEPAP");
+    auto bl_ps_data       = readSig("S.VA.PS");
+    auto bl_ipap_data     = readSig("S.S.IPAP");
+    auto bl_epap_data     = readSig("S.S.EPAP");
+
     // Read all signals we care about
     auto duration_data     = readSig("Duration");
     auto patient_hours_data = readSig("PatientHours");
@@ -203,6 +228,28 @@ std::vector<STRDailyRecord> EDFParser::parseSTRInternal(
         r.pressure_setting = val(press_setting_data, rec);
         r.max_pressure     = val(max_press_data, rec);
         r.min_pressure     = val(min_press_data, rec);
+
+        // SDD-064. The family comes from the signal set, so it is the same for every
+        // day in the file -- a machine does not change what it is overnight.
+        // `mode` is left EXACTLY as the machine reported it: rewriting the number
+        // would silently change what every previously stored row means. Consumers
+        // read the number THROUGH the family instead.
+        r.family = family;
+
+        // Bi-level pressures. Only a bi-level writes these, so on any other machine
+        // the signals are absent and these stay empty. Zero means "not set" the same
+        // way it does for the ASV block below.
+        {
+            auto optVal = [&val](const std::vector<double>& v, int i) -> std::optional<double> {
+                double d = val(v, i);
+                return (d > 0) ? std::optional<double>(d) : std::nullopt;
+            };
+            r.bl_max_ipap = optVal(bl_max_ipap_data, rec);
+            r.bl_min_epap = optVal(bl_min_epap_data, rec);
+            r.bl_ps       = optVal(bl_ps_data, rec);
+            r.bl_ipap     = optVal(bl_ipap_data, rec);
+            r.bl_epap     = optVal(bl_epap_data, rec);
+        }
 
         // Faults
         r.fault_device = static_cast<int>(val(fault_device_data, rec));
