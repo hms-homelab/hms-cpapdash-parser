@@ -1,5 +1,6 @@
 #include "cpapdash/parser/VLDParser.h"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <fstream>
 #include <numeric>
@@ -46,8 +47,24 @@ std::optional<OximetrySession> VLDParser::parse(
     uint8_t  minute = data[7];
     uint8_t  second = data[8];
 
-    // Duration at offset 0x12 (18) — uint16 LE in seconds
-    uint16_t duration_s = read_u16(data + 18);
+    // Header layout, recovered from the first REAL Wellue export we have ever had
+    // (Lee Hardin's ring, 2026-08-18) and corroborated against the CPAP session that
+    // accompanied it:
+    //   offset  9  u32  file size in bytes
+    //   offset 13  u32  recording duration in seconds
+    //   offset 22  u16  sample interval in seconds
+    //
+    // This used to read a u16 at offset 18 and divide it by the record count to get
+    // the interval. Offset 18 is NOT the duration. On that file it produced an
+    // interval of 0.4839 s -- not a rate any ring samples at -- which made the
+    // recording 1.02 h instead of 8.43 h and ODI 43.1/h instead of 5.2/h, i.e.
+    // "severe" instead of "mild". The CPAP session for the same night recorded 8.20
+    // therapy hours, which is what caught it.
+    //
+    // The synthesized fixtures could never have caught this: make_vld() writes the
+    // header the test then asserts against, so it encoded the same wrong assumption.
+    const uint32_t duration_hdr = read_u32(data + 13);
+    const uint16_t interval_hdr = read_u16(data + 22);
 
     // Build start time
     std::tm tm{};
@@ -70,8 +87,30 @@ std::optional<OximetrySession> VLDParser::parse(
     size_t record_count = data_len / RECORD_SIZE;
     if (record_count == 0) return std::nullopt;
 
-    double interval = static_cast<double>(duration_s) / record_count;
-    if (interval <= 0) interval = 4.0;
+    // An interval outside 1-10 s is not something these rings produce, so treat the
+    // header as untrustworthy rather than propagating a nonsense rate downstream:
+    // every metric that scales with the interval (duration, recording_hours,
+    // time_below_90/88, ODI, and calculateMetrics' 120s smoothing window) inherits it.
+    auto plausible = [](double s) { return s >= 1.0 && s <= 10.0; };
+
+    double interval = plausible(interval_hdr) ? static_cast<double>(interval_hdr) : 0.0;
+    if (interval <= 0.0) {
+        // No usable interval in the header: derive it, and only accept a sane result.
+        const double derived = duration_hdr > 0
+                                 ? static_cast<double>(duration_hdr) / record_count
+                                 : 0.0;
+        interval = plausible(derived) ? derived : 4.0;
+    }
+
+    // The duration has to agree with the samples actually present. Where it does not,
+    // the samples win: they are the thing that gets plotted, and a duration that
+    // disagrees with them silently distorts every rate computed against it.
+    uint32_t duration_s = duration_hdr;
+    const double expected_s = static_cast<double>(record_count) * interval;
+    if (duration_s == 0 ||
+        std::fabs(static_cast<double>(duration_s) - expected_s) > expected_s * 0.05) {
+        duration_s = static_cast<uint32_t>(expected_s);
+    }
 
     OximetrySession session;
     session.filename = filename;
