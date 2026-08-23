@@ -402,6 +402,31 @@ struct STRDailyRecord {
     double epr_level = 0, pressure_setting = 0;
     double max_pressure = 0, min_pressure = 0;
 
+    // ===== SDD-064: WHICH FAMILY OF MACHINE WROTE THIS =====
+    //
+    // `mode` alone is NOT enough to know what therapy this is, because the mode
+    // enum differs BETWEEN MACHINE FAMILIES. A bi-level reporting 8 was being read
+    // through the ASV enum and shown to its owner as "ASVAuto" -- a treatment for
+    // central apnea, which is not what he is on.
+    //
+    // The model code cannot separate them either: an AirSense (AutoSet) and an
+    // AirCurve (bi-level) BOTH report MID=46, verified across six real devices.
+    //
+    // The SIGNAL SET is unambiguous and self-describing, so that is what we use.
+    // Read the family first, then interpret `mode` WITHIN it.
+    enum class Family { Unknown, Cpap, AutoSet, BiLevel, Asv };
+    Family family = Family::Unknown;
+
+    // ===== BI-LEVEL SETTINGS (S.VA.* = VAuto, S.S.* = S) =====
+    // Present on an AirCurve and absent on an AirSense. These are the pressures the
+    // patient is actually prescribed; a single averaged mask pressure is a number a
+    // bi-level machine is rarely at, because it alternates EPAP<->IPAP every breath.
+    std::optional<double> bl_max_ipap;    // S.VA.MaxIPAP
+    std::optional<double> bl_min_epap;    // S.VA.MinEPAP
+    std::optional<double> bl_ps;          // S.VA.PS   (pressure support)
+    std::optional<double> bl_ipap;        // S.S.IPAP  (fixed bi-level)
+    std::optional<double> bl_epap;        // S.S.EPAP  (fixed bi-level)
+
     // Faults
     int fault_device = 0, fault_alarm = 0;
 
