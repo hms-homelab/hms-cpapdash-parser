@@ -55,6 +55,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         tests/test_eve_multiblock.cpp
         tests/test_models.cpp
         tests/test_vld_parser.cpp
+        tests/test_o2ring_csv.cpp
         tests/test_str_family.cpp
         tests/test_desat_detector.cpp
         tests/test_detect_manufacturer.cpp
