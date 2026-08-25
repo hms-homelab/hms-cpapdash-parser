@@ -69,16 +69,34 @@ bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
         session.session_start = file_start;
     }
 
+    const auto file_seconds =
+        static_cast<int>(edf.actual_records * edf.record_duration);
+
     // MAX, not last-one-wins. Checkpoints are parsed in name order, but a merge
     // that re-parsed an earlier one would otherwise pull the session end
     // backwards over a later checkpoint that had already extended it.
-    const auto brp_end = file_start + std::chrono::seconds(
-        static_cast<int>(edf.actual_records * edf.record_duration));
+    const auto brp_end = file_start + std::chrono::seconds(file_seconds);
     if (!session.session_end.has_value() || brp_end > session.session_end.value())
         session.session_end = brp_end;
-    session.duration_seconds = static_cast<int>(
-        std::chrono::duration_cast<std::chrono::seconds>(
-            session.session_end.value() - session.session_start.value()).count());
+
+    // Duration is the SUM of what the checkpoints hold, not the distance between
+    // the first and the last. The gap between two checkpoints is mask-off time --
+    // the very break this function's header comment describes ResMed opening a
+    // fresh file after -- so measuring the envelope reports it as therapy. That
+    // is support ticket 87: 1 + 114 + 107 minutes of real data spread across a
+    // 7h evening break came back as 11h22m instead of 3h42m, and AHI fell from
+    // 0.54 to 0.18 with it. OSCAR, which sums the sessions, agrees with 3h42m.
+    //
+    // Assign by file_start rather than adding: this same checkpoint is re-parsed
+    // on a merge and grows during a live session, and both would otherwise
+    // inflate a running total.
+    session.brp_spans[file_start] = file_seconds;
+    int therapy_seconds = 0;
+    for (const auto& [start, secs] : session.brp_spans) {
+        (void)start;
+        therapy_seconds += secs;
+    }
+    session.duration_seconds = therapy_seconds;
     session.data_records = edf.actual_records;
     session.file_complete = edf.complete;
     session.extra_records = edf.extra_records;
