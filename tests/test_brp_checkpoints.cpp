@@ -173,8 +173,52 @@ TEST_F(BrpCheckpoints, SessionEndIsTheLatestCheckpointEnd) {
     ASSERT_TRUE(s.session_end.has_value());
     EXPECT_EQ(hhmm(s.session_end.value()), "23:02:00");
     EXPECT_EQ(hhmm(s.session_start.value()), "22:00:00");
-    // 22:00 -> 23:02 wall clock, gap included. Mask-on time is a separate figure.
-    EXPECT_EQ(s.duration_seconds, 62 * 60);
+
+    // session_end stays WALL CLOCK -- the charts need the real end of the night.
+    // duration_seconds does not: it is therapy time, so the 58-minute mask-off
+    // break between these two checkpoints is excluded. 3 + 2 minutes of data,
+    // not the 62-minute envelope.
+    //
+    // This assertion used to read 62 * 60, deliberately, with a note that mask-on
+    // time was "a separate figure". No such figure exists on a session -- the only
+    // per-session duration is this one, and it is what hms-cpap shows. Support
+    // ticket 87: a night of 1 + 114 + 107 minutes split by a 7h evening break was
+    // reported as 11h22m instead of 3h42m, and AHI fell from 0.54 to 0.18 with it,
+    // because AHI is events / duration. OSCAR, summing sessions, says 3h42m.
+    EXPECT_EQ(s.duration_seconds, 5 * 60)
+        << "duration must be therapy time, not first-start-to-last-end";
+}
+
+// The shape of ticket 87: several checkpoints with real breaks between them.
+// The envelope and the therapy time differ by hours, and only one of them is
+// a duration a patient would recognise.
+TEST_F(BrpCheckpoints, DurationSumsCheckpointsAndExcludesTheGaps) {
+    writeCheckpoint(dir_, "20260701_171500", "01.07.26", "17.15.00", 1);
+    writeCheckpoint(dir_, "20260702_002400", "02.07.26", "00.24.00", 114);
+    writeCheckpoint(dir_, "20260702_024900", "02.07.26", "02.49.00", 107);
+    auto sp = parseDir();
+    ASSERT_TRUE(sp != nullptr);
+    const auto& s = *sp;
+
+    EXPECT_EQ(s.duration_seconds, (1 + 114 + 107) * 60) << "sum of the data held";
+    ASSERT_TRUE(s.session_end.has_value());
+    EXPECT_EQ(hhmm(s.session_end.value()), "04:36:00") << "end is still wall clock";
+}
+
+// A live checkpoint grows between reads and a merge re-parses earlier ones.
+// Both must leave the total correct rather than compounding it.
+TEST_F(BrpCheckpoints, RereadingAndGrowthDoNotInflateDuration) {
+    writeCheckpoint(dir_, "20260701_220000", "01.07.26", "22.00.00", 3);
+    writeCheckpoint(dir_, "20260701_230000", "01.07.26", "23.00.00", 2);
+    ASSERT_EQ(parseDir()->duration_seconds, 5 * 60);
+
+    // Same directory parsed again: every checkpoint is re-read.
+    EXPECT_EQ(parseDir()->duration_seconds, 5 * 60) << "re-parse must be idempotent";
+
+    // The later checkpoint grows, as a live file does; the total follows it up
+    // by exactly the new data rather than adding a second copy of the file.
+    writeCheckpoint(dir_, "20260701_230000", "01.07.26", "23.00.00", 9);
+    EXPECT_EQ(parseDir()->duration_seconds, (3 + 9) * 60) << "growth replaces, not adds";
 }
 
 // Re-parsing an earlier checkpoint after a later one must not drag the end backwards.

@@ -277,7 +277,22 @@ struct ParsedSession {
     // Session metadata
     std::optional<std::chrono::system_clock::time_point> session_start;
     std::optional<std::chrono::system_clock::time_point> session_end;
+    // THERAPY time, not the envelope: the sum of the data each BRP checkpoint
+    // actually holds, with the mask-off gaps between them excluded. This used to
+    // be session_end - session_start, which counted every break as therapy: a
+    // night of 1 + 114 + 107 minutes split by a 7h evening break reported 11h22m
+    // instead of 3h42m, and deflated AHI by the same factor because AHI is
+    // events / duration (support ticket 87, confirmed against OSCAR).
     std::optional<int> duration_seconds;
+
+    // file_start -> seconds of data in that checkpoint, which is what makes the
+    // sum above safe to recompute. Keyed rather than accumulated because the same
+    // BRP is legitimately parsed more than once: a merge can re-parse an earlier
+    // checkpoint, and a live file GROWS between reads. Assigning by key makes a
+    // re-parse idempotent and lets a grown file simply replace its own older,
+    // smaller value; a running total would double-count both.
+    std::map<std::chrono::system_clock::time_point, int> brp_spans;
+
     int data_records = 0;
     bool file_complete = false;
 
