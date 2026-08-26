@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2026.4.0] - 2026-08-26
 
 ### Added
 - **`SleepIndex`**, the nightly therapy-quality index and the consistency
@@ -24,6 +24,132 @@
   because this library links no JSON reader and a five column table is not
   worth adding one.
 
+## [2026.3.0] - 2026-08-25
+
+### Fixed
+- **Session duration is therapy time, not the envelope around it.**
+  `parseBRPFile` set `duration_seconds` to `session_end - session_start`. A
+  night is not one file: ResMed opens a fresh checkpoint after every mask-off
+  break, so that span counted every break as therapy.
+
+  Support ticket 87, verified against the customer's own card. Three
+  checkpoints holding 1, 114 and 107 minutes, separated by a 7h evening break
+  and a 31m gap, reported 11h 22m where OSCAR reports 3h 42m. One error, two
+  wrong numbers, because AHI is events over duration: 2 obstructive apneas came
+  out as 0.18/h instead of 0.54/h. Both of the customer's figures are
+  reproduced exactly by the two formulas, which is what identified the line.
+
+  `duration_seconds` is now the sum of what the checkpoints actually hold,
+  keyed on `file_start` in a new `ParsedSession::brp_spans` rather than
+  accumulated. The same checkpoint is legitimately parsed more than once: a
+  merge re-parses earlier files, and a live file grows between reads. Assigning
+  by key makes a re-parse idempotent and lets a grown file replace its own
+  smaller value, where a running total would double-count both and a live
+  session polled every minute would inflate without bound.
+
+  `session_end` is untouched and still wall clock. The charts need the real end
+  of the night, and the break has to stay visible as a break.
+
+## [2026.2.0] - 2026-08-23
+
+### Changed
+- **A minor rather than a patch, because the oximetry path is now whole.** The
+  O2 Ring CSV reader landed alongside the writer and the `.vld` parser, so this
+  library covers all of oximetry rather than half of it, and both hms-cpap and
+  hms-cpapdash-api can delete their own copies. Also corrects
+  `project(VERSION)`, which had been left behind while the tags moved on, a
+  mismatch nobody reads until something links against the wrong thing.
+
+## [2026.1.16] - 2026-08-23
+
+### Added
+- **`readO2RingCsv`, one reader instead of one per consumer.** hms-cpap and
+  hms-cpapdash-api had each grown their own reader for the Wellue/Viatom
+  export, and the two drifted exactly where a duplicated format definition
+  always drifts: in the corners one consumer hit and the other had not yet. The
+  API had learned to resolve an ambiguous numeric date from the night the
+  client filed it under (ticket 84) and to strip the comma out of
+  "Jun 19, 2026" before sniffing the date order; hms-cpap had learned to
+  summarise through `calculateMetrics` rather than a hand-rolled proxy. Neither
+  knew what the other knew, and a user with the wrong one got their night filed
+  on the wrong day. This is the union.
+
+  Numeric dates are the hard part: the phone app writes the date in the
+  PHONE's locale, so "05/08/2026" is the 5th of August or the 8th of May and
+  nothing in the file says which. Resolved in order by a component above 12
+  (only a day can be), the caller's day hint, consecutive-day progression
+  across the file, the YYYYMMDD stamp in the export's own filename, an AM/PM
+  clock implying a US locale, then day-first.
+
+  Stays timezone-free, which is the constraint that makes the file safe to
+  share between consumers. A ring records a wall clock with no zone, so
+  timestamps go in through `timegm` and come out through `gmtime`, the same
+  clock `writeO2RingCsv` renders, which is what makes read-then-write an exact
+  round trip. Whose evening that wall clock was is the caller's question.
+
+## [2026.1.15] - 2026-08-23
+
+### Fixed
+- **A ResMed STR's mode enum means different things on different machines**,
+  and one enum was being applied to all of them. A bi-level reporting mode 8
+  was read through the ASV enum, so its owner was told he is on ASVAuto, a
+  treatment for central apnea he is not on.
+
+  The model code cannot separate them either: an AirSense (AutoSet) and an
+  AirCurve (bi-level) both report MID=46, verified across six real devices. The
+  signal set is unambiguous and self-describing, so it is now the
+  discriminator: `S.AV.*`/`S.AA.*` is ASV, `S.VA.*`/`S.S.*` is bi-level,
+  `S.AS.*` is AutoSet, `S.C.*` alone is CPAP. Read the family first, then
+  interpret the mode within it.
+
+  `mode` itself is left exactly as the machine reported it. Rewriting the
+  number would silently change what every already-stored row means, so
+  consumers read it through the family instead.
+
+### Added
+- **The bi-level settings that were being dropped:** `S.VA.MaxIPAP`,
+  `S.VA.MinEPAP`, `S.VA.PS`, `S.S.IPAP` and `S.S.EPAP`. Deliberately not gated
+  on a mode number, since trusting `mode` to decide which settings exist was
+  the whole defect. A machine without them simply has no such signals.
+
+  Proven on real files: the affected customer's STR classifies BiLevel with
+  MaxIPAP 14 / MinEPAP 5 / PS 3 / IPAP 8 / EPAP 5, corroborated by his measured
+  mask pressure sitting at p50 6.40 / p95 7.20, between EPAP and IPAP as a
+  bi-level should. An AutoSet machine on the same MID classifies AutoSet with
+  every bi-level field empty.
+
+## [2026.1.14] - 2026-08-23
+
+### Fixed
+- **`.vld` duration and sample interval are read from the header, not derived
+  by division.** `parse()` read a u16 at offset 18 as the recording duration
+  and computed the interval as duration over record count. Offset 18 is not the
+  duration.
+
+  Found on the first real Wellue export we have ever had: 7591 records, a true
+  4s interval and a true 30364s duration, but offset 18 held 3673, so the
+  interval came out as 0.4839s. Nothing samples at half a second. The recording
+  was reported as 1.02h instead of 8.43h and ODI as 43.1/h instead of 9.13/h,
+  which is severe instead of mild. What caught it was the CPAP session recorded
+  alongside that night: 8.20 therapy hours.
+
+  The real layout, recovered by scanning the header for arithmetic identities:
+  offset 9 is a u32 file size, offset 13 a u32 duration in seconds, offset 22 a
+  u16 sample interval in seconds, and offset 18 is what we were reading.
+  7591 records at 4s is 30364s, and offset 13 holds exactly that.
+
+  Everything that scales with the interval had inherited the error, including
+  the 120s smoothing window `calculateMetrics` sizes as `120.0 / interval`, so
+  desaturation detection was mis-windowed too. That is why the corrected ODI is
+  9.13 rather than the 5.2 a naive rescale of the old event count suggests.
+
+  An interval outside 1 to 10s is now refused rather than propagating a
+  nonsense rate, and a duration that disagrees with the samples by more than 5%
+  is corrected to record count times interval. The samples are what gets
+  plotted; a duration that contradicts them silently distorts every rate
+  computed against it.
+
+### Added
 ## [2026.1.13] - 2026-08-14
 
 ### Added
@@ -108,8 +234,6 @@
   declares `SpO2`, `HeartFrequency`, `BreathVolume`, `BreathFrequency`,
   `InspExpirRel` and `MV` and writes zero to every sample, and a SMART max does
   not declare them at all. Neither has a snore channel.
-
-## [Unreleased]
 
 ## [2026.1.9] - 2026-08-12
 
@@ -278,6 +402,19 @@
 ### Changed
 - `calculateMetrics()` now populates `spo2_drops`/`odi` from the rolling-baseline
   `DesatDetector` instead of the previous naive consecutive-sample 4% diff.
+
+## [2026.1.2] - 2026-06-14
+
+### Removed
+- **The Philips DreamStation 2 parser.** The DS2/PRS1 implementation (crypto,
+  chunk reader, F0V6 event decoder) had been adapted from a GPLv3 reference and
+  is license-incompatible with this MIT library. Removed along with its tests,
+  the `CPAPDASH_PARSER_WITH_PHILIPS` build flag, the OpenSSL dependency it
+  required and the `PHILIPS` manufacturer enum.
+
+  Supported hardware is ResMed (EDF) and Löwenstein Prisma (WMEDF/XML). A
+  clean-room DreamStation parser may be added later behind the same flag, which
+  is what SDD-002 and the private hms-cpapdash-parser-philips fork exist for.
 
 ## [2026.1.0] - 2026-04-02
 
