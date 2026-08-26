@@ -1,5 +1,24 @@
 # Changelog
 
+## [2026.4.1] - 2026-08-26
+
+### Fixed
+- **The sleep index fixtures are found wherever the tests are run from.**
+  v2026.4.0's two contract tests read `tests/fixtures/sleep_index/*.csv` by a
+  path relative to the repository root. `ctest` runs the binary from the BUILD
+  directory, so both tests failed in CI on a tag whose library code was
+  perfectly fine. They passed locally only because a hand-run `./run_tests`
+  usually starts at the root.
+
+  CMake now passes the source directory in as `CPAPDASH_PARSER_SOURCE_DIR` and
+  the lookup falls back through the working directory and its parents, so the
+  tables are found from the build tree, from the root, and from anywhere else.
+  Verified all three ways, including `ctest` from the build directory, which is
+  the shape CI actually runs.
+
+  **v2026.4.0 should not be used.** Its library is identical to this one, but
+  its test suite fails under ctest and it therefore has no release artifacts.
+
 ## [2026.4.0] - 2026-08-26
 
 ### Added

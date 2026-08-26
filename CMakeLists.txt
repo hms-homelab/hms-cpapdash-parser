@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cpapdash_parser VERSION 2026.4.0 LANGUAGES CXX)
+project(cpapdash_parser VERSION 2026.4.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -69,5 +69,10 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
 
     add_executable(run_tests ${TEST_SOURCES})
     target_link_libraries(run_tests cpapdash_parser GTest::GTest GTest::Main)
+    # ctest runs the binary from the BUILD directory while a developer running
+    # ./run_tests by hand is usually at the repository root, so a fixture path
+    # relative to either one alone passes in one place and fails in the other.
+    target_compile_definitions(run_tests PRIVATE
+        CPAPDASH_PARSER_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME parser_tests COMMAND run_tests)
 endif()

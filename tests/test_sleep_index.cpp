@@ -3,6 +3,7 @@
 #include "cpapdash/parser/SleepIndex.h"
 
 #include <cmath>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <sstream>
@@ -13,12 +14,34 @@ using namespace cpapdash::parser;
 
 namespace {
 
-const std::string FIXTURES = "tests/fixtures/sleep_index";
+// Where the contract tables live.
+//
+// CMake passes the source directory in, because ctest runs the binary from the
+// BUILD directory while a developer running ./run_tests by hand is usually at
+// the repository root. A path relative to either one alone is a test that
+// passes locally and fails in CI, which is exactly what happened.
+#ifndef CPAPDASH_PARSER_SOURCE_DIR
+#define CPAPDASH_PARSER_SOURCE_DIR "."
+#endif
 
-std::vector<std::string> readTable(const std::string& path) {
+std::string fixturePath(const std::string& name) {
+    const std::string rel = "tests/fixtures/sleep_index/" + name;
+    for (const std::string& base : {std::string(CPAPDASH_PARSER_SOURCE_DIR) + "/",
+                                    std::string(""),
+                                    std::string("../"),
+                                    std::string("../../")}) {
+        std::error_code ec;
+        if (std::filesystem::exists(base + rel, ec)) return base + rel;
+    }
+    return {};
+}
+
+std::vector<std::string> readTable(const std::string& name) {
+    const std::string path = fixturePath(name);
     std::ifstream in(path);
-    EXPECT_TRUE(in.good()) << "missing fixture " << path
-                           << " (run the tests from the repository root)";
+    EXPECT_TRUE(!path.empty() && in.good())
+        << "missing fixture " << name << " (looked relative to "
+        << CPAPDASH_PARSER_SOURCE_DIR << " and to the working directory)";
     std::vector<std::string> lines;
     std::string line;
     while (std::getline(in, line)) {
@@ -54,7 +77,7 @@ std::optional<double> optDouble(const std::string& field) {
 // ---------------------------------------------------------------------------
 
 TEST(SleepIndex, MatchesTheIndexFixture) {
-    const auto lines = readTable(FIXTURES + "/index_vectors.csv");
+    const auto lines = readTable("index_vectors.csv");
     ASSERT_FALSE(lines.empty());
 
     int checked = 0;
@@ -78,7 +101,7 @@ TEST(SleepIndex, MatchesTheIndexFixture) {
 }
 
 TEST(SleepIndex, MatchesTheStreakFixture) {
-    const auto lines = readTable(FIXTURES + "/streak_vectors.csv");
+    const auto lines = readTable("streak_vectors.csv");
     ASSERT_FALSE(lines.empty());
 
     for (const auto& line : lines) {
