@@ -1,0 +1,51 @@
+# SDD-019 nightly index contract. Every implementation of the index, in any
+# language, must reproduce this table exactly.
+#
+# usage_hours,ahi,leak_95,expected_index,expected_band
+# An empty input field means the input is absent for that night.
+# An empty expected_index means the night does not score at all.
+#
+# Regenerate this file whenever a weight or cutoff in SleepIndex.h changes.
+# Every consumer's tests then fail until it follows, which is the point.
+
+# Full credit and no credit
+8,2,10,100,excellent
+0,40,60,0,needs_attention
+10,0,0,100,excellent
+
+# Exactly on the full-credit cutoffs
+7,5,24,100,excellent
+
+# Every component exactly half: 20 + 20 + 10
+3.5,17.5,32,50,fair
+
+# Renormalisation: an absent input drops out, it does not score zero
+7,5,,100,excellent
+3.5,17.5,,50,fair
+7,,,100,excellent
+,30,,0,needs_attention
+,,32,50,fair
+
+# Nothing to score
+,,,,
+
+# A negative leak is a sentinel and is dropped, not clamped to full credit.
+# Dropping gives 40/80; clamping to full would give 60/100.
+3.5,17.5,-1,50,fair
+
+# Past the zero-credit ceilings
+8,50,10,60,fair
+8,2,100,80,good
+
+# Both sides of every band boundary, usage only so the arithmetic is visible
+5.95,,,85,excellent
+5.88,,,84,good
+4.9,,,70,good
+4.83,,,69,fair
+3.5,,,50,fair
+3.43,,,49,needs_attention
+
+# Nights off real cards
+6.2,1.4,18.5,95,excellent
+4.1,8.3,27,74,good
+7.5,6,25,97,excellent

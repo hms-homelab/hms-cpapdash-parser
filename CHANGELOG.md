@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **`SleepIndex`**, the nightly therapy-quality index and the consistency
+  streak, moved here from cpapdash-app. It was defined once, in Dart, in
+  `lib/services/sleep_score.dart`; hms-cpapdash-api never had it and hms-cpap
+  has nothing score-shaped at all. Writing it again in each consumer would make
+  three copies of a set of tunable constants in three languages with nothing
+  keeping them equal. See hms-cpap `docs/SDD-019`.
+
+  `nightlyIndex()` weights usage 40, AHI 40 and leak 20, renormalising over
+  whichever inputs are actually present, so a machine that reports no leak
+  scores out of 80 rather than being punished for its silence. A negative leak
+  is a sentinel and is dropped rather than clamped to full credit.
+  `currentStreak()` / `bestStreak()` count compliant nights over YYYYMMDD dates
+  with real calendar arithmetic, so 31 April is rejected instead of quietly
+  becoming 1 May.
+
+  `tests/fixtures/sleep_index/*.csv` are the contract, not just a test: the
+  Dart implementation reads the same two tables, and a change to any weight or
+  cutoff here fails the app's tests until it follows. CSV rather than JSON
+  because this library links no JSON reader and a five column table is not
+  worth adding one.
+
 ## [2026.1.13] - 2026-08-14
 
 ### Added

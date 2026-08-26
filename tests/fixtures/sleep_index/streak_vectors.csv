@@ -1,0 +1,41 @@
+# SDD-019 streak contract. Semicolon separated, because the night list is
+# itself comma separated:
+#
+#   name;YYYYMMDD:hours,YYYYMMDD:hours,...;expected_current;expected_best
+#
+# The night list is NEWEST FIRST, which is what currentStreak requires and what
+# bestStreak ignores. A night counts as compliant at or above 4 hours.
+
+empty;;0;0
+single_compliant;20260826:7.5;1;1
+single_short;20260826:3.9;0;0
+three_in_a_row;20260826:7,20260825:5,20260824:4;3;3
+week;20260826:8,20260825:8,20260824:8,20260823:8,20260822:8,20260821:8,20260820:8;7;7
+
+# The newest night broke it, so there is no current streak, but the history
+# still holds one.
+newest_broken;20260826:2,20260825:8,20260824:8;0;2
+
+# A missed night ends the run
+gap_in_middle;20260826:8,20260825:8,20260823:8,20260822:8;2;2
+
+# The compliance threshold is inclusive
+threshold_exact;20260826:4,20260825:4;2;2
+just_below;20260826:3.99,20260825:8;0;1
+
+# Calendar arithmetic, not string arithmetic
+month_boundary;20260801:8,20260731:8,20260730:8;3;3
+year_boundary;20270101:8,20261231:8;2;2
+leap_day;20280301:8,20280229:8,20280228:8;3;3
+non_leap_boundary;20270301:8,20270228:8;2;2
+
+# A repeated date ends the current run but is skipped by bestStreak. That
+# asymmetry is inherited from the Dart original and is deliberate here.
+duplicate_date;20260826:8,20260826:8,20260825:8;1;2
+
+# A date that does not parse ends the current run and is dropped from the
+# history entirely
+unparseable_date;20260826:8,notadate:8,20260824:8;1;1
+
+# currentStreak trusts the order it is given; bestStreak sorts for itself
+unsorted_input;20260820:8,20260826:8,20260825:8,20260824:8;1;3
