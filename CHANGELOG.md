@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2026.4.2] - 2026-08-29
 
 ### Fixed
 - **Inspiratory and expiratory time were missing from 57% of every night.**
