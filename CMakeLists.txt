@@ -61,6 +61,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         tests/test_desat_detector.cpp
         tests/test_detect_manufacturer.cpp
         tests/test_sleep_index.cpp
+        tests/test_breath_analysis.cpp
     )
     if(CPAPDASH_PARSER_WITH_LOWENSTEIN)
         list(APPEND TEST_SOURCES tests/test_prisma.cpp)

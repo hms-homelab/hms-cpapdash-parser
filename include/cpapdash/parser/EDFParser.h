@@ -7,6 +7,7 @@
 #include <vector>
 #include <chrono>
 #include <cstdint>
+#include <optional>
 
 namespace cpapdash::parser {
 
@@ -116,6 +117,37 @@ public:
         const uint8_t* data, size_t len,
         const std::string& device_id);
 
+    // ---- Breath analysis -------------------------------------------------
+    // Public so it can be tested as a unit rather than only through a parsed
+    // EDF fixture. The Philips fork hoists this block into its own
+    // BreathAnalysis.{h,cpp}; this is the seam where the two reconcile.
+
+    struct BreathCycle {
+        int start_idx;
+        int end_idx;
+        double tidal_volume;
+        double inspiratory_time;
+        double expiratory_time;
+        double flow_limitation;
+    };
+
+    static std::vector<BreathCycle> detectBreaths(
+        const std::vector<double>& flow_data,
+        double sample_rate
+    );
+
+    // Takes the breaths whose onset falls in this minute. The caller detects
+    // breaths ONCE over the whole file and buckets them, so a breath straddling
+    // a minute boundary is counted exactly once (SDD-003 D2).
+    static void calculateRespiratoryMetrics(
+        const std::vector<double>& flow_data,
+        const std::vector<double>& pressure_data,
+        const std::vector<BreathCycle>& breaths,
+        double sample_rate,
+        int minute_idx,
+        BreathingSummary& summary
+    );
+
 private:
     static bool parseDeviceInfo(EDFFile& edf,
                                 std::string& serial_number,
@@ -135,29 +167,6 @@ private:
         std::optional<std::chrono::system_clock::time_point>& actual_start,
         std::optional<std::chrono::system_clock::time_point>& actual_end,
         bool& session_active
-    );
-
-    // Breath analysis and calculated respiratory metrics
-    struct BreathCycle {
-        int start_idx;
-        int end_idx;
-        double tidal_volume;
-        double inspiratory_time;
-        double expiratory_time;
-        double flow_limitation;
-    };
-
-    static std::vector<BreathCycle> detectBreaths(
-        const std::vector<double>& flow_data,
-        double sample_rate
-    );
-
-    static void calculateRespiratoryMetrics(
-        const std::vector<double>& flow_data,
-        const std::vector<double>& pressure_data,
-        double sample_rate,
-        int minute_idx,
-        BreathingSummary& summary
     );
 
     static double calculatePercentile(
