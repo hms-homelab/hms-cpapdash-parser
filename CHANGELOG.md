@@ -1,5 +1,46 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **Inspiratory and expiratory time were missing from 57% of every night.**
+  The breath detector seeded its zero-crossing list with sample 0 unconditionally
+  and then walked crossings in triples from there, which is only correct when the
+  flow series opens in inspiration. A series opening mid-expiration had every
+  triple shifted by half a breath, Ti and Te came out swapped, and the
+  tidal-volume sanity filter then discarded most of the mispaired cycles, so the
+  failure was silent: the file yielded almost no breaths rather than visibly
+  wrong ones.
+
+  Per-minute summaries made this constant rather than occasional, because they
+  re-ran detection on a 1500-sample slice starting at an arbitrary phase, so
+  roughly half of all minutes tripped it. `Ti`, `Te` and the I:E ratio are the
+  only per-minute fields not overwritten by PLD's machine-reported values, which
+  is why nothing else on the page ever looked wrong.
+
+  Measured over 175 real nights: minutes carrying a `Ti` went from 20,992 to
+  49,261 out of 49,271, with the mean essentially unchanged (1.5961 s to
+  1.5922 s). Whole-card breath count rose 1.83%, concentrated in five nights
+  whose files opened in expiration, one of which had been producing zero breaths
+  and now produces 5,884.
+
+### Changed
+- Breath detection runs **once over the whole flow series** and is bucketed by
+  the minute each breath's onset falls in, instead of a second full pass per
+  minute. A breath straddling a minute boundary is now counted exactly once
+  instead of being truncated and filtered out of both minutes. The breath
+  analysis block moved to the public section of `EDFParser.h` so it can be tested
+  as a unit; `tests/test_breath_analysis.cpp` covers both defects.
+
+  No model change: `Breath` and `BreathingSummary` are unchanged, so consumers
+  need no edit to compile.
+
+See `sdd/003-the-breath-detector.md`, which also records a shape-based flattening
+index that was built and then **rejected**: validated against ResMed's own
+FlowLim channel over 49,256 paired minutes it scored Spearman -0.003, because
+ResMed blends a flatness index with a breath shape index, ventilation change and
+duty cycle, and a flatness scalar alone measures almost none of it.
+
 ## [2026.4.1] - 2026-08-26
 
 ### Fixed

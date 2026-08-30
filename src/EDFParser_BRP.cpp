@@ -143,6 +143,21 @@ bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
 
     bool have_pressure = !press_data.empty();
 
+    // Detect breaths ONCE over the full flow series, then bucket them by the
+    // minute their onset falls in. This feeds both the per-minute summaries
+    // below and session.breaths further down, so the two can no longer disagree
+    // about a breath that straddles a minute boundary, and an eight-hour night
+    // is scanned once instead of once plus once per minute. (SDD-003 D2)
+    const auto all_breaths = detectBreaths(flow_data, sample_rate);
+
+    std::vector<std::vector<BreathCycle>> breaths_by_minute(n_minutes);
+    for (const auto& b : all_breaths) {
+        const int min_idx = b.start_idx / samples_per_minute;
+        if (min_idx >= 0 && min_idx < n_minutes) {
+            breaths_by_minute[min_idx].push_back(b);
+        }
+    }
+
     for (int min = 0; min < n_minutes; ++min) {
         int start = min * samples_per_minute;
         int end   = start + samples_per_minute;
@@ -169,21 +184,20 @@ bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
         }
 
         // Calculate calculated respiratory metrics (RR, TV, MV, Ti/Te, I:E, FL, percentiles)
-        calculateRespiratoryMetrics(flow_data, press_data, sample_rate, min, summary);
+        calculateRespiratoryMetrics(flow_data, press_data, breaths_by_minute[min],
+                                    sample_rate, min, summary);
 
         session.breathing_summary.push_back(summary);
     }
 
-    // Persist breath-by-breath detail: run zero-crossing detection once over
-    // the full flow series (not per-minute, to avoid double-counting breaths
-    // that straddle a minute boundary) and map sample indices to absolute time.
-    // Base on THIS file's start, the same anchor the per-minute summaries use, so
-    // breaths stay lined up with them across a multi-checkpoint night.
+    // Persist breath-by-breath detail from the same single detection pass the
+    // per-minute summaries were built from, mapping sample indices to absolute
+    // time. Base on THIS file's start, the same anchor the per-minute summaries
+    // use, so breaths stay lined up with them across a multi-checkpoint night.
     {
         auto breath_base = file_start;
-        auto breaths = detectBreaths(flow_data, sample_rate);
-        session.breaths.reserve(breaths.size());
-        for (const auto& b : breaths) {
+        session.breaths.reserve(all_breaths.size());
+        for (const auto& b : all_breaths) {
             Breath out;
             out.onset = breath_base + std::chrono::microseconds(
                 static_cast<long long>(b.start_idx / sample_rate * 1e6));
@@ -320,12 +334,32 @@ std::vector<EDFParser::BreathCycle> EDFParser::detectBreaths(
 
     // Detect zero-crossings (breath boundaries)
     // Positive flow = inspiration, negative flow = expiration
+    //
+    // The list holds ONLY real crossings, so it strictly alternates. It used to
+    // be seeded with index 0 and walked in triples from there, which is correct
+    // only when the file opens in inspiration. A file opening mid-expiration got
+    // every triple shifted by half a breath: the segment read as inspiration was
+    // the tail of an expiration, Ti and Te came out swapped, and the tidal-volume
+    // sanity filter below then discarded most of the mispaired cycles, so the
+    // whole file quietly yielded almost no breaths instead of visibly wrong ones.
+    // A sine starting exactly at 0.0 yielded none at all. (SDD-003 D1)
+
+    // Opening phase comes from the first sample that clears the noise threshold.
+    // clean_flow[0] is 0.0 for any file that starts at rest, and 0.0 > 0 is
+    // false, which is what silently declared those files to be in expiration.
+    size_t first_signal = 0;
+    while (first_signal < clean_flow.size() &&
+           std::abs(clean_flow[first_signal]) <= FLOW_THRESHOLD) {
+        ++first_signal;
+    }
+    if (first_signal == clean_flow.size()) return breaths;  // flat line
+
+    const bool opened_in_inspiration = clean_flow[first_signal] > 0;
+
     std::vector<int> zero_crossings;
-    zero_crossings.push_back(0);  // Start of data
+    bool was_positive = opened_in_inspiration;
 
-    bool was_positive = (clean_flow[0] > 0);
-
-    for (size_t i = 1; i < clean_flow.size(); ++i) {
+    for (size_t i = first_signal + 1; i < clean_flow.size(); ++i) {
         bool is_positive = (clean_flow[i] > FLOW_THRESHOLD);
         bool is_negative = (clean_flow[i] < -FLOW_THRESHOLD);
 
@@ -341,10 +375,15 @@ std::vector<EDFParser::BreathCycle> EDFParser::detectBreaths(
         }
     }
 
-    zero_crossings.push_back(clean_flow.size() - 1);  // End of data
+    // Start the walk on the first crossing INTO inspiration, so every triple is
+    // (inspiration start, expiration start, next inspiration start). If the file
+    // opened in inspiration, crossing 0 is into expiration and we skip it. The
+    // partial breath at each end of the file is dropped rather than guessed:
+    // under 0.1% of an eight-hour night at roughly one breath per four seconds.
+    const size_t first_triple = opened_in_inspiration ? 1 : 0;
 
     // Process each breath cycle (inspiration + expiration)
-    for (size_t i = 0; i < zero_crossings.size() - 2; i += 2) {
+    for (size_t i = first_triple; i + 2 < zero_crossings.size(); i += 2) {
         int start = zero_crossings[i];
         int mid = zero_crossings[i + 1];  // Inspiration -> Expiration transition
         int end = zero_crossings[i + 2];
@@ -408,9 +447,19 @@ std::vector<EDFParser::BreathCycle> EDFParser::detectBreaths(
     return breaths;
 }
 
+// A shape-based flattening index was written here and then REMOVED, because it
+// did not survive validation. Measured against ResMed's own FlowLim channel over
+// 175 sessions and 49,256 paired minutes of real card data: Spearman -0.003, and
+// the machine's highest flow-limitation minutes scored no higher than its
+// lowest. ResMed computes flow limitation by blending a flatness index with a
+// breath shape index, ventilation change and duty cycle, so a flatness scalar on
+// its own measures almost none of it. Do not re-add one without an oracle.
+// See sdd/003-the-breath-detector.md.
+
 void EDFParser::calculateRespiratoryMetrics(
     const std::vector<double>& flow_data,
     const std::vector<double>& pressure_data,
+    const std::vector<BreathCycle>& breaths,
     double sample_rate,
     int minute_idx,
     BreathingSummary& summary
@@ -423,12 +472,16 @@ void EDFParser::calculateRespiratoryMetrics(
         end = flow_data.size();
     }
 
-    // Extract this minute's flow data
+    // Extract this minute's flow data (still needed for the percentiles below,
+    // which are sample statistics rather than breath statistics)
     std::vector<double> minute_flow(flow_data.begin() + start, flow_data.begin() + end);
 
-    // Detect breaths in this minute
-    std::vector<BreathCycle> breaths = detectBreaths(minute_flow, sample_rate);
-
+    // Breaths arrive already detected over the whole file and bucketed by the
+    // minute their onset falls in. Re-detecting them from a one-minute slice, as
+    // this used to do, meant a second full pass over the night AND truncating
+    // every breath that straddled a boundary, which the tidal-volume filter then
+    // dropped from both minutes. All breath indices below are file-relative.
+    // (SDD-003 D2)
     if (breaths.empty()) {
         return;
     }
@@ -493,10 +546,13 @@ void EDFParser::calculateRespiratoryMetrics(
             double expiratory_volume = 0.0;
             int mid_idx = breath.start_idx + (breath.end_idx - breath.start_idx) / 2;
 
+            // This is the only place breath indices escape the detector. They
+            // are file-relative now that detection runs once over the whole
+            // file, so index flow_data, not the minute slice (SDD-003 D2).
             for (int j = mid_idx; j < breath.end_idx; ++j) {
-                if (j >= 0 && j < static_cast<int>(minute_flow.size())) {
-                    if (minute_flow[j] < 0) {
-                        expiratory_volume += std::abs(minute_flow[j]);
+                if (j >= 0 && j < static_cast<int>(flow_data.size())) {
+                    if (flow_data[j] < 0) {
+                        expiratory_volume += std::abs(flow_data[j]);
                     }
                 }
             }
