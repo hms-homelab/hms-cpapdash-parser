@@ -1,10 +1,22 @@
 name: CI
 
+# MANUAL ONLY. Do not add a push/pull_request trigger back.
+#
+# Several repositories now compete for one Actions budget, and this workflow is a
+# MATRIX -- it multiplies runner time by the number of configurations, so it is
+# the most expensive CI here per push. Reserved for a final confirmation before a
+# release.
+#
+# Build and test locally before pushing:
+#     cmake -S . -B build -DCPAPDASH_PARSER_BUILD_TESTS=ON \
+#         && cmake --build build -j8 && ctest --test-dir build --output-on-failure
+#
+# Trigger this one from the Actions UI or:  gh workflow run ci.yml --ref master
+#
+# The Release workflow is separate and still fires on a v* tag, which is the
+# final-deployment case and stays automatic.
 on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+  workflow_dispatch:
 
 jobs:
   build:
