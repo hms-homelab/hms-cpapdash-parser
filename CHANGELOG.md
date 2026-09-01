@@ -209,7 +209,6 @@ duty cycle, and a flatness scalar alone measures almost none of it.
   plotted; a duration that contradicts them silently distorts every rate
   computed against it.
 
-### Added
 ## [2026.1.13] - 2026-08-14
 
 ### Added
