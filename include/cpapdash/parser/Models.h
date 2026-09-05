@@ -23,7 +23,10 @@ enum class EventType {
     PERIODIC_BREATHING,
     LARGE_LEAK,
     VIBRATORY_SNORE,
-    DESATURATION   // SpO2 desaturation (detected from vitals, NOT counted toward AHI)
+    DESATURATION,  // SpO2 desaturation (detected from vitals, NOT counted toward AHI)
+    OTHER          // Recognised as an annotation, belongs to no index. Recorded so a new
+                   // firmware label shows up in the data instead of quietly inflating a
+                   // clinical index; still inside total_events (SDD-004 2.1).
 };
 
 /**
@@ -167,6 +170,13 @@ struct SessionMetrics {
     int hypopneas = 0;
     int reras = 0;
     int clear_airway_apneas = 0;
+    // ResMed's bare 'Apnea' label: an apnea it did not classify. Counts toward the
+    // AHI numerator, so it has to be persisted or AHI cannot be reconstructed from
+    // the stored counts (docs/RESMED_CALCULATION_RULES.md section 5).
+    int unclassified_apneas = 0;
+    // Annotations that match no known event. Recorded, part of total_events, part of
+    // no index (SDD-004 2.2).
+    int other_events = 0;
 
     // Event statistics
     std::optional<double> avg_event_duration;     // seconds

@@ -22,6 +22,7 @@ std::string eventTypeToString(EventType type) {
         case EventType::LARGE_LEAK: return "Large Leak";
         case EventType::VIBRATORY_SNORE: return "Vibratory Snore";
         case EventType::DESATURATION: return "Desaturation";
+        case EventType::OTHER: return "Other";
         default: return "Unknown";
     }
 }
@@ -58,7 +59,6 @@ void ParsedSession::calculateMetrics() {
     metrics->total_events = static_cast<int>(events.size());
 
     // Event breakdown by type
-    int apnea_other = 0;  // generic apneas (not OA/CA/clear-airway) — count toward AHI
     for (const auto& event : events) {
         switch (event.event_type) {
             case EventType::OBSTRUCTIVE:
@@ -77,21 +77,27 @@ void ParsedSession::calculateMetrics() {
                 metrics->clear_airway_apneas++;
                 break;
             case EventType::APNEA:
-                apnea_other++;
+                // ResMed's bare 'Apnea', an apnea it did not classify. Counts toward AHI.
+                metrics->unclassified_apneas++;
+                break;
+            case EventType::OTHER:
+                metrics->other_events++;
                 break;
             default:
                 break;
         }
     }
 
-    // AHI = (apneas + hypopneas) per hour. RERA, flow limitation, vibratory
-    // snore, and large leak are recorded for display but are NOT part of AHI —
-    // using total_events here over-counted it (badly, on devices that flag many
-    // flow-limitation events such as the Löwenstein Prisma SMART max).
+    // AHI = (apneas + hypopneas) per hour. RERA, CSR, OTHER, flow limitation,
+    // vibratory snore, and large leak are recorded for display but are NOT part of
+    // AHI — using total_events here over-counted it (badly, on devices that flag many
+    // flow-limitation events such as the Löwenstein Prisma SMART max). Definitions
+    // live in docs/RESMED_CALCULATION_RULES.md; they are not restated here.
     if (duration_seconds.has_value() && duration_seconds.value() > 0) {
         double hours = duration_seconds.value() / 3600.0;
         int apnea_hypopnea = metrics->obstructive_apneas + metrics->central_apneas
-                           + metrics->clear_airway_apneas + metrics->hypopneas + apnea_other;
+                           + metrics->clear_airway_apneas + metrics->unclassified_apneas
+                           + metrics->hypopneas;
         metrics->ahi = apnea_hypopnea / hours;
     }
 

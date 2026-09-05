@@ -54,6 +54,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         tests/test_edf_file.cpp
         tests/test_brp_checkpoints.cpp
         tests/test_eve_multiblock.cpp
+        tests/test_event_classification.cpp
         tests/test_models.cpp
         tests/test_vld_parser.cpp
         tests/test_o2ring_csv.cpp
