@@ -1,5 +1,31 @@
 # Changelog
 
+## [2026.5.0] - 2026-09-05
+
+### Added
+- **`EventType::OTHER`, so an unrecognised annotation stops becoming a RERA.**
+  The classification chain in `EDFParser_EVE.cpp` ended in a catch-all `else`
+  that assigned `RERA` to every label it did not match. Any annotation a future
+  ResMed firmware introduces would silently have become a clinical RERA in a
+  patient's event counts. `OTHER` is recorded and stays inside `total_events`,
+  but belongs to no index, so no displayed count drops at this release. The
+  enum value is appended, so existing integer values are unchanged.
+- `'arousal'` now has its own explicit `RERA` branch instead of relying on the
+  catch-all, so the mapping is stated rather than incidental.
+- `SessionMetrics.unclassified_apneas` and `SessionMetrics.other_events`.
+  `unclassified_apneas` is ResMed's bare `'Apnea'` label, which the AHI
+  numerator already counted through an unpersisted local and which no consumer
+  could reconstruct. It reconciles 175/175 against STR's own UAI channel.
+- `docs/RESMED_CALCULATION_RULES.md`, and `tools/` holding the four scripts
+  that produced every measurement in it. Which ResMed number comes from where,
+  and why: the STR.edf index channels are 0..2400 scaled by 0.1, so they carry
+  one decimal and the machine floors into them. Leak and pressure at 0.02 are
+  not coarse, and STR wins those on definition rather than precision.
+
+### Notes
+- No format change and no behaviour change to any existing index. `total_events`
+  is unchanged for identical input, which is covered by a test.
+
 ## [2026.4.2] - 2026-08-29
 
 ### Fixed
