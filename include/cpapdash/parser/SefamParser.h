@@ -14,48 +14,95 @@
 
 // Sefam S.Box -- see sdd/005-sefam-sbox-support.md and docs/SEFAM_FORMAT.md.
 //
-// The distinguishing feature of this format is that it describes itself. Every
-// session folder carries an INI declaring each channel's name, unit, sample rate,
-// bit depth and range, and one binary file per declared channel named by that
-// channel. So this parser hard-codes no channel table.
+// Rewritten 2026-09-05 against a real 242-session card. The first cut of this
+// parser derived the file layout from first principles because there was no card
+// to look at; the card disagreed with it on almost every point that mattered,
+// and everything below is now measured rather than reasoned.
 //
-// It also hard-codes neither of the two things a channel file will not tell you
-// directly: how many bytes of header sit in front of the samples, and how the
-// sample bytes are scrambled. Both are DERIVED from the files at parse time
-// (deduceHeaderLength, deduceDescrambler). That is partly independence -- the only
-// two write-ups of this format that exist are GPL and unlicensed respectively, and
-// this library is MIT, so nothing may be transcribed from either -- and partly
-// robustness, since a firmware that changes either one still parses.
+// A channel file is:
+//
+//   bytes 0..37   a 38-byte ASCII header, every byte XOR 0xBF, reading
+//                 "#02/<model><serial>      /<YYMMDDhhmmss>/"
+//   then          the samples, in blocks of ten seconds, each block followed by
+//                 a 3-byte trailer: the sum of the block's bytes mod 256, then a
+//                 big-endian uint16 block index
+//
+// The samples themselves are plain. A channel that was declared but never
+// recorded is written as the 38-byte header and nothing else.
 
 namespace cpapdash::parser {
 
-/** One channel, exactly as the INI declares it. Nothing here is assumed. */
+/** The fixed header every channel file opens with. */
+constexpr size_t kSefamFileHeaderBytes = 38;
+
+/** Its obfuscation. XOR 0xBF turns the header into ASCII; 0x9F becomes a space. */
+constexpr uint8_t kSefamHeaderXor = 0xBF;
+
+/** Bound on the block length the search will consider. */
+constexpr int kSefamMaxBlockSeconds = 120;
+
+/**
+ * How a session's samples are framed.
+ *
+ * Blocks of a fixed number of seconds -- the same for every channel in the
+ * session, whatever each channel's rate -- each followed by a trailer.
+ *
+ * Neither number is a constant of the format:
+ *
+ *   S.Box AUTO, 1263R, VER :A020400   10 s blocks, 3-byte trailer
+ *                                     [checksum][uint16 BE block index]
+ *   SleepBox_AUTO, 1200R, VER :A010300   10 s blocks, 1-byte trailer
+ *                                     [checksum], no index at all
+ *
+ * A parser that hard-codes either reads the other as corrupt, so both are
+ * derived per session -- see deduceBlockLayout().
+ */
+struct SefamBlockLayout {
+    int seconds = 0;
+    int trailer_bytes = 0;
+
+    bool hasIndex() const { return trailer_bytes >= 3; }
+    bool valid() const { return seconds > 0 && trailer_bytes > 0; }
+};
+
+/** Each block is followed by [checksum][uint16 big-endian index]. */
+constexpr size_t kSefamBlockTrailerBytes = 3;
+
+/** One channel, exactly as the INI declares it. */
 struct SefamChannel {
     int index = -1;          // N from [ChanN]
+    int type = 0;            // the INI's Type=, a per-quantity kind code
     std::string name;        // "FLW" -- also the file extension carrying its samples
     std::string description;
-    std::string unit;        // "lpm", "cmH2O", ...
+    std::string unit;        // "lpm", "cmH20", ...
     double min = 0;
     double max = 0;
     int freq = 0;            // Hz
     int bits = 8;
 
-    /** Bytes per sample, from the declared bit depth. */
     int bytesPerSample() const { return (bits + 7) / 8; }
+};
 
-    /**
-     * Raw code -> physical value.
-     *
-     * The declared range routinely exceeds what the declared bit depth can hold
-     * one-for-one (a flow channel spanning 460 L/min in 8 bits), so a raw code is
-     * a quantisation of [min, max] rather than the value itself. Reading it as a
-     * linear map is what makes the declared range mean anything, and it lands on
-     * suspiciously clean scale factors for the channels we expect to meet.
-     *
-     * Where min == 0 and max == 2^bits - 1 this is the identity, which is the
-     * degenerate case a channel with nothing to declare will use.
-     */
-    double toPhysical(uint32_t raw) const;
+/**
+ * How a channel's raw codes become physical values: `offset` then `factor`.
+ *
+ * The INI's Min/Max do NOT describe this. It is tempting to read a channel
+ * declaring -180..280 in 8 bits as a quantisation of that span, and the first
+ * cut of this parser did; the card says otherwise. Flow is centred on the code
+ * 128, not on the 99.8 that reading implies, and a pressure channel declaring
+ * 0..255 would put a patient on 110 cmH2O. Min/Max look like display or clipping
+ * limits, not a scale.
+ *
+ * See scaleFor() for what each channel actually uses and how much of it is
+ * confirmed.
+ */
+struct SefamScale {
+    double offset = 0;   // subtracted from the raw code first
+    double factor = 1;   // then multiplied
+    bool confirmed = false;
+    const char* unit = "";
+
+    double apply(double raw) const { return (raw - offset) * factor; }
 };
 
 /** Everything the session INI declares. */
@@ -77,60 +124,42 @@ struct SefamIni {
     const SefamChannel* find(const std::string& name) const;
 };
 
-/**
- * How to turn the bytes in a channel file back into samples.
- *
- * Discovered per card, never assumed. The search and its scoring live in
- * deduceDescrambler(); this is just the answer.
- */
-struct SefamDescrambler {
-    enum class Kind {
-        Identity,       // the bytes are already samples
-        SingleByteXor   // every byte XORed with one card-wide key
-    };
-
-    Kind kind = Kind::Identity;
-    uint8_t key = 0;
-
-    // Mean absolute successive difference of the decoded bytes, the score the
-    // winning candidate achieved. Lower is smoother, and a physiological signal
-    // sampled tens of times a second is smooth. Carried so a caller can tell a
-    // confident answer from a marginal one.
-    double roughness = 0;
-
-    // Roughness the identity candidate scored, for the same comparison.
-    double identity_roughness = 0;
-
-    // Whether a long constant stretch confirmed the key.
-    //
-    // Smoothness narrows the key to two and never to one: XOR by 0xFF is
-    // x -> 255 - x, which mirrors a signal while leaving the distance between
-    // neighbouring samples untouched, so a key and its complement score exactly
-    // alike. An idle stretch is what settles it, because a channel that recorded
-    // nothing recorded zero, so the byte that stretch repeats IS the key.
-    bool confirmed_by_idle_run = false;
-
-    // Set when nothing resolved that ambiguity, or when the idle stretch and the
-    // smoothness search name different keys -- which is what a repeating
-    // multi-byte key would look like through a single-byte search.
-    //
-    // Reading a card mirrored is not a near miss. A pressure of 10 comes out as
-    // 15.5 and still looks like breathing, so a session whose scrambling is
-    // ambiguous is refused rather than reported.
-    bool ambiguous = false;
-
-    uint8_t apply(uint8_t b) const {
-        return kind == Kind::SingleByteXor ? static_cast<uint8_t>(b ^ key) : b;
-    }
+/** The decoded 38-byte file header. */
+struct SefamFileHeader {
+    bool valid = false;
+    std::string text;         // the whole decoded line, for diagnostics
+    std::string record_type;  // "#02"
+    std::string identity;     // model code and serial, as the device writes it
+    std::optional<std::chrono::system_clock::time_point> stamp;
 };
 
-/** What a session folder turned out to contain, beyond the parsed data. */
+/** What de-framing a channel file found. */
+struct SefamFraming {
+    SefamBlockLayout layout;
+    size_t blocks = 0;
+    size_t checksum_failures = 0;
+    size_t index_breaks = 0;   // a block index that did not follow its predecessor
+    size_t samples = 0;
+
+    // A run at the end of the file too short to be a block and whose checksum
+    // does not verify: a write cut off mid-block. Its samples are dropped.
+    bool truncated_tail = false;
+};
+
+/** What the last parseSession() found out about the card. */
 struct SefamSessionNotes {
-    size_t header_bytes = 0;
-    SefamDescrambler descrambler;
-    std::vector<std::string> unmapped_channels;  // declared, read, nowhere to put
-    std::vector<std::string> undeclared_files;   // present, not in the INI, ignored
-    int unknown_event_codes = 0;
+    SefamFileHeader header;
+    std::string stem;              // the session's manifest name, without ".INI"
+    SefamBlockLayout layout;       // derived, not assumed
+    std::map<std::string, SefamFraming> framing;   // channel name -> framing
+    std::vector<std::string> unmapped_channels;    // declared, read, nowhere to put
+    std::vector<std::string> undeclared_files;     // present, not in the INI, ignored
+    std::vector<std::string> stub_channels;        // declared, never recorded
+
+    // Share of the recording each bit of the detection channel was set for.
+    // DET is a bitfield, not an enumeration, and what the bits MEAN is not known,
+    // so this is reported rather than turned into events. See SDD-005 section 7.
+    std::map<int, double> det_bit_share;
 };
 
 class SefamParser : public ISessionParser {
@@ -153,95 +182,126 @@ public:
         return DeviceManufacturer::SEFAM;
     }
 
-    /**
-     * What the last parseSession() found out about the card.
-     *
-     * The header length and the descrambling are discovered rather than known, so
-     * how they were resolved is part of the result, not a detail. This is where
-     * the donor-card work reads them back, and where an unmapped channel or an
-     * unrecognised detection code gets reported.
-     */
+    /** What the last parseSession() found out about the card. */
     const SefamSessionNotes& lastNotes() const { return notes_; }
 
-    // ── The discovery steps, public so they can be tested on their own and run
-    //    by hand against a donor card ──────────────────────────────────────────
+    // ── The steps, public so they can be tested on their own and run by hand
+    //    against a card ─────────────────────────────────────────────────────────
 
     static SefamIni parseIni(const std::string& filepath);
     static SefamIni parseIniText(const std::string& text);
 
     /**
-     * How many bytes sit in front of the samples in every channel file.
+     * Decode the 38-byte header at the front of a channel file.
      *
-     * The channels of one session cover one span of wall-clock time, each at its
-     * own rate. So the right header length is the one that makes every file
-     * agree on how long the recording was, and every wrong one makes them
-     * disagree -- by more, the further off it is, because the channels divide by
-     * different rates. That is the whole method: try each length, keep the one
-     * that reconciles them.
-     *
-     * A pair of channels at different rates pins the answer arithmetically, and
-     * a channel that was declared but never recorded helps too: its file is
-     * exactly the header length, so its payload goes to zero at the right answer
-     * and to a nonsense one-sample recording anywhere else.
-     *
-     * Returns nothing unless one length reconciles the files and no other comes
-     * close -- a single populated channel agrees with itself at every offset. A
-     * header length off by one byte shifts every sample in the night while the
-     * result still looks like therapy data, so there is no partial credit.
-     *
-     * @param file_sizes  channel name -> size in bytes of that channel's file
+     * Every byte XOR 0xBF, which yields printable ASCII in all 242 sessions of
+     * the donor card: "#02/1263R24337476       /251110222516/". The identity and
+     * the timestamp both agree with the session INI in every one of them, so this
+     * is a free cross-check on whether the INI and the data belong together.
      */
-    static std::optional<size_t> deduceHeaderLength(
-        const SefamIni& ini,
-        const std::map<std::string, size_t>& file_sizes);
+    static SefamFileHeader decodeFileHeader(const std::vector<uint8_t>& raw);
 
     /**
-     * Work out how the sample bytes are scrambled, by trying every candidate and
-     * keeping the one that yields the smoothest signal.
+     * Strip the block framing, returning the sample bytes.
      *
-     * The declared range cannot score this, because toPhysical() maps any byte
-     * into range by construction. Smoothness can: flow at 25 Hz moves a little
-     * between neighbouring samples, and XOR with the wrong key turns small steps
-     * into large ones wherever it flips a high bit.
+     * Samples run in blocks of ten seconds -- 250 samples on a 25 Hz channel, 10
+     * on a 1 Hz one -- each followed by three bytes: the sum of that block's
+     * bytes mod 256, then a big-endian uint16 index. The final, short block is
+     * framed the same way.
      *
-     * It gets us to two candidates and no further, because a key and its
-     * complement mirror the signal without changing its smoothness at all. An
-     * idle stretch chooses between them; without one the result is marked
-     * `ambiguous` and the caller must not use it.
+     * The checksum is the reason to trust anything this parser says about a
+     * Sefam card. Across the donor card's 209,610 flow blocks it verified every
+     * single time, so a misread offset or a misread rate cannot pass quietly.
      *
-     * A card that was never scrambled comes out as identity, which is the honest
-     * answer for that card.
-     *
-     * @param samples  raw bytes after the header, from one or more 8-bit channels
+     * The index is checked for continuity but not for its starting value: two
+     * sessions on the card begin at 2 rather than 1, with correct checksums
+     * throughout, so treating a first index of 1 as a rule would reject two
+     * perfectly good nights.
      */
-    static SefamDescrambler deduceDescrambler(const std::vector<std::vector<uint8_t>>& samples);
+    static std::vector<uint8_t> deframe(const std::vector<uint8_t>& raw,
+                                        const SefamChannel& channel,
+                                        SefamBlockLayout layout,
+                                        SefamFraming* framing = nullptr);
 
     /**
-     * Decode one channel's file into physical values.
+     * Work out how a session's samples are framed.
      *
-     * @param raw     the whole file, header included
-     * @param header  bytes to skip, from deduceHeaderLength()
+     * The checksums make this easy and safe: try each candidate, and the right
+     * one is the only one under which every block's trailer describes its block.
+     * Under a wrong layout the boundaries land mid-data, the trailer bytes are
+     * samples, and the sums do not match -- across hundreds of blocks, never by
+     * accident.
+     *
+     * Two blocks are required before an answer is offered, because a single
+     * block verifies under any layout long enough to contain it.
      */
-    static std::vector<double> decodeChannel(
-        const std::vector<uint8_t>& raw,
-        size_t header,
-        const SefamChannel& channel,
-        const SefamDescrambler& descrambler);
+    static std::optional<SefamBlockLayout> deduceBlockLayout(
+        const std::vector<uint8_t>& raw, const SefamChannel& channel);
 
     /**
-     * Turn a decoded event-detection channel into events.
+     * How to read a channel's codes as physical values.
      *
-     * Each run of one non-zero code becomes one event. Every event is
-     * EventType::OTHER carrying its raw code, because what a Sefam detection code
-     * MEANS is not known yet -- see SDD-005 section 7. Under SDD-004 that puts
-     * them inside total_events and inside no clinical index, so an AHI is never
-     * invented from a guess.
+     * NONE of this is confirmed. Every reading below is the one the donor card
+     * supports and the alternatives contradict, which is evidence and not proof,
+     * and SDD-005's oracle step is what settles them.
+     *
+     *   PRE  code/10 cmH2O. Mid-session codes sit near 110; a night reads as an
+     *        8.35 average peaking at 16.3, an ordinary CPAP prescription, and
+     *        across all 241 readable sessions the averages run 0.5 to 12. Read
+     *        through the INI's declared 0..255 the same night is 110 cmH2O,
+     *        which is not a pressure anyone survives.
+     *   LK   code/10 L/min, giving a 9.03 L/min mean. Through the declared
+     *        0..153 the same night averages 54 L/min, a leak that would have the
+     *        machine alarming all night.
+     *   FLW  offset 128, factor 1.
+     *
+     *        The offset is the weaker of the two claims and worth stating
+     *        carefully. Flow is measured at the blower, so it carries the mask's
+     *        intentional leak and a night's mean is not expected to be zero --
+     *        but it should be small against a signal that swings roughly +/-70.
+     *        It is: across the 40 nights of four hours or more, the per-night
+     *        mean sits between -14.6 and +14.9 and averages -2.7. Mid-scale is
+     *        the right neighbourhood. It is not pinned to the code, and the
+     *        first cut of this parser read the declared -180..280 as a
+     *        quantisation, which would put the centre at 99.8 instead.
+     *
+     *        The factor is not evidenced at all: nothing in the data
+     *        distinguishes L/min from any multiple of it.
      */
-    static std::vector<SleepEvent> decodeEvents(
-        const std::vector<double>& codes,
-        int freq,
-        std::chrono::system_clock::time_point session_start,
-        int* unknown_code_count = nullptr);
+    static SefamScale scaleFor(const SefamChannel& channel);
+
+    /** Codes to physical values, via deframe() and scaleFor(). */
+    static std::vector<double> readChannel(const std::vector<uint8_t>& raw,
+                                           const SefamChannel& channel,
+                                           SefamBlockLayout layout,
+                                           SefamFraming* framing = nullptr);
+
+    /**
+     * The session manifests in a folder, by filename stem.
+     *
+     * Two layouts are known, and they disagree about what a folder holds:
+     *
+     *   DATA_<n>/DATA_<n>.INI          one session per folder (S.Box AUTO, 1263R)
+     *   <YYMMDD>/<HHMMSS>.ini          several per folder, one per start time
+     *                                  (SleepBox_AUTO, 1200R)
+     *
+     * Under the second, a night's folder holds every recording that started that
+     * day, so the session is the filename stem and not the folder.
+     */
+    static std::vector<std::string> listSessionStems(const std::string& dir);
+
+    /**
+     * Parse one named session out of a folder that may hold several.
+     *
+     * parseSession() delegates here when a folder holds exactly one manifest,
+     * which is every session of the DATA_<n> layout.
+     */
+    std::unique_ptr<ParsedSession> parseSessionNamed(
+        const std::string& session_dir,
+        const std::string& stem,
+        const std::string& device_id,
+        const std::string& device_name,
+        std::optional<std::chrono::system_clock::time_point> session_start = std::nullopt);
 
 private:
     SefamSessionNotes notes_;

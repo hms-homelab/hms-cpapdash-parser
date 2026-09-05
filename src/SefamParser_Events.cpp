@@ -2,75 +2,57 @@
 
 #include "cpapdash/parser/SefamParser.h"
 
-#include <cmath>
-#include <set>
-#include <string>
+#include <map>
+#include <vector>
 
 namespace cpapdash::parser {
 
-// Sefam records detections as a sampled channel rather than as an annotation
-// list: one code per sample, at the rate the INI declares for that channel. An
-// event is therefore a run of the same non-zero code.
+// Why this file produces no events.
 //
-// Every one of them comes out as EventType::OTHER.
+// The first cut of this parser read DET as an enumeration -- one code per
+// sample, a run of equal codes being one event -- and emitted each run as
+// EventType::OTHER. The donor card says that is the wrong shape entirely. Over a
+// single 6h24m night DET takes 85 distinct values, and they decompose into
+// eight independent bits:
 //
-// We do not know what a Sefam detection code means. The vendor's own software
-// distinguishes obstructive from central apneas and hypopneas, reports snoring
-// and flow-limitation runs, and there is no published mapping from those to the
-// numbers in this channel. Assigning one by guesswork would put invented numbers
-// into somebody's AHI, which is worse than reporting none: under SDD-004 an
-// OTHER is inside total_events and inside no clinical index, so the codes are
-// visible in the data without pretending to a classification.
+//     bit 0 (0x01)  14.60% of the night      bit 4 (0x10)   4.11%
+//     bit 1 (0x02)  66.48%                   bit 5 (0x20)  37.34%
+//     bit 2 (0x04)   2.97%                   bit 6 (0x40)  13.39%
+//     bit 3 (0x08)   0.01%                   bit 7 (0x80)  25.13%
 //
-// The map gets filled in when a donor card can be checked against a SEFAM
-// Analyze report for the same nights, and not before.
-std::vector<SleepEvent> SefamParser::decodeEvents(
-    const std::vector<double>& codes,
-    int freq,
-    std::chrono::system_clock::time_point session_start,
-    int* unknown_code_count)
-{
-    std::vector<SleepEvent> events;
-    std::set<int> seen;
+// It is a bitfield of concurrent flags. A bit that is set for two thirds of the
+// night is not an apnea; it is far more likely a breath phase or a device state,
+// while the bit set for 0.01% of it might well be an event. But "might well be"
+// is not something to put in a person's therapy record.
+//
+// Reading runs of the whole byte would have produced tens of thousands of
+// "events" per night out of flags toggling against each other. Reading runs of
+// each bit would produce the same for the prevalent bits. Either way the count
+// would be an artefact of the encoding, not a finding about the patient.
+//
+// So v1 emits nothing, and reports each bit's share of the recording in
+// SefamSessionNotes::det_bit_share instead. That is the starting point for
+// decoding the bits against a SEFAM Analyze report, which is the only thing that
+// can settle what they mean. Until then a Sefam session carries no events and no
+// AHI, which is the honest reading rather than a convenient one.
 
-    if (freq <= 0 || codes.empty()) {
-        if (unknown_code_count) *unknown_code_count = 0;
-        return events;
+std::map<int, double> sefamDetBitShare(const std::vector<double>& codes) {
+    std::map<int, double> share;
+    if (codes.empty()) return share;
+
+    std::vector<size_t> counts(8, 0);
+    for (double d : codes) {
+        const unsigned v = static_cast<unsigned>(d) & 0xFFu;
+        for (int b = 0; b < 8; ++b)
+            if (v & (1u << b)) ++counts[static_cast<size_t>(b)];
     }
 
-    // A run shorter than a second is not a respiratory event. At 25 Hz a single
-    // sample is 40 ms, and emitting one event per sample would turn a noisy or
-    // mis-descrambled channel into tens of thousands of events that all look
-    // real. Nothing the device detects -- apnea, hypopnea, snore, flow
-    // limitation -- is over inside a second.
-    const size_t min_run = static_cast<size_t>(freq);
+    for (int b = 0; b < 8; ++b)
+        if (counts[static_cast<size_t>(b)])
+            share[b] = static_cast<double>(counts[static_cast<size_t>(b)]) /
+                       static_cast<double>(codes.size());
 
-    auto codeAt = [&](size_t i) { return static_cast<int>(std::lround(codes[i])); };
-
-    size_t i = 0;
-    while (i < codes.size()) {
-        const int code = codeAt(i);
-        size_t j = i + 1;
-        while (j < codes.size() && codeAt(j) == code) ++j;
-
-        const size_t run = j - i;
-        if (code != 0 && run >= min_run) {
-            seen.insert(code);
-
-            SleepEvent ev;
-            ev.event_type = EventType::OTHER;
-            ev.timestamp = session_start + std::chrono::milliseconds(
-                static_cast<long long>(std::llround(1000.0 * static_cast<double>(i) / freq)));
-            ev.duration_seconds = static_cast<double>(run) / freq;
-            ev.details = "Sefam detection code " + std::to_string(code);
-            events.push_back(std::move(ev));
-        }
-
-        i = j;
-    }
-
-    if (unknown_code_count) *unknown_code_count = static_cast<int>(seen.size());
-    return events;
+    return share;
 }
 
 } // namespace cpapdash::parser

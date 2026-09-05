@@ -1,16 +1,19 @@
 #!/usr/bin/env python3
 """Generate the Sefam S.Box test fixtures.
 
-These cards are SYNTHETIC. No donor card has been received yet (SDD-005), and the
-only two write-ups of this format that exist are GPL and unlicensed respectively,
-so nothing here is copied from either: the layout below is what the parser is
-built to *discover*, written out so the discovery can be tested.
+Written to the format a real 242-session donor card actually uses (SDD-005,
+docs/SEFAM_FORMAT.md), not to a guess:
 
-That is the point of them. The header length, the descrambling key and the
-channel table are all worked out at parse time, and these fixtures are what prove
-that logic works -- including the cases where it must refuse rather than guess.
-When a real card arrives it validates the same code against reality; until then
-this is what stands between the library and untested assumptions.
+    bytes 0..37   38-byte ASCII header, every byte XOR 0xBF, reading
+                  "#02/<model><serial>      /<YYMMDDhhmmss>/"
+    then          samples in ten-second blocks, each followed by three bytes:
+                  the sum of the block's bytes mod 256, then a big-endian
+                  uint16 block index
+
+These are synthetic, and they exist to exercise the paths a single donor card
+cannot: a corrupt checksum, channels that disagree about how long the recording
+was, an identity that does not match the INI. The real card is the accuracy
+check; these are the refusal checks.
 
 Everything is deterministic: fixed waveforms, no randomness, so regenerating
 produces byte-identical files.
@@ -27,158 +30,173 @@ import shutil
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)  # tests/fixtures/sefam
 
-# The header length the parser has to derive. Chosen to be a value nothing in the
-# code knows: if anyone ever hard-codes an offset, these fixtures stop passing.
-HEADER_BYTES = 101
+HEADER_BYTES = 38
+HEADER_XOR = 0xBF
+BLOCK_SECONDS = 10
 
-# The card-wide XOR the scrambled fixture uses. Likewise never named in the code.
-SCRAMBLE_KEY = 0x9F
-
+IDENTITY = "1263R24337476"
+STAMP = "251110222516"  # 2025-11-10 22:25:16, as [Start Record] below
 DURATION_S = 120
 
 
-def header() -> bytes:
-    """A deterministic stand-in for the per-file header.
-
-    The parser never interprets these bytes, it only skips them, so their content
-    is irrelevant and only the length matters.
-    """
-    body = b"SEFAM\x00"
-    return body + bytes((i * 7) % 251 for i in range(HEADER_BYTES - len(body)))
+def header(identity=IDENTITY, stamp=STAMP) -> bytes:
+    """The 38-byte file header, obfuscated the way the device writes it."""
+    pad = HEADER_BYTES - (4 + 1 + len(stamp) + 1) - len(identity)
+    text = f"#02/{identity}{' ' * pad}/{stamp}/"
+    assert len(text) == HEADER_BYTES, f"{len(text)} != {HEADER_BYTES}: {text!r}"
+    return bytes(ord(c) ^ HEADER_XOR for c in text)
 
 
-def scramble(payload: bytes, key: int) -> bytes:
-    return bytes(b ^ key for b in payload)
+def frame(samples, freq, bits=8, corrupt_block=None, first_index=1) -> bytes:
+    """Wrap raw sample bytes in the ten-second block framing."""
+    b = (bits + 7) // 8
+    payload = bytearray()
+    for s in samples:
+        v = max(0, min((1 << bits) - 1, int(round(s))))
+        payload += v.to_bytes(b, "little")
+
+    per_block = BLOCK_SECONDS * freq * b
+    out = bytearray()
+    index = first_index
+    for at in range(0, len(payload), per_block):
+        chunk = payload[at:at + per_block]
+        out += chunk
+        checksum = sum(chunk) & 0xFF
+        if corrupt_block is not None and index == corrupt_block:
+            checksum ^= 0x5A  # a trailer that does not describe its block
+        out += bytes([checksum]) + index.to_bytes(2, "big")
+        index += 1
+    return bytes(out)
 
 
-def write_channel(path: str, samples, key: int) -> None:
-    payload = bytes(max(0, min(255, int(round(s)))) for s in samples)
+def write_channel(path, samples, freq, bits=8, **kw):
     with open(path, "wb") as f:
-        f.write(header())
-        f.write(scramble(payload, key))
+        f.write(header(**{k: v for k, v in kw.items() if k in ("identity", "stamp")}))
+        f.write(frame(samples, freq, bits,
+                      corrupt_block=kw.get("corrupt_block"),
+                      first_index=kw.get("first_index", 1)))
 
 
-def write_stub(path: str) -> None:
-    """A channel that was declared but never recorded: header, no samples."""
+def write_stub(path, **kw):
+    """A channel that was declared but never recorded: the header, nothing else."""
     with open(path, "wb") as f:
-        f.write(header())
+        f.write(header(**{k: v for k, v in kw.items() if k in ("identity", "stamp")}))
 
 
-# ── Waveforms ────────────────────────────────────────────────────────────────
-#
-# Raw codes, not physical values. The INI's Min/Max turn these into L/min and
-# cmH2O; see SefamChannel::toPhysical.
+# ── Waveforms, in raw codes ─────────────────────────────────────────────────
 
 
-def flow(freq: int, seconds: int):
-    # Centred on the code that maps to about zero flow through the declared
-    # -180..280 range, so the fixture looks like breathing rather than a offset.
+def flow(freq, seconds):
+    # Centred on 128, which is where the donor card's flow sits: a night has to
+    # integrate to nothing.
+    return [128 + 60 * math.sin(2 * math.pi * i / (freq * 4))
+            for i in range(freq * seconds)]
+
+
+def pressure(freq, seconds):
+    # Codes near 110, which read as 11.0 cmH2O.
+    return [110 + 4 * math.sin(2 * math.pi * i / (freq * 8))
+            for i in range(freq * seconds)]
+
+
+def leak(freq, seconds):
+    # Codes near 122, which read as 12.2 L/min.
+    return [122 + 3 * math.sin(2 * math.pi * i / (freq * 30))
+            for i in range(freq * seconds)]
+
+
+def spo2(freq, seconds):
+    return [96 + 2 * math.sin(2 * math.pi * i / (freq * 40))
+            for i in range(freq * seconds)]
+
+
+def heart_rate(freq, seconds):
+    return [60 + 5 * math.sin(2 * math.pi * i / (freq * 50))
+            for i in range(freq * seconds)]
+
+
+def effort(freq, seconds):
+    return [128 + 40 * math.sin(2 * math.pi * i / (freq * 3))
+            for i in range(freq * seconds)]
+
+
+def detections(freq, seconds):
+    """A bitfield, the way the donor card writes it: several flags at once, each
+    with its own prevalence. Bit 1 is set for most of the recording, bit 3 for
+    almost none of it."""
     n = freq * seconds
-    return [100 + 60 * math.sin(2 * math.pi * i / (freq * 4)) for i in range(n)]
+    out = []
+    for i in range(n):
+        v = 0
+        if (i // freq) % 3 != 0:
+            v |= 0x02
+        if 30 * freq <= i < 50 * freq:
+            v |= 0x20
+        if 70 * freq <= i < 85 * freq:
+            v |= 0x80
+        if 100 * freq <= i < 100 * freq + freq // 2:
+            v |= 0x08
+        out.append(v)
+    return out
 
 
-def pressure(freq: int, seconds: int):
-    # Declared 0..25.5, so a code of 100 is 10.0 cmH2O.
-    n = freq * seconds
-    return [100 + 4 * math.sin(2 * math.pi * i / (freq * 8)) for i in range(n)]
+# ── INI ─────────────────────────────────────────────────────────────────────
 
 
-def leak(freq: int, seconds: int):
-    # Declared 0..153, so a code of 20 is 12.0 L/min.
-    n = freq * seconds
-    return [20 + 3 * math.sin(2 * math.pi * i / (freq * 30)) for i in range(n)]
-
-
-def spo2(freq: int, seconds: int):
-    n = freq * seconds
-    return [96 + 2 * math.sin(2 * math.pi * i / (freq * 40)) for i in range(n)]
-
-
-def heart_rate(freq: int, seconds: int):
-    # Declared 25..280, so a code of 35 is 60 bpm.
-    n = freq * seconds
-    return [35 + 5 * math.sin(2 * math.pi * i / (freq * 50)) for i in range(n)]
-
-
-def effort(freq: int, seconds: int):
-    n = freq * seconds
-    return [128 + 40 * math.sin(2 * math.pi * i / (freq * 3)) for i in range(n)]
-
-
-def detections(freq: int, seconds: int):
-    """Two events long enough to count, and one blip that must not.
-
-    The blip is there because a detection channel is sampled, not annotated: a
-    single sample at 25 Hz is 40 ms, and anything that treats one as an event
-    turns noise into a clinical count.
-    """
-    n = freq * seconds
-    codes = [0] * n
-
-    def mark(start_s, end_index, code):
-        for i in range(start_s * freq, min(end_index, n)):
-            codes[i] = code
-
-    mark(30, 50 * freq, 2)                  # 20 s of code 2
-    mark(70, 85 * freq, 7)                  # 15 s of code 7
-    mark(seconds - 1, (seconds - 1) * freq + 10, 3)  # 0.4 s of code 3
-
-    return codes
-
-
-# ── INI ──────────────────────────────────────────────────────────────────────
-
-
-def ini_text(created_by, serial, channels, oximeter="NONE"):
+def ini_text(channels, oximeter="NONE", serial=IDENTITY):
     lines = [
         "[Create Info]",
-        f"Created By={created_by}",
+        "Created By=S.Box_AUTO ",
         f"Serial Number={serial}",
         "Version=VER :A020400",
-        "Date=13/12/25 23:45:50",
+        "Date=10/11/25 22:25:16",
         "[Oximeter]",
         f"TYPE={oximeter}",
-        "BDA=  :  :  :  :  :",
+        "BDA=  :  :  :  :  :  ",
         "[BLE Device]",
         "Local BDA=000000000000",
         "Distant BDA=000000000000",
         "[Start Record]",
-        "Hour=23",
-        "Min=45",
-        "Sec=50",
-        "Day=13",
-        "Month=12",
+        "Hour=22",
+        "Min=25",
+        "Sec=16",
+        "Day=10",
+        "Month=11",
         "Year=2025",
+        # Eight hours declared against a two-minute recording, which is what the
+        # donor card does on every single session.
         "Programmed Record Duration=28800",
-        f"Real Record Duration={DURATION_S}",
+        "Real Record Duration=28800",
     ]
-
     for idx, ch in enumerate(channels):
         lines += [
             f"[Chan{idx}]",
             f"Name={ch['name']}",
             "Description=NO",
-            "Type=4",
+            f"Type={ch['type']}",
             f"Unit={ch['unit']}",
             f"Min={ch['min']}",
             f"Max={ch['max']}",
             f"Freq={ch['freq']}",
             f"Bit={ch['bit']}",
         ]
-
-    # CRLF, because the file is written by a Windows toolchain and the reader has
-    # to cope with it.
+    # CRLF, because the device writes it and the reader has to cope.
     return "\r\n".join(lines) + "\r\n"
 
 
-FLW = {"name": "FLW", "unit": "lpm", "min": -180, "max": 280, "freq": 25, "bit": 8}
-PRE = {"name": "PRE", "unit": "cmH2O", "min": 0, "max": 25.5, "freq": 5, "bit": 8}
-LK = {"name": "LK", "unit": "lpm", "min": 0, "max": 153, "freq": 1, "bit": 8}
-DET = {"name": "DET", "unit": "", "min": 0, "max": 255, "freq": 25, "bit": 8}
-SPO = {"name": "SPO", "unit": "%", "min": 0, "max": 255, "freq": 1, "bit": 8}
-HRT = {"name": "HRT", "unit": "bpm", "min": 25, "max": 280, "freq": 1, "bit": 8}
-POS = {"name": "POS", "unit": "", "min": 0, "max": 255, "freq": 1, "bit": 8}
-THO = {"name": "THO", "unit": "", "min": 0, "max": 255, "freq": 10, "bit": 8}
+def C(name, type_, unit, lo, hi, freq, bit=8):
+    return {"name": name, "type": type_, "unit": unit,
+            "min": lo, "max": hi, "freq": freq, "bit": bit}
+
+
+FLW = C("FLW", 4, "lpm", -180, 280, 25)
+PRE = C("PRE", 11, "cmH20", 0, 255, 5)
+LK = C("LK", 4, "lpm", 0, 153, 1)
+DET = C("DET", 13, "", 0, 255, 25)
+SPO = C("SPO", 16, "%", 0, 255, 1)
+HRT = C("HRT", 17, "bpm", 25, 280, 1)
+POS = C("POS", 13, "", 0, 255, 1)
+THO = C("THO", 13, "", 0, 255, 10)
 
 
 def session_dir(*parts):
@@ -192,91 +210,122 @@ def write_ini(folder, name, text):
         f.write(text)
 
 
-# ── The fixtures ─────────────────────────────────────────────────────────────
+# ── The fixtures ────────────────────────────────────────────────────────────
 
 
 def make_card():
-    """A scrambled CPAP-only session, inside the two-level card tree.
-
-    Also the detection fixture: the parser has to find DATA_0 under
-    <model>/<serial>/ rather than in the folder it was handed.
-    """
-    folder = session_dir("card", "1263R", "24462543", "DATA_0")
+    """A CPAP-only night inside the two-level card tree. Also the detection
+    fixture: the session sits under <model>/<serial>/, not in the folder handed
+    to the parser."""
+    folder = session_dir("card", "1263R", "24337476", "DATA_0")
     name = "DATA_0"
 
-    channels = [FLW, PRE, LK, DET, SPO, HRT, POS]
-    write_ini(folder, name, ini_text("S.Box_AUTO", "1263R24462543", channels))
-
-    write_channel(os.path.join(folder, f"{name}.FLW"), flow(25, DURATION_S), SCRAMBLE_KEY)
-    write_channel(os.path.join(folder, f"{name}.PRE"), pressure(5, DURATION_S), SCRAMBLE_KEY)
-    write_channel(os.path.join(folder, f"{name}.LK"), leak(1, DURATION_S), SCRAMBLE_KEY)
-    write_channel(os.path.join(folder, f"{name}.DET"), detections(25, DURATION_S), SCRAMBLE_KEY)
+    write_ini(folder, name, ini_text([FLW, PRE, LK, DET, SPO, HRT, POS]))
+    write_channel(os.path.join(folder, f"{name}.FLW"), flow(25, DURATION_S), 25)
+    write_channel(os.path.join(folder, f"{name}.PRE"), pressure(5, DURATION_S), 5)
+    write_channel(os.path.join(folder, f"{name}.LK"), leak(1, DURATION_S), 1)
+    write_channel(os.path.join(folder, f"{name}.DET"), detections(25, DURATION_S), 25)
 
     # No oximeter and no position sensor on this night.
     for ext in ("SPO", "HRT", "POS"):
         write_stub(os.path.join(folder, f"{name}.{ext}"))
 
 
-def make_plain():
-    """An unscrambled session with oximetry, an unmapped channel, and a file the
-    INI never declares."""
-    folder = session_dir("plain", "DATA_1")
+def make_oximetry():
+    """Oximetry attached, an unmapped channel, and a file the INI never declares.
+
+    Its blocks are numbered from 2, which two sessions on the donor card do with
+    every checksum correct -- so a parser that insists on a first index of 1
+    throws away good nights."""
+    folder = session_dir("oximetry", "DATA_1")
     name = "DATA_1"
 
-    channels = [FLW, PRE, LK, DET, SPO, HRT, THO]
-    write_ini(folder, name, ini_text("S.Box_AUTO", "1263R24462543", channels,
+    write_ini(folder, name, ini_text([FLW, PRE, LK, DET, SPO, HRT, THO],
                                      oximeter="INTEGRATED"))
-
-    write_channel(os.path.join(folder, f"{name}.FLW"), flow(25, DURATION_S), 0)
-    write_channel(os.path.join(folder, f"{name}.PRE"), pressure(5, DURATION_S), 0)
-    write_channel(os.path.join(folder, f"{name}.LK"), leak(1, DURATION_S), 0)
-    write_channel(os.path.join(folder, f"{name}.DET"), detections(25, DURATION_S), 0)
-    write_channel(os.path.join(folder, f"{name}.SPO"), spo2(1, DURATION_S), 0)
-    write_channel(os.path.join(folder, f"{name}.HRT"), heart_rate(1, DURATION_S), 0)
-    write_channel(os.path.join(folder, f"{name}.THO"), effort(10, DURATION_S), 0)
+    write_channel(os.path.join(folder, f"{name}.FLW"), flow(25, DURATION_S), 25,
+                  first_index=2)
+    write_channel(os.path.join(folder, f"{name}.PRE"), pressure(5, DURATION_S), 5,
+                  first_index=2)
+    write_channel(os.path.join(folder, f"{name}.LK"), leak(1, DURATION_S), 1,
+                  first_index=2)
+    write_channel(os.path.join(folder, f"{name}.DET"), detections(25, DURATION_S), 25,
+                  first_index=2)
+    write_channel(os.path.join(folder, f"{name}.SPO"), spo2(1, DURATION_S), 1,
+                  first_index=2)
+    write_channel(os.path.join(folder, f"{name}.HRT"), heart_rate(1, DURATION_S), 1,
+                  first_index=2)
+    write_channel(os.path.join(folder, f"{name}.THO"), effort(10, DURATION_S), 10,
+                  first_index=2)
 
     # Present on the card, absent from the INI. Ignored, and reported as ignored.
-    write_channel(os.path.join(folder, f"{name}.Y17"), flow(25, DURATION_S), 0)
+    write_channel(os.path.join(folder, f"{name}.Y17"), flow(25, DURATION_S), 25,
+                  first_index=2)
 
 
 def make_stubs_only():
-    """Every declared channel is a stub. The header length is still derivable;
-    the session holds no data and has to be refused on that basis, not on a
-    failure to read it."""
+    """Every declared channel is a stub. Refused for holding no data, which is a
+    different thing from being unreadable."""
     folder = session_dir("stubs", "DATA_2")
     name = "DATA_2"
 
     channels = [FLW, PRE, LK]
-    write_ini(folder, name, ini_text("S.Box_AUTO", "1263R24462543", channels))
+    write_ini(folder, name, ini_text(channels))
     for ch in channels:
         write_stub(os.path.join(folder, f"{name}.{ch['name']}"))
 
 
-def make_ambiguous():
-    """Two populated channels at the same rate and no stubs.
+def make_bad_checksum():
+    """One block trailer that does not describe its block.
 
-    Neither derivation can run: there is no pair of differing rates to solve
-    from, and no repeated minimum size to read a stub length off. The parser must
-    refuse the session rather than assume an offset.
-    """
-    folder = session_dir("ambiguous", "DATA_3")
+    The checksums are the whole reason to trust a reading of this format, so a
+    failure is refused rather than reported around."""
+    folder = session_dir("badsum", "DATA_3")
     name = "DATA_3"
 
-    channels = [FLW, DET]
-    write_ini(folder, name, ini_text("S.Box_AUTO", "1263R24462543", channels))
+    write_ini(folder, name, ini_text([FLW, PRE, LK]))
+    write_channel(os.path.join(folder, f"{name}.FLW"), flow(25, DURATION_S), 25)
+    write_channel(os.path.join(folder, f"{name}.PRE"), pressure(5, DURATION_S), 5,
+                  corrupt_block=4)
+    write_channel(os.path.join(folder, f"{name}.LK"), leak(1, DURATION_S), 1)
 
-    write_channel(os.path.join(folder, f"{name}.FLW"), flow(25, DURATION_S), 0)
-    write_channel(os.path.join(folder, f"{name}.DET"), detections(25, DURATION_S - 10), 0)
+
+def make_span_mismatch():
+    """Channels that disagree about how long the recording was."""
+    folder = session_dir("spans", "DATA_4")
+    name = "DATA_4"
+
+    write_ini(folder, name, ini_text([FLW, PRE, LK]))
+    write_channel(os.path.join(folder, f"{name}.FLW"), flow(25, DURATION_S), 25)
+    write_channel(os.path.join(folder, f"{name}.PRE"), pressure(5, DURATION_S), 5)
+    write_channel(os.path.join(folder, f"{name}.LK"), leak(1, DURATION_S - 60), 1)
+
+
+def make_identity_mismatch():
+    """A data header naming a different device from the INI."""
+    folder = session_dir("mismatch", "DATA_5")
+    name = "DATA_5"
+
+    write_ini(folder, name, ini_text([FLW, PRE, LK]))
+    other = "1263R99999999"
+    write_channel(os.path.join(folder, f"{name}.FLW"), flow(25, DURATION_S), 25,
+                  identity=other)
+    write_channel(os.path.join(folder, f"{name}.PRE"), pressure(5, DURATION_S), 5,
+                  identity=other)
+    write_channel(os.path.join(folder, f"{name}.LK"), leak(1, DURATION_S), 1,
+                  identity=other)
 
 
 def main():
-    for sub in ("card", "plain", "stubs", "ambiguous"):
+    for sub in ("card", "oximetry", "stubs", "badsum", "spans", "mismatch",
+                "plain", "ambiguous"):
         shutil.rmtree(os.path.join(ROOT, sub), ignore_errors=True)
 
     make_card()
-    make_plain()
+    make_oximetry()
     make_stubs_only()
-    make_ambiguous()
+    make_bad_checksum()
+    make_span_mismatch()
+    make_identity_mismatch()
 
     for dirpath, _, filenames in sorted(os.walk(ROOT)):
         if "gen" in dirpath.split(os.sep):

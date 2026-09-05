@@ -215,37 +215,29 @@ TEST(SefamIni, SectionsThatOnlyLookLikeChannelsAreIgnored) {
     EXPECT_EQ(ini.channels[0].name, "FLW");
 }
 
-// ── The scaling the declared range implies ──────────────────────────────────
+// The INI's Type= is a per-quantity kind code, separate from the name: the donor
+// card writes 4 for flow and leak, 11 for pressure, 13 for the unitless
+// channels, 16 for SpO2 and 17 for heart rate. Carried in case it turns out to
+// be a better key than the name.
+TEST(SefamIni, ChannelTypeIsCarried) {
+    const std::string text =
+        "[Chan0]\r\nName=FLW\r\nType=4\r\nUnit=lpm\r\nMin=-180\r\nMax=280\r\n"
+        "Freq=25\r\nBit=8\r\n"
+        "[Chan1]\r\nName=HRT\r\nType=17\r\nUnit=bpm\r\nMin=25\r\nMax=280\r\n"
+        "Freq=1\r\nBit=8\r\n";
 
-TEST(SefamChannelScaling, RangeWiderThanTheBitDepthIsAQuantisation) {
-    // A flow channel declaring -180..280 in 8 bits cannot be storing L/min
-    // directly; the code is a quantisation of the declared span.
-    SefamChannel flow;
-    flow.min = -180; flow.max = 280; flow.bits = 8;
-
-    EXPECT_DOUBLE_EQ(flow.toPhysical(0), -180.0);
-    EXPECT_DOUBLE_EQ(flow.toPhysical(255), 280.0);
-    EXPECT_NEAR(flow.toPhysical(100), -180.0 + 100.0 * 460.0 / 255.0, 1e-9);
+    const SefamIni ini = SefamParser::parseIniText(text);
+    ASSERT_EQ(ini.channels.size(), 2u);
+    EXPECT_EQ(ini.channels[0].type, 4);
+    EXPECT_EQ(ini.channels[1].type, 17);
 }
 
-TEST(SefamChannelScaling, AFullRangeChannelIsTheIdentity) {
-    SefamChannel raw;
-    raw.min = 0; raw.max = 255; raw.bits = 8;
-    for (uint32_t v : {0u, 1u, 128u, 255u}) EXPECT_DOUBLE_EQ(raw.toPhysical(v), v);
-}
-
-TEST(SefamChannelScaling, AChannelDeclaringNoRangeHandsBackTheCode) {
-    SefamChannel none;
-    none.min = 0; none.max = 0; none.bits = 8;
-    EXPECT_DOUBLE_EQ(none.toPhysical(42), 42.0);
-}
-
-TEST(SefamChannelScaling, BitDepthDrivesTheFullScale) {
-    SefamChannel wide;
-    wide.min = 0; wide.max = 1000; wide.bits = 16;
-    EXPECT_EQ(wide.bytesPerSample(), 2);
-    EXPECT_DOUBLE_EQ(wide.toPhysical(65535), 1000.0);
-    EXPECT_NEAR(wide.toPhysical(32767), 500.0, 0.02);
+TEST(SefamIni, BytesPerSampleFollowsTheDeclaredBitDepth) {
+    SefamChannel eight, sixteen;
+    eight.bits = 8;
+    sixteen.bits = 16;
+    EXPECT_EQ(eight.bytesPerSample(), 1);
+    EXPECT_EQ(sixteen.bytesPerSample(), 2);
 }
 
 #endif // CPAPDASH_WITH_SEFAM

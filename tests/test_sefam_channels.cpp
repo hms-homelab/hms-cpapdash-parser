@@ -1,19 +1,16 @@
 #ifdef CPAPDASH_WITH_SEFAM
 
-// The two things a Sefam channel file will not tell you outright -- where the
-// samples start, and how the bytes are scrambled -- are derived at parse time
-// rather than hard-coded (SDD-005 sections 6.2 and 6.3). These tests are what
-// stands behind that derivation until a donor card exists, and they matter most
-// for the cases where the answer is "I do not know", because a wrong header
-// offset shifts every sample in a night and nothing downstream would notice.
+// The file header and the block framing, tested on their own.
+//
+// Both are measured from a real 242-session card rather than reasoned about, so
+// these tests are mostly a record of what that card does -- including the two
+// places where it contradicts what a reasonable person would have assumed.
 
 #include <gtest/gtest.h>
 
 #include "cpapdash/parser/SefamParser.h"
 
-#include <chrono>
 #include <cmath>
-#include <map>
 #include <string>
 #include <vector>
 
@@ -21,341 +18,322 @@ using namespace cpapdash::parser;
 
 namespace {
 
-SefamChannel channel(const std::string& name, int freq, int bits = 8,
-                     double min = 0, double max = 255) {
+SefamChannel channel(const std::string& name, int freq, int bits = 8) {
     SefamChannel c;
     c.name = name;
     c.freq = freq;
     c.bits = bits;
-    c.min = min;
-    c.max = max;
     return c;
 }
 
-SefamIni iniWith(std::vector<SefamChannel> channels) {
-    SefamIni ini;
-    ini.channels = std::move(channels);
-    ini.valid = !ini.channels.empty();
-    return ini;
+std::vector<uint8_t> header(const std::string& identity = "1263R24337476",
+                            const std::string& stamp = "251110222516") {
+    const size_t pad = kSefamFileHeaderBytes - (4 + 1 + stamp.size() + 1)
+                     - identity.size();
+    const std::string text = "#02/" + identity + std::string(pad, ' ') + "/" + stamp + "/";
+    EXPECT_EQ(text.size(), kSefamFileHeaderBytes);
+
+    std::vector<uint8_t> out;
+    for (char c : text) out.push_back(static_cast<uint8_t>(c) ^ kSefamHeaderXor);
+    return out;
 }
 
-// A smooth waveform in raw codes, the way a real channel looks.
-std::vector<uint8_t> smooth(size_t n, double period, double centre = 128,
-                            double amplitude = 60) {
+// The block length these helpers write. Ten seconds is what the S.Box AUTO donor
+// card uses; the SleepBox demo recording uses thirty, which is why the parser
+// derives it rather than knowing it.
+constexpr int kTestBlockSeconds = 10;
+
+// The 1263R layout: ten-second blocks, three-byte trailers.
+constexpr SefamBlockLayout kTestLayout{kTestBlockSeconds, 3};
+
+// Wrap sample bytes the way the device does: a fixed number of seconds a block,
+// then a checksum and a big-endian block index.
+std::vector<uint8_t> frame(const std::vector<uint8_t>& samples, int freq,
+                           int corrupt_block = -1, int first_index = 1,
+                           int block_seconds = kTestBlockSeconds) {
+    const size_t per_block = static_cast<size_t>(block_seconds) * freq;
     std::vector<uint8_t> out;
-    out.reserve(n);
-    for (size_t i = 0; i < n; ++i) {
-        const double v = centre + amplitude * std::sin(2 * M_PI * i / period);
-        out.push_back(static_cast<uint8_t>(std::lround(v)));
+    int index = first_index;
+
+    for (size_t at = 0; at < samples.size(); at += per_block) {
+        const size_t take = std::min(per_block, samples.size() - at);
+        unsigned sum = 0;
+        for (size_t i = 0; i < take; ++i) {
+            out.push_back(samples[at + i]);
+            sum += samples[at + i];
+        }
+        uint8_t checksum = static_cast<uint8_t>(sum & 0xFF);
+        if (index == corrupt_block) checksum ^= 0x5A;
+        out.push_back(checksum);
+        out.push_back(static_cast<uint8_t>((index >> 8) & 0xFF));
+        out.push_back(static_cast<uint8_t>(index & 0xFF));
+        ++index;
     }
     return out;
 }
 
-std::vector<uint8_t> xorAll(std::vector<uint8_t> v, uint8_t key) {
-    for (auto& b : v) b = static_cast<uint8_t>(b ^ key);
-    return v;
+std::vector<uint8_t> file(const std::vector<uint8_t>& samples, int freq,
+                          int corrupt_block = -1, int first_index = 1,
+                          const std::string& identity = "1263R24337476",
+                          int block_seconds = kTestBlockSeconds) {
+    std::vector<uint8_t> out = header(identity);
+    const auto framed = frame(samples, freq, corrupt_block, first_index, block_seconds);
+    out.insert(out.end(), framed.begin(), framed.end());
+    return out;
+}
+
+std::vector<uint8_t> ramp(size_t n, uint8_t from = 0) {
+    std::vector<uint8_t> out;
+    for (size_t i = 0; i < n; ++i) out.push_back(static_cast<uint8_t>(from + i));
+    return out;
 }
 
 } // namespace
 
-// ── Where the samples start ─────────────────────────────────────────────────
+// ── The 38-byte header ──────────────────────────────────────────────────────
 
-TEST(SefamHeaderLength, StubsGiveItAway) {
-    // Three channels were declared and never recorded, so their files are the
-    // header and nothing else.
-    const SefamIni ini = iniWith({channel("FLW", 25), channel("PRE", 5),
-                                  channel("SPO", 1), channel("HRT", 1),
-                                  channel("POS", 1)});
-    const std::map<std::string, size_t> sizes = {
-        {"FLW", 3101}, {"PRE", 701}, {"SPO", 101}, {"HRT", 101}, {"POS", 101}};
+TEST(SefamFileHeader, DecodesToTheDeviceIdentityAndTheRecordingTime) {
+    const auto h = SefamParser::decodeFileHeader(header());
 
-    const auto h = SefamParser::deduceHeaderLength(ini, sizes);
-    ASSERT_TRUE(h.has_value());
-    EXPECT_EQ(*h, 101u);
+    ASSERT_TRUE(h.valid);
+    EXPECT_EQ(h.text, "#02/1263R24337476       /251110222516/");
+    EXPECT_EQ(h.record_type, "#02");
+    EXPECT_EQ(h.identity, "1263R24337476");
+    ASSERT_TRUE(h.stamp.has_value());
+
+    const std::time_t t = std::chrono::system_clock::to_time_t(*h.stamp);
+    std::tm local{};
+#ifdef _WIN32
+    localtime_s(&local, &t);
+#else
+    localtime_r(&t, &local);
+#endif
+    EXPECT_EQ(local.tm_year + 1900, 2025);
+    EXPECT_EQ(local.tm_mon + 1, 11);
+    EXPECT_EQ(local.tm_mday, 10);
+    EXPECT_EQ(local.tm_hour, 22);
+    EXPECT_EQ(local.tm_min, 25);
+    EXPECT_EQ(local.tm_sec, 16);
 }
 
-TEST(SefamHeaderLength, TwoRatesSolveItWithoutAnyStub) {
-    const SefamIni ini = iniWith({channel("FLW", 25), channel("PRE", 5), channel("LK", 1)});
-    const std::map<std::string, size_t> sizes = {
-        {"FLW", 3101}, {"PRE", 701}, {"LK", 221}};
-
-    const auto h = SefamParser::deduceHeaderLength(ini, sizes);
-    ASSERT_TRUE(h.has_value());
-    EXPECT_EQ(*h, 101u);
+// The obfuscation is a plain XOR, and 0x9F is where it shows: that is a space,
+// which is why the padding in the middle of the header reads as a run of 0x9F
+// bytes and why the whole file used to look scrambled.
+TEST(SefamFileHeader, IsXor0xBF) {
+    const auto raw = header();
+    EXPECT_EQ(raw[0] ^ kSefamHeaderXor, '#');
+    EXPECT_EQ(raw[17], 0x9F);
+    EXPECT_EQ(raw[17] ^ kSefamHeaderXor, ' ');
 }
 
-TEST(SefamHeaderLength, AStubInTheMixDoesNotDragTheArithmetic) {
-    // The stub is excluded before the rate arithmetic runs; left in, it would
-    // force h to its own size and every sample would land 101 bytes early.
-    const SefamIni ini = iniWith({channel("FLW", 25), channel("PRE", 5),
-                                  channel("SPO", 1), channel("HRT", 1)});
-    const std::map<std::string, size_t> sizes = {
-        {"FLW", 3101}, {"PRE", 701}, {"SPO", 101}, {"HRT", 101}};
+TEST(SefamFileHeader, RejectsBytesThatDoNotDecodeToText) {
+    std::vector<uint8_t> junk(kSefamFileHeaderBytes, 0x00);
+    EXPECT_FALSE(SefamParser::decodeFileHeader(junk).valid);
 
-    const auto h = SefamParser::deduceHeaderLength(ini, sizes);
-    ASSERT_TRUE(h.has_value());
-    EXPECT_EQ(*h, 101u);
+    std::vector<uint8_t> tooShort(10, 0x9F);
+    EXPECT_FALSE(SefamParser::decodeFileHeader(tooShort).valid);
 }
 
-TEST(SefamHeaderLength, ADifferentHeaderLengthIsFoundJustAsWell) {
-    // Nothing in the library knows the number 101.
-    const SefamIni ini = iniWith({channel("FLW", 25), channel("LK", 1)});
-    const std::map<std::string, size_t> sizes = {{"FLW", 3064}, {"LK", 184}};
+// ── Block framing ───────────────────────────────────────────────────────────
 
-    const auto h = SefamParser::deduceHeaderLength(ini, sizes);
-    ASSERT_TRUE(h.has_value());
-    EXPECT_EQ(*h, 64u);
+TEST(SefamFraming, StripsTheTrailersAndKeepsEverySample) {
+    const auto samples = ramp(250 * 3);  // three full blocks at 25 Hz
+    const auto raw = file(samples, 25);
+
+    SefamFraming f;
+    const auto out = SefamParser::deframe(raw, channel("FLW", 25), kTestLayout, &f);
+
+    EXPECT_EQ(out, samples);
+    EXPECT_EQ(f.blocks, 3u);
+    EXPECT_EQ(f.samples, 750u);
+    EXPECT_EQ(f.checksum_failures, 0u);
+    EXPECT_EQ(f.index_breaks, 0u);
 }
 
-TEST(SefamHeaderLength, OneRateAndNoStubsIsNotEnough) {
-    // Two channels at the same rate: the equation degenerates, and a single
-    // smallest file could just as well be a shorter recording.
-    const SefamIni ini = iniWith({channel("FLW", 25), channel("DET", 25)});
-    const std::map<std::string, size_t> sizes = {{"FLW", 3101}, {"DET", 2851}};
+// A block is ten seconds whatever the rate, so the block size differs per
+// channel: 250 samples at 25 Hz, 10 at 1 Hz.
+TEST(SefamFraming, BlockLengthFollowsTheChannelRate) {
+    const auto samples = ramp(10 * 4);
+    SefamFraming f;
+    const auto out = SefamParser::deframe(file(samples, 1), channel("LK", 1),
+                                          kTestLayout, &f);
 
-    EXPECT_FALSE(SefamParser::deduceHeaderLength(ini, sizes).has_value());
+    EXPECT_EQ(out, samples);
+    EXPECT_EQ(f.blocks, 4u);
 }
 
-TEST(SefamHeaderLength, AChannelEndingASampleShortIsStillTheSameRecording) {
-    // PRE stops one sample before the others. A recording does not become
-    // unreadable because one channel ended a fifth of a second early.
-    const SefamIni ini = iniWith({channel("FLW", 25), channel("PRE", 5), channel("LK", 1)});
-    const std::map<std::string, size_t> sizes = {
-        {"FLW", 3101}, {"PRE", 700}, {"LK", 221}};
+TEST(SefamFraming, TheLastShortBlockIsFramedLikeAnyOther) {
+    const auto samples = ramp(250 * 2 + 37);
+    SefamFraming f;
+    const auto out = SefamParser::deframe(file(samples, 25), channel("FLW", 25), kTestLayout, &f);
 
-    const auto h = SefamParser::deduceHeaderLength(ini, sizes);
-    ASSERT_TRUE(h.has_value());
-    EXPECT_EQ(*h, 101u);
+    EXPECT_EQ(out, samples);
+    EXPECT_EQ(f.blocks, 3u);
+    EXPECT_EQ(f.samples, samples.size());
 }
 
-TEST(SefamHeaderLength, ChannelsThatCoverDifferentSpansYieldNothing) {
-    // Here LK holds a full minute less than the others. No offset reconciles
-    // that, and inventing one would shift every sample in the night.
-    const SefamIni ini = iniWith({channel("FLW", 25), channel("PRE", 5), channel("LK", 1)});
-    const std::map<std::string, size_t> sizes = {
-        {"FLW", 3101}, {"PRE", 701}, {"LK", 161}};
+TEST(SefamFraming, ABadChecksumIsCounted) {
+    const auto samples = ramp(250 * 4);
+    SefamFraming f;
+    SefamParser::deframe(file(samples, 25, /*corrupt_block=*/3), channel("FLW", 25), kTestLayout, &f);
 
-    EXPECT_FALSE(SefamParser::deduceHeaderLength(ini, sizes).has_value());
+    EXPECT_EQ(f.blocks, 4u);
+    EXPECT_EQ(f.checksum_failures, 1u);
 }
 
-TEST(SefamHeaderLength, StubsAndRatesMustAgree) {
-    const SefamIni ini = iniWith({channel("FLW", 25), channel("PRE", 5),
-                                  channel("SPO", 1), channel("HRT", 1)});
-    // The stubs say 90; the populated pair says 101.
-    const std::map<std::string, size_t> sizes = {
-        {"FLW", 3101}, {"PRE", 701}, {"SPO", 90}, {"HRT", 90}};
+// Two sessions on the donor card open at block index 2, with every checksum
+// correct. Requiring a first index of 1 would throw away two good nights, so
+// continuity is checked and the starting value is not.
+TEST(SefamFraming, AFirstIndexOtherThanOneIsFine) {
+    const auto samples = ramp(250 * 3);
+    SefamFraming f;
+    const auto out = SefamParser::deframe(file(samples, 25, -1, /*first_index=*/2),
+                                          channel("FLW", 25), kTestLayout, &f);
 
-    EXPECT_FALSE(SefamParser::deduceHeaderLength(ini, sizes).has_value());
+    EXPECT_EQ(out, samples);
+    EXPECT_EQ(f.index_breaks, 0u);
+    EXPECT_EQ(f.checksum_failures, 0u);
 }
 
-TEST(SefamHeaderLength, AHeaderLongerThanAFileIsImpossible) {
-    const SefamIni ini = iniWith({channel("FLW", 25), channel("PRE", 5),
-                                  channel("SPO", 1), channel("HRT", 1),
-                                  channel("TINY", 1)});
-    const std::map<std::string, size_t> sizes = {
-        {"FLW", 3101}, {"PRE", 701}, {"SPO", 101}, {"HRT", 101}, {"TINY", 40}};
+TEST(SefamFraming, ABreakInTheIndexSequenceIsCounted) {
+    auto raw = file(ramp(250 * 3), 25);
+    // Third block's index, in the trailer that follows it.
+    const size_t third_trailer = kSefamFileHeaderBytes + 2 * (250 + 3) + 250;
+    raw[third_trailer + 2] = 0x77;
 
-    EXPECT_FALSE(SefamParser::deduceHeaderLength(ini, sizes).has_value());
+    SefamFraming f;
+    SefamParser::deframe(raw, channel("FLW", 25), kTestLayout, &f);
+    EXPECT_EQ(f.index_breaks, 1u);
 }
 
-TEST(SefamHeaderLength, ARemainderThatIsNotWholeSamplesIsRejected) {
-    // A 16-bit channel whose payload is an odd number of bytes cannot be right.
-    const SefamIni ini = iniWith({channel("FLW", 25), channel("PRE", 5),
-                                  channel("SPO", 1), channel("HRT", 1),
-                                  channel("PLS", 75, 16)});
-    const std::map<std::string, size_t> sizes = {
-        {"FLW", 3101}, {"PRE", 701}, {"SPO", 101}, {"HRT", 101}, {"PLS", 1000}};
+// A short run at the end of the file is either a legitimate final block or a
+// write cut off mid-block, and the sizes alone cannot tell them apart. The
+// checksum can: one that verifies is real, one that does not is a truncated
+// tail, and dropping it costs at most ten seconds.
+TEST(SefamFraming, ATruncatedTailIsDroppedRatherThanRead) {
+    auto raw = file(ramp(250 * 3), 25);
+    raw.resize(raw.size() - 2);  // eat into the last trailer
 
-    EXPECT_FALSE(SefamParser::deduceHeaderLength(ini, sizes).has_value());
+    SefamFraming f;
+    const auto out = SefamParser::deframe(raw, channel("FLW", 25), kTestLayout, &f);
+    EXPECT_EQ(f.blocks, 2u);
+    EXPECT_EQ(out.size(), 500u);
+    EXPECT_TRUE(f.truncated_tail);
+    EXPECT_EQ(f.checksum_failures, 0u);
 }
 
-TEST(SefamHeaderLength, NothingDeclaredMeansNothingToDeduce) {
-    EXPECT_FALSE(SefamParser::deduceHeaderLength(iniWith({}), {}).has_value());
-    EXPECT_FALSE(SefamParser::deduceHeaderLength(
-        iniWith({channel("FLW", 25)}), {{"PRE", 701}}).has_value());
+TEST(SefamFraming, AStubHasNoSamples) {
+    SefamFraming f;
+    EXPECT_TRUE(SefamParser::deframe(header(), channel("SPO", 1),
+                                     kTestLayout, &f).empty());
+    EXPECT_EQ(f.blocks, 0u);
 }
 
-// ── How the bytes are scrambled ─────────────────────────────────────────────
+// ── Physical values ─────────────────────────────────────────────────────────
 
-TEST(SefamDescrambling, RecoversASingleByteKey) {
-    const auto flow = smooth(3000, 100);
-    const auto pressure = smooth(600, 40, 100, 4);
-    const std::vector<uint8_t> idle(500, 0);  // a detection channel with nothing to say
+// The INI's Min/Max do NOT scale a channel. Reading a flow channel declaring
+// -180..280 as a quantisation of that span puts its centre at code 99.8; the
+// donor card's flow is centred on 128 to within half a code, over a whole night.
+TEST(SefamScaling, FlowIsCentredOnMidScaleNotOnTheDeclaredRange) {
+    SefamChannel flw = channel("FLW", 25);
+    flw.min = -180;
+    flw.max = 280;
 
-    const std::vector<std::vector<uint8_t>> scrambled = {
-        xorAll(flow, 0x9F), xorAll(pressure, 0x9F), xorAll(idle, 0x9F)};
-
-    const auto d = SefamParser::deduceDescrambler(scrambled);
-    EXPECT_EQ(d.kind, SefamDescrambler::Kind::SingleByteXor);
-    EXPECT_EQ(d.key, 0x9F);
-    EXPECT_FALSE(d.ambiguous);
-    EXPECT_LT(d.roughness, d.identity_roughness);
+    const SefamScale s = SefamParser::scaleFor(flw);
+    EXPECT_DOUBLE_EQ(s.offset, 128.0);
+    EXPECT_DOUBLE_EQ(s.apply(128), 0.0);
+    EXPECT_DOUBLE_EQ(s.apply(188), 60.0);
+    EXPECT_DOUBLE_EQ(s.apply(68), -60.0);
 }
 
-// Smoothness cannot get past two candidates, ever. XOR by 0xFF is x -> 255 - x,
-// which mirrors the signal and leaves every step between neighbouring samples
-// exactly the length it was, so a key and its complement score identically. This
-// is a property of the measure, not a shortcoming of the search, and the honest
-// output for a card with nothing to break the tie is "I do not know".
-TEST(SefamDescrambling, WithoutAnIdleStretchTheKeyIsAmbiguous) {
-    const auto flow = smooth(3000, 100);
-    const auto d = SefamParser::deduceDescrambler({xorAll(flow, 0x9F)});
+TEST(SefamScaling, PressureAndLeakAreTenthsOfTheirUnit) {
+    SefamChannel pre = channel("PRE", 5);
+    pre.min = 0;
+    pre.max = 255;
+    EXPECT_NEAR(SefamParser::scaleFor(pre).apply(110), 11.0, 1e-9);
 
-    EXPECT_TRUE(d.ambiguous);
-    EXPECT_FALSE(d.confirmed_by_idle_run);
-    // The two it cannot separate are the true key and its mirror.
-    EXPECT_TRUE(d.key == 0x9F || d.key == static_cast<uint8_t>(0x9F ^ 0xFF));
+    SefamChannel lk = channel("LK", 1);
+    lk.min = 0;
+    lk.max = 153;
+    EXPECT_NEAR(SefamParser::scaleFor(lk).apply(122), 12.2, 1e-9);
 }
 
-TEST(SefamDescrambling, AnIdleStretchPinsTheKeyExactly) {
-    auto flow = smooth(3000, 100);
-    std::vector<uint8_t> idle(500, 0);
-
-    const std::vector<std::vector<uint8_t>> scrambled = {
-        xorAll(flow, 0x51), xorAll(idle, 0x51)};
-
-    const auto d = SefamParser::deduceDescrambler(scrambled);
-    EXPECT_EQ(d.key, 0x51);
-    EXPECT_TRUE(d.confirmed_by_idle_run);
-    EXPECT_FALSE(d.ambiguous);
+// None of the factors are confirmed. They are round numbers chosen because the
+// alternative reading is physically impossible, which is evidence and not proof,
+// and SDD-005's oracle step is what settles them.
+TEST(SefamScaling, NothingClaimsToBeConfirmed) {
+    for (const char* name : {"FLW", "PRE", "LK", "SPO", "HRT"})
+        EXPECT_FALSE(SefamParser::scaleFor(channel(name, 1)).confirmed) << name;
 }
 
-TEST(SefamDescrambling, UnscrambledDataIsLeftAlone) {
-    const auto flow = smooth(3000, 100);
-    const std::vector<uint8_t> idle(500, 0);  // already zero, so nothing to undo
-
-    const auto d = SefamParser::deduceDescrambler({flow, idle});
-
-    EXPECT_EQ(d.kind, SefamDescrambler::Kind::Identity);
-    EXPECT_EQ(d.key, 0);
-    EXPECT_FALSE(d.ambiguous);
+TEST(SefamScaling, AnUnknownChannelIsPassedThroughUntouched) {
+    const SefamScale s = SefamParser::scaleFor(channel("Y17", 25));
+    EXPECT_DOUBLE_EQ(s.apply(200), 200.0);
 }
 
-TEST(SefamDescrambling, ConstantDataStaysIdentity) {
-    // Every key scores the same on a file that never changes, and inventing one
-    // from a tie would be a guess.
-    const std::vector<uint8_t> flat(500, 0x00);
-    const auto d = SefamParser::deduceDescrambler({flat});
+TEST(SefamReadChannel, DeframesAndScalesTogether) {
+    const std::vector<uint8_t> samples(10, 110);
+    const auto out = SefamParser::readChannel(file(samples, 1), channel("PRE", 1),
+                                              kTestLayout);
 
-    EXPECT_EQ(d.kind, SefamDescrambler::Kind::Identity);
-    EXPECT_EQ(d.key, 0);
+    ASSERT_EQ(out.size(), 10u);
+    for (double v : out) EXPECT_NEAR(v, 11.0, 1e-9);
 }
 
-TEST(SefamDescrambling, NothingToJudgeLeavesIdentity) {
-    EXPECT_EQ(SefamParser::deduceDescrambler({}).kind, SefamDescrambler::Kind::Identity);
-    EXPECT_EQ(SefamParser::deduceDescrambler({{0x41}}).kind, SefamDescrambler::Kind::Identity);
+// ── The block framing is derived, not known ─────────────────────────────────
+//
+// Neither number is a constant of the format. The S.Box AUTO donor card uses
+// ten-second blocks with a three-byte trailer; Sefam's own SleepBox_AUTO demo
+// recording, model 1200R on older firmware, uses ten-second blocks with a
+// ONE-byte trailer and no block index at all. A parser that hard-codes either
+// reads the other as corrupt. The checksums settle it -- under a wrong layout
+// the trailer bytes are samples and the sums do not match.
+
+TEST(SefamBlockLayout, IsRecoveredFromTheChecksums) {
+    for (int seconds : {1, 5, 10, 30, 60}) {
+        const auto raw = file(ramp(25 * seconds * 4), 25, -1, 1,
+                              "1263R24337476", seconds);
+        const auto found = SefamParser::deduceBlockLayout(raw, channel("FLW", 25));
+        ASSERT_TRUE(found.has_value()) << seconds;
+        EXPECT_EQ(found->seconds, seconds);
+        EXPECT_EQ(found->trailer_bytes, 3);
+    }
 }
 
-// ── Decoding ────────────────────────────────────────────────────────────────
+TEST(SefamBlockLayout, AOneByteTrailerIsRecognised) {
+    // The 1200R firmware writes the checksum alone, with no block index.
+    std::vector<uint8_t> raw = header();
+    const auto samples = ramp(250 * 5);
+    for (size_t at = 0; at < samples.size(); at += 250) {
+        unsigned sum = 0;
+        for (size_t i = at; i < at + 250; ++i) { raw.push_back(samples[i]); sum += samples[i]; }
+        raw.push_back(static_cast<uint8_t>(sum & 0xFF));
+    }
 
-TEST(SefamDecodeChannel, SkipsTheHeaderAndScalesToTheDeclaredRange) {
-    std::vector<uint8_t> raw(8, 0xAA);          // header
-    raw.insert(raw.end(), {0, 255, 128});       // samples
+    const auto found = SefamParser::deduceBlockLayout(raw, channel("FLW", 25));
+    ASSERT_TRUE(found.has_value());
+    EXPECT_EQ(found->seconds, 10);
+    EXPECT_EQ(found->trailer_bytes, 1);
+    EXPECT_FALSE(found->hasIndex());
 
-    const SefamChannel ch = channel("FLW", 25, 8, -180, 280);
-    const auto out = SefamParser::decodeChannel(raw, 8, ch, SefamDescrambler{});
-
-    ASSERT_EQ(out.size(), 3u);
-    EXPECT_DOUBLE_EQ(out[0], -180.0);
-    EXPECT_DOUBLE_EQ(out[1], 280.0);
-    EXPECT_NEAR(out[2], -180.0 + 128.0 * 460.0 / 255.0, 1e-9);
+    SefamFraming f;
+    EXPECT_EQ(SefamParser::deframe(raw, channel("FLW", 25), *found, &f), samples);
+    EXPECT_EQ(f.blocks, 5u);
+    EXPECT_EQ(f.checksum_failures, 0u);
 }
 
-TEST(SefamDecodeChannel, AppliesTheDescrambler) {
-    SefamDescrambler d;
-    d.kind = SefamDescrambler::Kind::SingleByteXor;
-    d.key = 0x9F;
-
-    std::vector<uint8_t> raw(4, 0x00);
-    raw.push_back(static_cast<uint8_t>(200 ^ 0x9F));
-
-    const SefamChannel ch = channel("PRE", 5, 8, 0, 255);
-    const auto out = SefamParser::decodeChannel(raw, 4, ch, d);
-
-    ASSERT_EQ(out.size(), 1u);
-    EXPECT_DOUBLE_EQ(out[0], 200.0);
+TEST(SefamBlockLayout, ASingleBlockCannotSettleIt) {
+    // One block verifies under any layout long enough to hold it.
+    const auto raw = file(ramp(250), 25);
+    EXPECT_FALSE(SefamParser::deduceBlockLayout(raw, channel("FLW", 25)).has_value());
 }
 
-TEST(SefamDecodeChannel, AStubDecodesToNothing) {
-    const std::vector<uint8_t> raw(101, 0x11);
-    const SefamChannel ch = channel("SPO", 1);
-    EXPECT_TRUE(SefamParser::decodeChannel(raw, 101, ch, SefamDescrambler{}).empty());
-    EXPECT_TRUE(SefamParser::decodeChannel(raw, 200, ch, SefamDescrambler{}).empty());
-}
+TEST(SefamBlockLayout, NoAnswerFromAStubOrFromNoise) {
+    EXPECT_FALSE(SefamParser::deduceBlockLayout(header(), channel("FLW", 25)).has_value());
 
-// ── Events ──────────────────────────────────────────────────────────────────
-
-TEST(SefamEvents, ARunOfOneCodeIsOneEvent) {
-    const int freq = 25;
-    std::vector<double> codes(freq * 60, 0);
-    for (int i = 10 * freq; i < 30 * freq; ++i) codes[i] = 2;
-
-    int distinct = 0;
-    const auto start = std::chrono::system_clock::from_time_t(1'700'000'000);
-    const auto events = SefamParser::decodeEvents(codes, freq, start, &distinct);
-
-    ASSERT_EQ(events.size(), 1u);
-    EXPECT_EQ(events[0].event_type, EventType::OTHER);
-    EXPECT_DOUBLE_EQ(events[0].duration_seconds, 20.0);
-    EXPECT_EQ(events[0].timestamp, start + std::chrono::seconds(10));
-    ASSERT_TRUE(events[0].details.has_value());
-    EXPECT_EQ(*events[0].details, "Sefam detection code 2");
-    EXPECT_EQ(distinct, 1);
-}
-
-// Every detection is OTHER. We do not know what a Sefam code means, and a guess
-// would put an invented number into somebody's AHI. SDD-004 keeps OTHER inside
-// total_events and inside no index, which is exactly the property wanted here.
-TEST(SefamEvents, NothingIsClassifiedAsApneaOrHypopnea) {
-    const int freq = 10;
-    std::vector<double> codes(freq * 120, 0);
-    for (int i = 0 * freq; i < 20 * freq; ++i) codes[i] = 1;
-    for (int i = 40 * freq; i < 55 * freq; ++i) codes[i] = 2;
-    for (int i = 80 * freq; i < 95 * freq; ++i) codes[i] = 9;
-
-    int distinct = 0;
-    const auto events = SefamParser::decodeEvents(
-        codes, freq, std::chrono::system_clock::from_time_t(0), &distinct);
-
-    ASSERT_EQ(events.size(), 3u);
-    for (const auto& e : events) EXPECT_EQ(e.event_type, EventType::OTHER);
-    EXPECT_EQ(distinct, 3);
-}
-
-TEST(SefamEvents, ABlipShorterThanASecondIsNotAnEvent) {
-    // At 25 Hz a single sample is 40 ms. Nothing the device detects is over in
-    // that time, and counting them would turn a noisy channel into a diagnosis.
-    const int freq = 25;
-    std::vector<double> codes(freq * 60, 0);
-    for (int i = 100; i < 110; ++i) codes[i] = 3;          // 0.4 s
-    for (int i = 20 * freq; i < 24 * freq; ++i) codes[i] = 4;  // 4 s
-
-    const auto events = SefamParser::decodeEvents(
-        codes, freq, std::chrono::system_clock::from_time_t(0), nullptr);
-
-    ASSERT_EQ(events.size(), 1u);
-    EXPECT_DOUBLE_EQ(events[0].duration_seconds, 4.0);
-}
-
-TEST(SefamEvents, AdjacentDifferentCodesAreSeparateEvents) {
-    const int freq = 5;
-    std::vector<double> codes(freq * 60, 0);
-    for (int i = 5 * freq; i < 15 * freq; ++i) codes[i] = 2;
-    for (int i = 15 * freq; i < 25 * freq; ++i) codes[i] = 7;
-
-    const auto events = SefamParser::decodeEvents(
-        codes, freq, std::chrono::system_clock::from_time_t(0), nullptr);
-
-    ASSERT_EQ(events.size(), 2u);
-    EXPECT_DOUBLE_EQ(events[0].duration_seconds, 10.0);
-    EXPECT_DOUBLE_EQ(events[1].duration_seconds, 10.0);
-    EXPECT_EQ(*events[1].details, "Sefam detection code 7");
-}
-
-TEST(SefamEvents, NoRateMeansNoEvents) {
-    const std::vector<double> codes(100, 2);
-    EXPECT_TRUE(SefamParser::decodeEvents(
-        codes, 0, std::chrono::system_clock::from_time_t(0), nullptr).empty());
+    auto noise = header();
+    for (int i = 0; i < 4000; ++i) noise.push_back(static_cast<uint8_t>(i * 37 + 11));
+    EXPECT_FALSE(SefamParser::deduceBlockLayout(noise, channel("FLW", 25)).has_value());
 }
 
 #endif // CPAPDASH_WITH_SEFAM

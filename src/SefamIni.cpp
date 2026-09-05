@@ -98,19 +98,6 @@ std::string get(const Section& s, const std::string& key_lower) {
 
 } // anonymous namespace
 
-// ── SefamChannel ────────────────────────────────────────────────────────────
-
-double SefamChannel::toPhysical(uint32_t raw) const {
-    const int b = bits > 0 && bits <= 32 ? bits : 8;
-    const double full_scale = std::pow(2.0, b) - 1.0;
-
-    // A channel that declares no meaningful range (max <= min, which includes an
-    // INI that simply omits both) has nothing to scale by. Hand back the code.
-    if (!(max > min) || full_scale <= 0) return static_cast<double>(raw);
-
-    return min + (static_cast<double>(raw) / full_scale) * (max - min);
-}
-
 // ── SefamIni ────────────────────────────────────────────────────────────────
 
 const SefamChannel* SefamIni::find(const std::string& name) const {
@@ -202,6 +189,12 @@ SefamIni SefamParser::parseIniText(const std::string& text) {
 
         SefamChannel ch;
         ch.index       = *idx;
+        // The INI's Type= is a per-quantity kind code, distinct from the name:
+        // the donor card writes 4 for flow and leak, 11 for pressure, 13 for the
+        // several unitless channels, 16 for SpO2 and 17 for heart rate. Carried
+        // because it may turn out to be a better key than the name; nothing
+        // reads it yet.
+        ch.type        = parseIntOr(get(keys, "type"), 0);
         ch.name        = get(keys, "name");
         ch.description = get(keys, "description");
         ch.unit        = get(keys, "unit");
