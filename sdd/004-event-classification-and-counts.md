@@ -126,20 +126,28 @@ it.
 
 ## 5. Cross-repo note
 
-**CORRECTED 2026-09-04. hms-cpap does NOT inherit this fix.** An earlier draft said it did,
-on the strength of `hms-cpap/CMakeLists.txt:212-220` pulling this repo in by `SOURCE_DIR`.
-That much is true, but hms-cpap ALSO carries its own parallel implementation:
+**hms-cpap DOES inherit this fix.** It pulls this repo in by `SOURCE_DIR`
+(`hms-cpap/CMakeLists.txt:212-220`) and `include/parsers/CpapdashBridge.h` aliases
+`cpapdash::parser` into the `hms_cpap` namespace, so the shared implementation is the one
+that runs. Albin's local path and Rohan's Docker install both get it on their next build.
 
-- its own `EventType` at `include/models/CPAPModels.h:22`
-- its own EVE classification chain at `src/parsers/EDFParser.cpp:1003-1004`, holding the
-  identical unfixed catch-all, comment and all
+**Two corrections happened here, and the second reversed the first. Recorded so nobody
+re-derives either.**
 
-So Albin's local path and Rohan's Docker install keep the old behaviour until that second
-copy is fixed too. Verify which of the two paths actually runs before assuming either.
+1. A draft said hms-cpap inherits automatically. A reviewer found `hms-cpap` carrying its own
+   `EventType` at `include/models/CPAPModels.h:22` and its own EVE classification chain at
+   `src/parsers/EDFParser.cpp:1003-1004`, with the identical unfixed catch-all, and concluded
+   it does not inherit.
+2. That conclusion was wrong too. Both files are **dead code, excluded from every build**:
+   `CMakeLists.txt:307` and `tests/CMakeLists.txt:45` each carry
+   `list(FILTER ... EXCLUDE REGEX ".*/parsers/EDFParser\.cpp$")` above the comment "EDFParser
+   + CPAPModels are now provided by cpapdash-parser library". Finding a file is not the same
+   as finding the code that runs.
 
-Two implementations of the same classification in one product is the underlying problem here,
-and it is what made the wrong inference easy. Consolidating them is not in this spec's scope
-but should be raised.
+**Worth doing separately:** delete `hms-cpap/src/parsers/EDFParser.cpp` and
+`include/models/CPAPModels.h`. They are uncompiled copies of logic that lives here now, they
+already caused one wrong conclusion in review, and the next reader will hit the same trap.
+Not in this spec's scope.
 It has its own display path though; the two-decimal formatting there was part of the
 uncommitted 2026-08-29 sweep and is tracked in `cpapdash-app/sdd/079-index-precision.md`
 alongside the app's.
