@@ -83,6 +83,39 @@ bool isPropertiesTxtFilename(const std::string& filename) {
     return toLower(basenameOf(filename)) == "properties.txt";
 }
 
+// "DATA_7" and the like -- a Sefam session folder.
+bool isSefamSessionFolderName(const std::string& name) {
+    const std::string n = toLower(name);
+    if (n.rfind("data_", 0) != 0 || n.size() <= 5) return false;
+    for (size_t i = 5; i < n.size(); ++i)
+        if (!std::isdigit(static_cast<unsigned char>(n[i]))) return false;
+    return true;
+}
+
+// Sefam S.Box session manifest: "DATA_<n>/DATA_<n>.INI".
+//
+// A bare ".ini" is far too common a name to gate a brand on. What makes this one
+// safe is that the file is named after the folder holding it, so the pair is the
+// signature rather than the extension. Where the caller passed a bare filename
+// with no directory component there is nothing to cross-check against, and the
+// "DATA_<digits>" stem alone carries it.
+bool isSefamSessionIniPath(const std::string& path) {
+    const std::string base = basenameOf(path);
+    if (!endsWithCI(base, ".ini")) return false;
+
+    const std::string stem = base.substr(0, base.size() - 4);
+    if (!isSefamSessionFolderName(stem)) return false;
+
+    auto slash = path.find_last_of("/\\");
+    if (slash == std::string::npos) return true;  // no parent to check
+
+    std::string parent = path.substr(0, slash);
+    auto up = parent.find_last_of("/\\");
+    if (up != std::string::npos) parent = parent.substr(up + 1);
+
+    return toLower(parent) == toLower(stem);
+}
+
 // Directory-scoped version of a per-filename predicate (shallow, non-recursive --
 // matches the existing hasFileWithExtension/hasSubdirCaseInsensitive scope).
 bool hasMatchingFilename(const std::string& dir_path, bool (*pred)(const std::string&)) {
@@ -95,17 +128,45 @@ bool hasMatchingFilename(const std::string& dir_path, bool (*pred)(const std::st
     return false;
 }
 
+// A Sefam session folder sits two levels down from the card root
+// (<model>/<serial>/DATA_<n>/), so unlike every other brand here it cannot be
+// found by looking in one directory. Three levels reaches it from the card root,
+// from the serial folder, and from the session folder itself, which are the three
+// places a caller plausibly points at.
+constexpr int kSefamSearchDepth = 3;
+
+bool hasSefamSessionFolder(const std::string& dir_path, int depth) {
+    std::error_code ec;
+    if (depth < 0 || !fs::is_directory(dir_path, ec)) return false;
+
+    // The folder we were handed may be the session folder.
+    const std::string self = fs::path(dir_path).filename().string();
+    if (isSefamSessionFolderName(self) &&
+        fs::is_regular_file(fs::path(dir_path) / (self + ".INI"), ec)) return true;
+    if (isSefamSessionFolderName(self) &&
+        fs::is_regular_file(fs::path(dir_path) / (self + ".ini"), ec)) return true;
+
+    for (const auto& entry : fs::directory_iterator(dir_path, ec)) {
+        if (!entry.is_directory(ec)) continue;
+        if (hasSefamSessionFolder(entry.path().string(), depth - 1)) return true;
+    }
+    return false;
+}
+
 } // anonymous namespace
 
 DeviceManufacturer detectManufacturer(const std::vector<std::string>& filenames) {
-    bool has_wmedf = false, has_bmc_usr = false, has_properties = false, has_edf = false;
+    bool has_wmedf = false, has_sefam_ini = false, has_bmc_usr = false;
+    bool has_properties = false, has_edf = false;
     for (const auto& f : filenames) {
         if (!has_wmedf && endsWithCI(f, ".wmedf")) has_wmedf = true;
+        if (!has_sefam_ini && isSefamSessionIniPath(f)) has_sefam_ini = true;
         if (!has_bmc_usr && isBmcUsrFilename(f)) has_bmc_usr = true;
         if (!has_properties && isPropertiesTxtFilename(f)) has_properties = true;
         if (!has_edf && endsWithCI(basenameOf(f), ".edf")) has_edf = true;
     }
     if (has_wmedf) return DeviceManufacturer::LOWENSTEIN;
+    if (has_sefam_ini) return DeviceManufacturer::SEFAM;
     if (has_bmc_usr) return DeviceManufacturer::BMC;
     if (has_properties) return DeviceManufacturer::PHILIPS;
     if (has_edf) return DeviceManufacturer::RESMED;
@@ -114,6 +175,7 @@ DeviceManufacturer detectManufacturer(const std::vector<std::string>& filenames)
 
 DeviceManufacturer detectManufacturer(const std::string& data_dir) {
     if (hasFileWithExtension(data_dir, ".wmedf")) return DeviceManufacturer::LOWENSTEIN;
+    if (hasSefamSessionFolder(data_dir, kSefamSearchDepth)) return DeviceManufacturer::SEFAM;
     if (hasMatchingFilename(data_dir, isBmcUsrFilename)) return DeviceManufacturer::BMC;
     if (hasMatchingFilename(data_dir, isPropertiesTxtFilename)) return DeviceManufacturer::PHILIPS;
     if (hasSubdirCaseInsensitive(data_dir, "DATALOG") || hasFileWithExtension(data_dir, ".edf"))
@@ -189,8 +251,20 @@ std::unique_ptr<ISessionParser> createParser(DeviceManufacturer manufacturer) {
 
         case DeviceManufacturer::LOWENSTEIN:
 #ifdef CPAPDASH_WITH_LOWENSTEIN
+        {
             extern std::unique_ptr<ISessionParser> createLowensteinParser();
             return createLowensteinParser();
+        }
+#else
+            return nullptr;
+#endif
+
+        case DeviceManufacturer::SEFAM:
+#ifdef CPAPDASH_WITH_SEFAM
+        {
+            extern std::unique_ptr<ISessionParser> createSefamParser();
+            return createSefamParser();
+        }
 #else
             return nullptr;
 #endif

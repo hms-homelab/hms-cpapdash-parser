@@ -1,0 +1,7 @@
+# Fixtures are recordings, not source. Nothing about them may be normalised.
+#
+# The Sefam session manifests use CRLF on purpose -- the card is written by a
+# Windows toolchain, and one of the tests is that the reader copes. Left to its
+# own devices git rewrites them to LF on the next checkout, and the fixture
+# quietly stops testing the thing it exists to test.
+tests/fixtures/** -text

@@ -40,7 +40,8 @@ enum class DeviceManufacturer {
     RESMED,
     LOWENSTEIN,
     PHILIPS,
-    BMC
+    BMC,
+    SEFAM
 };
 
 std::string eventTypeToString(EventType type);

@@ -1,5 +1,43 @@
 # Changelog
 
+## [Unreleased]
+
+### Sefam S.Box support — BETA, UNVALIDATED
+
+No version number and no tag until a donor card has been read (SDD-005 section 8).
+Nothing here has met a real Sefam card; the fixtures behind it are synthetic.
+
+- **`SefamParser`, behind `CPAPDASH_PARSER_WITH_SEFAM`.** Raised by
+  hms-homelab/hms-cpap#28. Reads a `DATA_<n>` session folder: flow, pressure and
+  leak into the per-minute rows, SpO2 and heart rate into vitals, leak also into
+  `native_samples`, and detections into events.
+- **`DeviceManufacturer::SEFAM`**, and detection on the `DATA_<n>/DATA_<n>.INI`
+  pair. A Sefam session sits two levels down from the card root, so unlike every
+  other brand here detection walks rather than looking in one directory.
+- `docs/SEFAM_FORMAT.md` records what is actually known, per fact, with a status.
+  At the time of writing almost all of it is `HYPOTHESIS`.
+
+### Why it is built the way it is
+The card describes itself: every session folder carries an INI declaring each
+channel's name, unit, rate, bit depth and range. So the parser hard-codes no
+channel table, and it hard-codes neither of the two things the files do not state
+outright. The header length and the byte scrambling are both **derived at parse
+time**, and where they cannot be derived the session is refused rather than read
+with a guessed offset or a guessed key.
+
+That is partly independence. The only two write-ups of this format are GPL-3.0
+and unlicensed respectively, and this library is MIT, so neither may be
+transcribed. It is also robustness: a firmware that changes either one still
+parses.
+
+### What it deliberately does not do
+Every detection comes out as `EventType::OTHER` carrying its raw code. What a
+Sefam detection code means is not known, and a guess would put an invented number
+into somebody's AHI. Under SDD-004 that keeps them inside `total_events` and
+inside no clinical index, so a Sefam session reports an AHI of 0 next to its
+recorded events. The map gets filled in against a donor card and the matching
+SEFAM Analyze report, and not before.
+
 ## [2026.6.0] - 2026-09-05
 
 ### Added
