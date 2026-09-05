@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cpapdash_parser VERSION 2026.5.0 LANGUAGES CXX)
+project(cpapdash_parser VERSION 2026.6.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -62,6 +62,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         tests/test_desat_detector.cpp
         tests/test_detect_manufacturer.cpp
         tests/test_sleep_index.cpp
+        tests/test_event_indexes.cpp
         tests/test_breath_analysis.cpp
     )
     if(CPAPDASH_PARSER_WITH_LOWENSTEIN)
