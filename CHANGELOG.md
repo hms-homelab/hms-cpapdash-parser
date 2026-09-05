@@ -1,5 +1,74 @@
 # Changelog
 
+## [2026.8.0] - 2026-09-05
+
+### Sefam S.Box, rewritten against two real cards — still BETA
+
+A donor card arrived hours after 2026.7.0 shipped: an S.Box AUTO, 242 sessions,
+ten months. It falsified most of what that release had reasoned out. Inside the
+vendor application the reporter sent alongside it was a second card — Sefam's own
+demo recording, a different device family on older firmware — which falsified two
+more things and, between them, they are what this release is built on.
+
+| | Sessions | Blocks | Failing checksums |
+|---|---|---|---|
+| S.Box AUTO, 1263R | 242 → **241 read** | 838,440 | **0** |
+| SleepBox_AUTO, 1200R | 34 → **33 read** | 259,688 | **0** |
+
+Both refusals are sessions in which every channel is a stub. Before this release
+the parser refused all 276.
+
+### Two device families, and nothing about the framing assumed
+
+- **A session is a folder AND a manifest name.** The 1263R writes one session per
+  `DATA_<n>` folder; the 1200R writes `<YYMMDD>/<HHMMSS>.ini`, so one folder holds
+  every recording that started that day. `listSessionStems()` and
+  `parseSessionNamed()` handle both; `parseSession()` delegates when a folder
+  holds exactly one.
+- **The block framing is derived, not known.** Both families use ten-second
+  blocks, but the 1263R writes a three-byte trailer (checksum + block index) and
+  the 1200R writes **one** (checksum only, no index). `deduceBlockLayout()`
+  sweeps the candidates and keeps the one under which every checksum verifies.
+  Worth recording that file sizes alone cannot settle this — `30s/3B` and
+  `10s/1B` produce identical sizes, and reading the sizes is exactly how this
+  first went wrong. Only the checksums separate them.
+
+The 1200R demo is also the only Sefam recording we hold with the oximetry, effort
+and position channels populated; the donor card has all of them as stubs.
+
+- **The header is a fixed 38 bytes**, ASCII under XOR `0xBF`, reading
+  `#02/<model><serial>      /<YYMMDDhhmmss>/`. Its identity and timestamp match
+  the INI in all 242 sessions, so it is now a cross-check that an INI and a pile
+  of channel files belong together — a mismatch is refused.
+- **Samples are framed in ten-second blocks**, each followed by a checksum and a
+  big-endian block index. This was not in any prior description of the format.
+  The checksum is what the parser refuses on, and it is a far stronger guarantee
+  than 2026.7.0 had: a misread offset or rate cannot pass quietly.
+- **There is no scrambling.** The samples are plain. What looked scrambled is the
+  38-byte header, repeated in every file including the stubs.
+- **The INI's Min/Max do not scale a channel.** Pressure and leak read as tenths
+  of their unit; flow is centred on mid-scale. All of it is evidenced, none of it
+  is confirmed, and `docs/SEFAM_FORMAT.md` says which is which per row.
+- **`DET` is a bitfield, not an enumeration**, so this release emits **no events
+  at all** and reports each bit's share of the recording instead. 2026.7.0 turned
+  runs of the whole byte into `OTHER` events; on this card that would have been
+  tens of thousands of them a night, out of flags toggling against each other.
+  A Sefam session carries no AHI.
+
+**API changed.** `SefamDescrambler`, `deduceHeaderLength`, `deduceDescrambler`,
+`decodeChannel`, `decodeEvents` and `SefamChannel::toPhysical` are gone; they
+solved a format that does not exist. `decodeFileHeader`, `deframe`,
+`deduceBlockLayout`, `scaleFor`, `readChannel`, `listSessionStems` and
+`parseSessionNamed` replace them. Only hms-cpap consumes the Sefam parser, and it
+is being updated in step.
+
+`tools/sefam_probe` (behind `CPAPDASH_PARSER_BUILD_TOOLS=ON`) reads a card and
+reports what the parser made of it, which is how both cards above were checked.
+
+**Still open, and it needs the vendor application.** The reporter sent SEFAM
+Analyze alongside the card. Its session export is the only thing that can settle
+the physical scale of each channel and the meaning of the `DET` bits.
+
 ## [2026.7.0] - 2026-09-05
 
 ### Sefam S.Box support — BETA, UNVALIDATED

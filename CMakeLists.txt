@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cpapdash_parser VERSION 2026.7.0 LANGUAGES CXX)
+project(cpapdash_parser VERSION 2026.8.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,6 +18,7 @@ add_library(cpapdash_parser STATIC
     src/DesatDetector.cpp
     src/VLDParser.cpp
     src/SleepIndex.cpp
+    src/FlowEvents.cpp
 )
 
 target_include_directories(cpapdash_parser PUBLIC
@@ -55,6 +56,24 @@ if(CPAPDASH_PARSER_WITH_SEFAM)
         src/SefamParser_Events.cpp
     )
     target_compile_definitions(cpapdash_parser PUBLIC CPAPDASH_WITH_SEFAM=1)
+endif()
+
+# Command-line tools. Off by default: nothing consumes the library through them.
+option(CPAPDASH_PARSER_BUILD_TOOLS "Build the command-line tools" OFF)
+
+if(CPAPDASH_PARSER_BUILD_TOOLS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    if(CPAPDASH_PARSER_WITH_SEFAM)
+        # Reads a Sefam card and reports what the parser made of it. SDD-005 §8
+        # asks for exactly this against a donor card.
+        add_executable(sefam_probe tools/sefam_probe.cpp)
+        target_link_libraries(sefam_probe cpapdash_parser)
+    endif()
+
+    # Measures the flow-derived apnea detector against a machine that reports its
+    # own apneas (SDD-006 §6). A tool and not a test: tests never run on a real
+    # person's therapy data.
+    add_executable(flow_events_validate tools/flow_events_validate.cpp)
+    target_link_libraries(flow_events_validate cpapdash_parser)
 endif()
 
 # Tests
