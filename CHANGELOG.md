@@ -1,11 +1,16 @@
 # Changelog
 
-## [Unreleased]
+## [2026.7.0] - 2026-09-05
 
 ### Sefam S.Box support — BETA, UNVALIDATED
 
-No version number and no tag until a donor card has been read (SDD-005 section 8).
-Nothing here has met a real Sefam card; the fixtures behind it are synthetic.
+Released so it can be consumed, **not** because it has been proven. Nothing here
+has met a real Sefam card; the fixtures behind it are synthetic. The donor-card
+gate in SDD-005 section 8 is still open and still governs whether any of this can
+be called correct.
+
+Off by default. A consumer gets it only by asking for
+`CPAPDASH_PARSER_WITH_SEFAM=ON`.
 
 - **`SefamParser`, behind `CPAPDASH_PARSER_WITH_SEFAM`.** Raised by
   hms-homelab/hms-cpap#28. Reads a `DATA_<n>` session folder: flow, pressure and

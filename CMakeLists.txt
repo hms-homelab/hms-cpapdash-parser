@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cpapdash_parser VERSION 2026.6.0 LANGUAGES CXX)
+project(cpapdash_parser VERSION 2026.7.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

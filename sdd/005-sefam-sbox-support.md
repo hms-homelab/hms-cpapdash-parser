@@ -215,9 +215,14 @@ what the device reports; decoded pressure and leak against a Sefam Analyze expor
 the same nights; and the `.DET` code map worked out against the same report before any
 code is promoted out of OTHER.
 
-**Release gate.** No version, no tag, no release until the donor-card step passes.
-The Philips precedent applies: unvalidated work stays under Unreleased with a beta
-banner.
+**Release gate.** Released at **2026.7.0** on Albin's call, as a beta that is off by
+default: a consumer gets it only by asking for `CPAPDASH_PARSER_WITH_SEFAM=ON`, and
+the changelog says plainly that nothing here has met a real card.
+
+That is a decision about *availability*, not about correctness. The donor-card step
+still gates everything that matters: nothing leaves `EventType::OTHER`, no `.DET` code
+gets a meaning, and no number out of this parser should be shown to a patient as
+therapy data until a real card and its SEFAM Analyze export agree with it.
 
 ## 9. Shape of the change
 
