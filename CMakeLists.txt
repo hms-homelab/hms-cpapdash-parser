@@ -44,6 +44,19 @@ if(CPAPDASH_PARSER_WITH_LOWENSTEIN)
     target_compile_definitions(cpapdash_parser PUBLIC CPAPDASH_WITH_LOWENSTEIN=1)
 endif()
 
+# Sefam S.Box parser (optional, no extra dependencies) -- see sdd/005.
+option(CPAPDASH_PARSER_WITH_SEFAM "Build Sefam S.Box parser" OFF)
+
+if(CPAPDASH_PARSER_WITH_SEFAM)
+    target_sources(cpapdash_parser PRIVATE
+        src/SefamIni.cpp
+        src/SefamParser.cpp
+        src/SefamParser_Channels.cpp
+        src/SefamParser_Events.cpp
+    )
+    target_compile_definitions(cpapdash_parser PUBLIC CPAPDASH_WITH_SEFAM=1)
+endif()
+
 # Tests
 option(CPAPDASH_PARSER_BUILD_TESTS "Build tests" OFF)
 if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -68,6 +81,11 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
     if(CPAPDASH_PARSER_WITH_LOWENSTEIN)
         list(APPEND TEST_SOURCES tests/test_prisma.cpp)
         list(APPEND TEST_SOURCES tests/test_prisma_channels.cpp)
+    endif()
+    if(CPAPDASH_PARSER_WITH_SEFAM)
+        list(APPEND TEST_SOURCES tests/test_sefam_ini.cpp)
+        list(APPEND TEST_SOURCES tests/test_sefam_channels.cpp)
+        list(APPEND TEST_SOURCES tests/test_sefam.cpp)
     endif()
 
     add_executable(run_tests ${TEST_SOURCES})

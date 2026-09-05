@@ -30,4 +30,15 @@ inline int parseIntOr(const std::string& s, int fallback) {
     }
 }
 
+// The same contract for a floating-point field: std::stod's conversion without
+// the throw. Sefam's INI declares each channel's Min/Max as decimals, and that
+// INI arrives from a user's SD card like every other input here.
+inline double parseDoubleOr(const std::string& s, double fallback) {
+    try {
+        return std::stod(s);
+    } catch (const std::exception&) {
+        return fallback;
+    }
+}
+
 } // namespace cpapdash::parser

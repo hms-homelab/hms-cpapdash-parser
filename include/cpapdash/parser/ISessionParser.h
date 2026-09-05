@@ -64,13 +64,16 @@ public:
  * matching ONLY -- no file content is read. Ordered unambiguous-first, first match
  * wins:
  *   1. LOWENSTEIN -- any filename ends ".wmedf"
- *   2. BMC        -- any filename matches the serial-named identity file
+ *   2. SEFAM      -- a session folder's own manifest, "DATA_<n>/DATA_<n>.ini"
+ *                    (the folder and the file share a name, which is what makes
+ *                    a bare ".ini" specific enough to gate on)
+ *   3. BMC        -- any filename matches the serial-named identity file
  *                    "\d\dC\d{5}.usr" (React Health/3B Luna share this format)
- *   3. PHILIPS    -- any filename is "properties.txt" (the Properties.txt
+ *   4. PHILIPS    -- any filename is "properties.txt" (the Properties.txt
  *                    identity manifest; gated on this, not on .001/.002, which
  *                    collide with BMC's raw-data numbering)
- *   4. RESMED     -- "STR.edf" present, or a DATALOG subdir, or any .edf file
- *   5. else UNKNOWN
+ *   5. RESMED     -- "STR.edf" present, or a DATALOG subdir, or any .edf file
+ *   6. else UNKNOWN
  *
  * Detection is broader than parse support: PHILIPS and BMC are named here even
  * though createParser() has no parser for them (returns nullptr for both).

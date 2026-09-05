@@ -98,14 +98,46 @@ Medical, and Resvent.
   reverse-engineering approach as the current Philips effort. Highest cost, but market growth
   argues for eventually funding it.
 
+## 6. Sefam S.Box
+
+Added 2026-09-05, raised by hms-homelab/hms-cpap#28. Now **SDD-005**, implemented behind
+`CPAPDASH_PARSER_WITH_SEFAM`, unvalidated pending a donor card.
+
+French manufacturer (Nancy), industrial design by Philippe Starck, sold as "S.Box by Starck".
+Range: S.Box / S.Box C (CPAP, Auto-CPAP), S.Box AUTO (autotitration **and** Type-3 polygraph),
+S.Box DuoS / DuoST (bi-level NIV). Sold in the UK via Intus Healthcare, AU via cpaponline and
+cpapclub, IN via RespBuy. One clinician application across the range, SEFAM Analyze.
+
+**Nobody reads this format today.** OSCAR has no Sefam loader and Sefam themselves say the
+device is not OSCAR compatible; SleepHQ's supported list is ResMed, Philips and Löwenstein only.
+
+**Cheapest brand looked at so far, and it is not close.** The card is self-describing: every
+session folder carries an INI declaring each channel's name, unit, sample rate, bit depth and
+range, with one binary file per declared channel named by that channel. So the parser needs no
+channel table at all, where BMC and Prisma keep theirs firmware-internal. What it does need is
+two things the files do not state outright — the length of the per-file header, and how the
+sample bytes are scrambled — and both are *derived at parse time* rather than hard-coded. See
+`SEFAM_FORMAT.md` and SDD-005 sections 6.2 and 6.3.
+
+**Licensing: both prior write-ups are unusable.** `garett09/OSCAR-V2`'s
+`Notes/loaders/SD_CARD_FINGERPRINTS.md` is GPL-3.0, and `ChrisAylen/sefam-nea-analysis` (a
+viewer for the Sefam Néa) has no license at all. Read once for orientation, transcribed
+nowhere; everything normative waits on the donor card. The self-describing INI is what makes
+that constraint free rather than expensive.
+
+Also the first candidate carrying PSG-class channels — effort belts, oximetry, body position
+ride the same format — though v1 surfaces only flow, pressure, leak, SpO2 and heart rate.
+
 ---
 
 ## Net prioritization
 
-1. **BMC** — cheapest (MIT-licensed decoder exists), real growth market.
-2. **F&P SleepStyle (EDF half only)** — cheap, current product, zero GPL risk.
-3. **Resvent** — expensive (no prior art), but real and growing relevance.
-4. **F&P Icon / DeVilbiss** — cheap-ish if pursued, but declining/legacy installed base. Low
+1. **Sefam S.Box** — cheapest of the lot (self-describing card), an open request with a donor
+   card offered, and nothing else on the market reads it. Implemented, awaiting validation.
+2. **BMC** — cheap (MIT-licensed decoder exists), real growth market.
+3. **F&P SleepStyle (EDF half only)** — cheap, current product, zero GPL risk.
+4. **Resvent** — expensive (no prior art), but real and growing relevance.
+5. **F&P Icon / DeVilbiss** — cheap-ish if pursued, but declining/legacy installed base. Low
    priority.
 
 ## OSCAR-as-blackbox-parser: explored and deprioritized
