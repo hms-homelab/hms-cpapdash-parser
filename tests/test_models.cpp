@@ -16,6 +16,7 @@ TEST(ModelsTest, EventTypeToStringAllTypes) {
     EXPECT_EQ(eventTypeToString(EventType::OBSTRUCTIVE), "Obstructive");
     EXPECT_EQ(eventTypeToString(EventType::CENTRAL), "Central");
     EXPECT_EQ(eventTypeToString(EventType::CLEAR_AIRWAY), "Clear Airway");
+    EXPECT_EQ(eventTypeToString(EventType::OTHER), "Other");
 }
 
 // ============================================================================

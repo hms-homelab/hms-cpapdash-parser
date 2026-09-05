@@ -34,9 +34,17 @@ bool EDFParser::parseEVEFile(EDFFile& edf, ParsedSession& session) {
             event_type = EventType::RERA;
         } else if (desc_lower.find("csr") != std::string::npos) {
             event_type = EventType::CSR;
-        } else {
-            // Arousal, flow limitation, etc. -- still record them
+        } else if (desc_lower.find("arousal") != std::string::npos) {
+            // Deliberate, not a fallthrough: RIN computed from arousals alone
+            // reconciles against ResMed's own RIN channel on 172 of 175 nights
+            // (docs/RESMED_CALCULATION_RULES.md).
             event_type = EventType::RERA;
+        } else {
+            // Anything we do not recognise -- 'Recording starts' file markers, and
+            // whatever a future firmware invents. Recorded, counted in total_events,
+            // part of no index. It used to land in RERA, which inflated that count by
+            // one per EVE file (SDD-004 1.1).
+            event_type = EventType::OTHER;
         }
 
         double dur = (annot.duration_sec > 0) ? annot.duration_sec : 0.0;
