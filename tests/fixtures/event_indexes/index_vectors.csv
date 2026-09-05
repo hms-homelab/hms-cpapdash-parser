@@ -1,0 +1,70 @@
+# The seven respiratory indexes. Every implementation of this rule, in any
+# language and in SQL, must reproduce this table exactly.
+#
+# obstructive,central,clear_airway,unclassified,hypopnea,arousal,excluded,hours,ahi,ai,hi,oai,cai,uai,rin
+#
+# `excluded` is every event that belongs to NO index: vibratory snore, flow
+# limitation, large leak, CSR, desaturation and the OTHER bucket. It must change
+# nothing. It is in this table because it is the one mistake the rest of the
+# table cannot catch -- a numerator written as count(*) over a night's event
+# rows reproduces every other row here perfectly and is still ~25% high in
+# production.
+#
+# Indexes are events per hour at FULL precision. Rounding is a display concern
+# and must not happen at any storage or query layer, so the expectations here
+# are compared with a tolerance rather than as formatted strings.
+#
+# Regenerate whenever the mapping or arithmetic in EventIndexes.h changes.
+# Every consumer's tests then fail until it follows, which is the point.
+
+# The night that started all this. Rohan Misquith, 2026-09-04: the app showed
+# 0.40 where the truth was 0.49. One hypopnea over just under two hours.
+0,0,0,0,1,0,0,2.041,0.4899559,0,0.4899559,0,0,0,0
+
+# 20250721 from the reference card, as OUR copy sees it: 9 obstructive, 2
+# central, 1 unclassified, 11 hypopnea over 9.733h.
+9,2,0,1,11,3,0,9.733,2.3630947,1.2329189,1.1301757,0.9246892,0.2054865,0.1027432,0.3082297
+
+# Every type present and distinct, so a numerator that drops or double-counts
+# one type cannot pass by coincidence.
+7,5,3,2,11,13,0,10,2.8,1.7,1.1,0.7,0.5,0.2,1.3
+
+# *** THE PAIR TO THE ROW ABOVE, AND THE MOST IMPORTANT ROW IN THIS FILE. ***
+# Identical counts, identical expectations, plus 2856 excluded events -- the
+# real production mix of vibratory snore, flow limitation, large leak and CSR.
+# Every index must be UNCHANGED from the row above. A consumer that counts all
+# event rows for its numerator passes every other row here and fails this one.
+7,5,3,2,11,13,2856,10,2.8,1.7,1.1,0.7,0.5,0.2,1.3
+
+# Excluded events and nothing else. A night of snore and flow-limitation flags
+# is a night with no scored events, not a night with a high AHI.
+0,0,0,0,0,0,900,8,0,0,0,0,0,0,0
+
+# Clear-airway only. ResMed never emits it; Philips does. It must reach AHI and
+# AI and nothing else. (Production carries zero of these today, so this row
+# proves the definition rather than the pipeline.)
+0,0,4,0,0,0,0,8,0.5,0.5,0,0,0,0,0
+
+# Unclassified only. ResMed's bare 'Apnea'. It counts toward AHI and AI and is
+# the bucket that was counted but never persisted for years.
+0,0,0,3,0,0,0,6,0.5,0.5,0,0,0,0.5,0
+
+# Arousals only. RIN moves, nothing else does -- RERA is not part of AHI.
+0,0,0,0,0,9,0,9,0,0,0,0,0,0,1
+
+# Hypopneas only. AHI and HI move, AI does not.
+0,0,0,0,12,0,0,8,1.5,0,1.5,0,0,0,0
+
+# A perfect night. Zero events, real therapy time.
+0,0,0,0,0,0,0,7.5,0,0,0,0,0,0,0
+
+# Zero hours with events present: returns all zeros rather than dividing.
+# A caller that has not yet learned the night's duration must not publish this.
+4,1,0,0,6,2,0,0,0,0,0,0,0,0,0
+
+# A very short nap. Small denominators make indexes large and that is correct,
+# not a bug to clamp.
+1,0,0,0,1,0,0,0.25,8,4,4,4,0,0,0
+
+# A severe night, to prove nothing saturates or clamps.
+120,40,0,5,200,60,0,8,45.625,20.625,25,15,5,0.625,7.5

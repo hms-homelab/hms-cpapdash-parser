@@ -1,5 +1,39 @@
 # Changelog
 
+## [2026.6.0] - 2026-09-05
+
+### Added
+- **`EventIndexes.h`: the seven respiratory indexes, defined once.** AHI, AI, HI,
+  OAI, CAI, UAI and RIN, plus the event-type mapping that feeds them. Pure
+  arithmetic, no I/O. It lives here for the same reason `SleepIndex.h` does:
+  hms-cpapdash-api, cpapdash-ingest and cpapdash-app would otherwise each own a
+  copy of the rule and there would be nothing keeping them equal.
+- **`tests/fixtures/event_indexes/index_vectors.csv`**, the cross-language
+  contract, and `test_event_indexes.cpp` holding this side to it. The Dart copy
+  in cpapdash-app is held to the same table. Change the mapping here and the
+  parser's tests fail first, then every consumer's.
+
+### Why
+STR.edf carries the machine's own indexes, but every one of those channels is a
+0..2400 integer scaled by 0.1, so the file holds ONE decimal and ResMed FLOORS
+into it. Measured on a real card: 14 of 15 days match `floor()`, none match
+`round()`. A true AHI of 0.49 is stored as 0.4, so a customer shown two decimals
+is shown a fabricated zero. The indexes have to be computed, and computed the
+same way everywhere.
+
+### Notes for anyone transcribing this into SQL
+- **RIN keys on `details = 'Arousal'`, not `event_type = 'RERA'`.** Measured on
+  the live table: of 4073 RERA rows, 3557 are arousals and 516 are the pre-OTHER
+  catch-all, so keying on the type inflates RIN by 12.7% across stored history.
+  There are no case or whitespace variants, so an exact match is correct and a
+  defensive `lower()`/`trim()` would be worse than useless.
+- **Excluded events reach no index.** 2856 of 35,040 live rows are vibratory
+  snore, flow limitation, large leak or CSR, plus 4073 RERA that belong only to
+  RIN. A numerator written as `count(*)` runs about 25% high. The fixture has a
+  paired row that fails exactly this mistake.
+- **Divide by `60.0`, not `60`.** `duration_minutes` is an INT, so integer
+  division turns 7.9 hours into 7 and the index comes out ~13% high.
+
 ## [2026.5.0] - 2026-09-05
 
 ### Added
