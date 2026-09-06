@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<desc>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1003" NewValue="2"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1001" NewValue="20240001"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1002" NewValue="27"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1084" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1083" NewValue="3"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1199" NewValue="1000"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1128" NewValue="15"/>
+<RespEvent  RespEventID="101" EndTime="30" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="102" EndTime="50" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="103" EndTime="70" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="111" EndTime="90" Duration="10" Pressure="0" Strength="2"/>
+</desc>

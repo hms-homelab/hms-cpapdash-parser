@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?weinmann version="1.1" type="dde-tpg"?>
+<DeviceID>
+<DeviceType value="27"/>
+<DeviceSerialNumber value="TESTSN00"/>
+<MainboardSerialNumber value="TESTMB000"/>
+<BlowerIndex value="0"/>
+<FWVersion value="5.05"/>
+<FWRevision value="0022"/>
+<FWBuild value="0000-0000-0000-Test"/>
+<PMVersion value="2.17.8"/>
+<StatisticVersion value="2.4.1"/>
+<NotificationVersion value="00.00.01"/>
+<LoggerVersion value="00.01.02"/>
+<MainboardHWVersion value="11"/>
+<DisplayHWVersion value="24"/>
+<DeviceVariant value="0"/>
+<DeviceBranding value="2"/>
+</DeviceID>

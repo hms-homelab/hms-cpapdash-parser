@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<desc>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1003" NewValue="2"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1001" NewValue="20240001"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1002" NewValue="27"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1084" NewValue="1"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1083" NewValue="3"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1199" NewValue="1000"/>
+<DeviceEvent  DeviceEventID="0" Time="0" ParameterID="1128" NewValue="15"/>
+<RespEvent  RespEventID="101" EndTime="30" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="102" EndTime="50" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="103" EndTime="70" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="111" EndTime="90" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="112" EndTime="110" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="121" EndTime="130" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="131" EndTime="150" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="151" EndTime="170" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="161" EndTime="190" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="181" EndTime="210" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="101" EndTime="230" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="102" EndTime="250" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="103" EndTime="270" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="111" EndTime="290" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="112" EndTime="310" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="121" EndTime="330" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="131" EndTime="350" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="151" EndTime="370" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="161" EndTime="390" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="181" EndTime="410" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="101" EndTime="430" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="102" EndTime="450" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="103" EndTime="470" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="111" EndTime="490" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="112" EndTime="510" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="121" EndTime="530" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="131" EndTime="550" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="151" EndTime="570" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="161" EndTime="590" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="181" EndTime="610" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="101" EndTime="630" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="102" EndTime="650" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="103" EndTime="670" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="111" EndTime="690" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="112" EndTime="710" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="121" EndTime="730" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="131" EndTime="750" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="151" EndTime="770" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="161" EndTime="790" Duration="10" Pressure="0" Strength="2"/>
+<RespEvent  RespEventID="181" EndTime="810" Duration="10" Pressure="0" Strength="2"/>
+</desc>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?weinmann version="1.1" type="dde-cfg"?>
+<Configuration>
+<Parameter ID="1003" value="2"/>
+<Parameter ID="1084" value="1"/>
+<Parameter ID="1128" value="15"/>
+<Parameter ID="1199" value="1000"/>
+</Configuration>
