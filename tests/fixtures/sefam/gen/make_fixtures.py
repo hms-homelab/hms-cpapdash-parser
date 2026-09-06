@@ -122,20 +122,33 @@ def effort(freq, seconds):
 
 def detections(freq, seconds):
     """A bitfield, the way the donor card writes it: several flags at once, each
-    with its own prevalence. Bit 1 is set for most of the recording, bit 3 for
-    almost none of it."""
+    with its own prevalence.
+
+    Bit 2 is the apnea flag (identified from the card -- see
+    SefamParser_Events.cpp). Two runs here are long enough to count and one is
+    deliberately too short, because bit 2 also fires in sub-second bursts that
+    are not events and the ten-second floor is what separates them."""
     n = freq * seconds
     out = []
     for i in range(n):
         v = 0
         if (i // freq) % 3 != 0:
-            v |= 0x02
+            v |= 0x02                                   # phase-ish, prevalent
         if 30 * freq <= i < 50 * freq:
             v |= 0x20
         if 70 * freq <= i < 85 * freq:
             v |= 0x80
         if 100 * freq <= i < 100 * freq + freq // 2:
             v |= 0x08
+
+        # Apneas: 14 s and 11 s, plus a 2 s burst that must be ignored.
+        if 10 * freq <= i < 24 * freq:
+            v |= 0x04
+        if 55 * freq <= i < 66 * freq:
+            v |= 0x04
+        if 90 * freq <= i < 92 * freq:
+            v |= 0x04
+
         out.append(v)
     return out
 
