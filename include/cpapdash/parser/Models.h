@@ -175,15 +175,16 @@ struct SessionMetrics {
      * follow. Defaults to AHI, so every existing parser and every existing row
      * is unchanged.
      *
-     * There is deliberately no third value naming an apnea-only index. There is
-     * no published severity banding for one, and a number a consumer cannot
-     * grade is a number it should not be showing (SDD-081, ruled by Albin
-     * 2026-09-05). Unavailable means DO NOT PUBLISH THIS INDEX, not "publish it
-     * under another name".
+     * `Ungraded` does NOT mean discard the number. The index is computed and
+     * stored exactly as before; what it lacks is a SEVERITY interpretation,
+     * because there is no published banding for an apnea-only index. So nothing
+     * may grade it, alert on it, or feed it to a summary that will characterise
+     * it -- and one day, when there is something to compare it against, it is
+     * already there to compare (Albin, SDD-081, 2026-09-05).
      */
     enum class IndexKind {
-        AHI,          ///< apneas + hypopneas; the standard index
-        Unavailable   ///< no hypopnea detection, so there is no index to show
+        AHI,       ///< apneas + hypopneas; the standard index, safe to grade
+        Ungraded   ///< computed and stored, but it has no severity meaning
     };
     IndexKind index_kind = IndexKind::AHI;
 
