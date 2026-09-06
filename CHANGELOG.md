@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [2026.8.1] - 2026-09-06
+
+Everything below shipped after v2026.8.0 was cut and had never been released,
+so a consumer pinned to 2026.8.0 got S.Box channel decoding and respiratory
+mechanics but **no events at all** — which is the half an S.Box owner is
+waiting for. That is the reason for this bump.
+
 ### Sefam: apneas, from the bit that turned out to be the apnea flag
 
 Which DET bit means what was established from the card itself, without the
