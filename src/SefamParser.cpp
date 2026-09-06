@@ -503,12 +503,13 @@ std::unique_ptr<ParsedSession> SefamParser::parseSessionNamed(
     // hypopneas, and no DET bit meets the hypopnea criterion (the only candidate
     // sits at a 0.74 flow ratio where the definition requires 0.70 or less). So
     // the number calculateMetrics() just put in `ahi` is an apnea count per
-    // hour, and consumers are told not to publish it rather than to rename it.
+    // hour.
     //
-    // The events themselves stay. They are the machine's own detections and a
-    // user is entitled to see them; it is the INDEX that cannot be graded.
+    // It is still computed and still stored. What it does not have is a severity
+    // meaning, so nothing may grade it or characterise it -- and when there is
+    // eventually something to compare it against, it is already there.
     if (session->metrics)
-        session->metrics->index_kind = SessionMetrics::IndexKind::Unavailable;
+        session->metrics->index_kind = SessionMetrics::IndexKind::Ungraded;
 
     return session;
 }
