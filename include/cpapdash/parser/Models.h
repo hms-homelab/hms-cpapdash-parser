@@ -161,9 +161,37 @@ struct Breath {
  * SessionMetrics - Aggregated metrics for a CPAP session (standards-based)
  */
 struct SessionMetrics {
+    /**
+     * Whether `ahi` below is actually an AHI.
+     *
+     * An AHI is apneas PLUS hypopneas. A parser whose detector cannot produce
+     * hypopneas therefore does not produce an AHI, and the number it puts in
+     * `ahi` is an apnea count per hour wearing the wrong name. On a real ResMed
+     * sample hypopneas are 35% of the numerator (534 of 1536 across 175
+     * nights), so that is not a slightly smaller AHI -- it is a different
+     * measurement.
+     *
+     * The parser is the only layer that knows, so it says so here and consumers
+     * follow. Defaults to AHI, so every existing parser and every existing row
+     * is unchanged.
+     *
+     * There is deliberately no third value naming an apnea-only index. There is
+     * no published severity banding for one, and a number a consumer cannot
+     * grade is a number it should not be showing (SDD-081, ruled by Albin
+     * 2026-09-05). Unavailable means DO NOT PUBLISH THIS INDEX, not "publish it
+     * under another name".
+     */
+    enum class IndexKind {
+        AHI,          ///< apneas + hypopneas; the standard index
+        Unavailable   ///< no hypopnea detection, so there is no index to show
+    };
+    IndexKind index_kind = IndexKind::AHI;
+
     // ===== EVENT METRICS =====
     int total_events = 0;
-    double ahi = 0.0;  // Apnea-Hypopnea Index (events/hour)
+    // Apnea-Hypopnea Index (events/hour) -- ONLY when index_kind is AHI. See
+    // above before displaying, grading or alerting on this.
+    double ahi = 0.0;
 
     // Event breakdown
     int obstructive_apneas = 0;
