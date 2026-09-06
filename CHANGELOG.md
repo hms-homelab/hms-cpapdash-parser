@@ -1,5 +1,36 @@
 # Changelog
 
+## [Unreleased]
+
+### Sefam: apneas, from the bit that turned out to be the apnea flag
+
+Which DET bit means what was established from the card itself, without the
+vendor's software, by two tests that need no external truth because the
+definitions constrain what each flag can look like: run-length shape (an apnea
+is by definition at least ten seconds) and airflow collapse (during a real one
+the flow stops).
+
+Bit 2 is the apnea flag. Its long runs sit at a flow ratio of **0.06** -- a 94%
+collapse -- and no other bit is close; the next lowest that occurs often is
+0.74. It is also the only bit that had correlated with apneas derived
+independently from the flow waveform, found earlier by an unrelated method.
+
+Two results worth keeping from the same table. Bits 5 and 6 fire ~841 times an
+hour, which is 14 a minute, the respiratory rate our own breath detector finds
+independently. And bit 4 is the trap: event-shaped in duration, no airflow drop
+at all -- judging by shape alone would have called it an apnea.
+
+Over the donor card: **94 apneas across 241 sessions and 582.3 hours**, which
+the parser and the standalone analysis agree on to the event.
+
+**This is an APNEA INDEX, not an AHI.** No hypopneas are detected: bit 0 is the
+only candidate and its 0.74 ratio does not meet the <= 0.70 the definition
+requires. `calculateMetrics()` still puts the number in `ahi` because that is
+the only field there is, and the web front end grades `ahi` against the AASM
+severity thresholds of 5/15/30 -- so a Sefam user currently gets an AHI-shaped
+badge computed from half the measurement. A consumer needs to be able to tell
+the two apart before this is shown as an AHI.
+
 ## [2026.8.0] - 2026-09-05
 
 ### Sefam S.Box, rewritten against two real cards — still BETA

@@ -14,8 +14,10 @@ namespace cpapdash::parser {
 
 namespace fs = std::filesystem;
 
-// Defined in SefamParser_Events.cpp, along with the reason there are no events.
+// Defined in SefamParser_Events.cpp, along with how the bits were identified.
 std::map<int, double> sefamDetBitShare(const std::vector<double>& codes);
+std::vector<SleepEvent> sefamApneasFromDet(const std::vector<double>& codes, int freq,
+                                           std::chrono::system_clock::time_point start);
 
 namespace {
 
@@ -358,10 +360,19 @@ std::unique_ptr<ParsedSession> SefamParser::parseSessionNamed(
 
     // ── Detections ───────────────────────────────────────────────────────────
     //
-    // No events. DET is a bitfield of concurrent flags whose meanings are not
-    // known, so its per-bit prevalence is reported and nothing is invented. See
-    // SefamParser_Events.cpp.
-    notes_.det_bit_share = sefamDetBitShare(samplesOf("DET"));
+    // Apneas only. DET is a bitfield of concurrent flags, and bit 2 is the one
+    // whose long runs coincide with the airflow actually stopping -- see
+    // SefamParser_Events.cpp for how that was established and for what the other
+    // seven bits appear to be.
+    //
+    // No hypopneas, so this is an APNEA INDEX and not an AHI. Consumers must not
+    // grade it against AHI severity thresholds.
+    {
+        const std::vector<double>& det = samplesOf("DET");
+        notes_.det_bit_share = sefamDetBitShare(det);
+        session->events = sefamApneasFromDet(det, rateOf("DET"), start);
+        session->has_events = !session->events.empty();
+    }
 
     // ── Per-minute rows ──────────────────────────────────────────────────────
 

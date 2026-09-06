@@ -206,10 +206,10 @@ TEST(SefamParse, LeakIsAlsoKeptAtTheRateTheMachineWroteIt) {
     EXPECT_EQ(s->native_samples.leak.size(), 120u);
 }
 
-// DET is a bitfield of concurrent flags, not an enumeration of events. What the
-// bits MEAN is not known, so v1 reports how much of the night each was set for
-// and invents nothing. A Sefam session therefore carries no events and no AHI.
-TEST(SefamParse, DetectionsAreReportedAsBitsAndNotAsEvents) {
+// DET is a bitfield of concurrent flags, and bit 2 is the apnea flag -- the only
+// bit whose long runs coincide with the airflow actually stopping, established
+// on the donor card (SefamParser_Events.cpp).
+TEST(SefamParse, ApneasComeFromDetBitTwo) {
     const auto dir = fixturePath(kCardSession);
     ASSERT_FALSE(dir.empty());
 
@@ -217,17 +217,58 @@ TEST(SefamParse, DetectionsAreReportedAsBitsAndNotAsEvents) {
     auto s = parser.parseSession(dir, "dev-1", "");
     ASSERT_NE(s, nullptr);
 
-    EXPECT_TRUE(s->events.empty());
-    EXPECT_FALSE(s->has_events);
+    // Two runs long enough to count, and a 2 s burst that is not an event: bit 2
+    // fires in sub-second bursts as well, and the ten-second floor is what
+    // separates a detection from an apnea.
+    ASSERT_EQ(s->events.size(), 2u);
+    EXPECT_TRUE(s->has_events);
+    EXPECT_NEAR(s->events[0].duration_seconds, 14.0, 0.1);
+    EXPECT_NEAR(s->events[1].duration_seconds, 11.0, 0.1);
 
+    // APNEA, never OBSTRUCTIVE or CENTRAL: that airflow stopped is measured,
+    // the mechanism is not.
+    for (const auto& e : s->events) {
+        EXPECT_EQ(e.event_type, EventType::APNEA);
+        ASSERT_TRUE(e.details.has_value());
+        EXPECT_EQ(*e.details, "Sefam apnea (DET bit 2)");
+    }
+}
+
+// The index that comes out is an APNEA index, not an AHI: no hypopneas are
+// detected, because the only candidate bit does not meet the criterion. A
+// consumer must not grade this against AHI severity thresholds.
+TEST(SefamParse, TheIndexIsApneaOnly) {
+    const auto dir = fixturePath(kCardSession);
+    ASSERT_FALSE(dir.empty());
+
+    SefamParser parser;
+    auto s = parser.parseSession(dir, "dev-1", "");
+    ASSERT_NE(s, nullptr);
     ASSERT_TRUE(s->metrics.has_value());
-    EXPECT_EQ(s->metrics->total_events, 0);
-    EXPECT_DOUBLE_EQ(s->metrics->ahi, 0.0);
 
-    // The fixture sets bit 1 for two thirds of the recording and bit 3 for half
-    // a second of it, which is the shape the donor card shows.
+    EXPECT_EQ(s->metrics->total_events, 2);
+    EXPECT_EQ(s->metrics->unclassified_apneas, 2);
+    EXPECT_EQ(s->metrics->hypopneas, 0);
+    EXPECT_EQ(s->metrics->obstructive_apneas, 0);
+    EXPECT_EQ(s->metrics->central_apneas, 0);
+
+    // Two apneas in two minutes of recording.
+    EXPECT_NEAR(s->metrics->ahi, 60.0, 1.0);
+}
+
+TEST(SefamParse, EveryDetBitIsStillReported) {
+    const auto dir = fixturePath(kCardSession);
+    ASSERT_FALSE(dir.empty());
+
+    SefamParser parser;
+    auto s = parser.parseSession(dir, "dev-1", "");
+    ASSERT_NE(s, nullptr);
+
+    // The seven bits we have not identified are reported rather than dropped, so
+    // the next round of identification has somewhere to start.
     const auto& share = parser.lastNotes().det_bit_share;
     ASSERT_TRUE(share.count(1));
+    ASSERT_TRUE(share.count(2));
     ASSERT_TRUE(share.count(3));
     EXPECT_NEAR(share.at(1), 2.0 / 3.0, 0.02);
     EXPECT_LT(share.at(3), 0.01);
