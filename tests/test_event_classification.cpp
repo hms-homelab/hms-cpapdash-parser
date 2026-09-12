@@ -12,7 +12,7 @@
 // for every label the filter does not know.
 //
 // The label census these tests assert against was measured from a real ResMed card
-// (~/cool_shit/cpap_card_backup_20260827, 181 EVE files); reproduce it with
+// (~/cool_shit/data/cpap_card_backup_20260827, 181 EVE files); reproduce it with
 // tools/eve_labels.py.
 #include <gtest/gtest.h>
 

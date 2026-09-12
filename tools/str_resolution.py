@@ -6,7 +6,7 @@ before we ever opened the file.
 """
 import struct, collections
 
-CARD = "/Users/aamat/cool_shit/cpap_card_backup_20260827/STR.edf"
+CARD = "/Users/aamat/cool_shit/data/cpap_card_backup_20260827/STR.edf"
 b = open(CARD, 'rb').read()
 
 ns = int(b[252:256]); nrec = int(b[236:244]); hdr = int(b[184:192])

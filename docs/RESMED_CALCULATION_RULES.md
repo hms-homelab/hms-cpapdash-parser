@@ -8,7 +8,7 @@ Ruled by Albin 2026-09-04: **compute the indexes ourselves, take everything else
 when STR is present, fall back to the signal files when it is not.**
 
 Every number in this document was measured from a real ResMed card
-(`~/cool_shit/cpap_card_backup_20260827`, AirSense, `MID=36 VID=39`, 261 STR days,
+(`~/cool_shit/data/cpap_card_backup_20260827`, AirSense, `MID=36 VID=39`, 261 STR days,
 181 EVE files). Nothing here was taken from OSCAR source. That rule is absolute, see
 `BRAND_RESEARCH.md`.
 

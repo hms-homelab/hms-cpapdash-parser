@@ -6,7 +6,7 @@ compute, not just AHI.
 """
 import struct, os, glob, datetime, collections, math
 
-CARD = "/Users/aamat/cool_shit/cpap_card_backup_20260827"
+CARD = "/Users/aamat/cool_shit/data/cpap_card_backup_20260827"
 
 
 def read_header(b):

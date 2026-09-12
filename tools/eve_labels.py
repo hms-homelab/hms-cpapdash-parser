@@ -6,7 +6,7 @@ unpersisted `apnea_other` bucket carries real events.
 """
 import os, glob, collections
 
-CARD = "/Users/aamat/cool_shit/cpap_card_backup_20260827"
+CARD = "/Users/aamat/cool_shit/data/cpap_card_backup_20260827"
 
 
 def read_header(b):

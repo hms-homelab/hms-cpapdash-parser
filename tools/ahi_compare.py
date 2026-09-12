@@ -5,7 +5,7 @@ data and is destroyed by STR's 0.1 quantisation.
 """
 import struct, os, glob, datetime, collections
 
-CARD = "/Users/aamat/cool_shit/cpap_card_backup_20260827"
+CARD = "/Users/aamat/cool_shit/data/cpap_card_backup_20260827"
 
 
 def read_header(b):
