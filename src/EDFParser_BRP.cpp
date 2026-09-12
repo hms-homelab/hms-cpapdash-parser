@@ -454,7 +454,7 @@ std::vector<EDFParser::BreathCycle> EDFParser::detectBreaths(
 // lowest. ResMed computes flow limitation by blending a flatness index with a
 // breath shape index, ventilation change and duty cycle, so a flatness scalar on
 // its own measures almost none of it. Do not re-add one without an oracle.
-// See sdd/003-the-breath-detector.md.
+// See sdlc/sdd/003-the-breath-detector.md.
 
 void EDFParser::calculateRespiratoryMetrics(
     const std::vector<double>& flow_data,

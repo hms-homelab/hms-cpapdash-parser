@@ -45,7 +45,7 @@ if(CPAPDASH_PARSER_WITH_LOWENSTEIN)
     target_compile_definitions(cpapdash_parser PUBLIC CPAPDASH_WITH_LOWENSTEIN=1)
 endif()
 
-# Sefam S.Box parser (optional, no extra dependencies) -- see sdd/005.
+# Sefam S.Box parser (optional, no extra dependencies) -- see sdlc/sdd/005.
 option(CPAPDASH_PARSER_WITH_SEFAM "Build Sefam S.Box parser" OFF)
 
 if(CPAPDASH_PARSER_WITH_SEFAM)

@@ -1,6 +1,6 @@
 # Sefam S.Box card format
 
-Companion to `sdd/005-sefam-sbox-support.md`.
+Companion to `sdlc/sdd/005-sefam-sbox-support.md`.
 
 **Source: a donor card from hms-homelab/hms-cpap#28**, an S.Box AUTO, model code
 `1263R`, 242 sessions spanning 2025-11-10 to 2026-09-05. Everything marked CONFIRMED

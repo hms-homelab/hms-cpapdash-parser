@@ -3,7 +3,7 @@
 **Status:** D1 and D2 implemented. **D3 REJECTED on validation, see below.**
 **Date:** 2026-08-29
 **Consumers:** `hms-cpap`, `cpapdash-app` (Dart port), `hms-cpapdash-api`
-**Companion:** `sdd/001-advanced-signal-analysis.md` (F3, which built this)
+**Companion:** `sdlc/sdd/001-advanced-signal-analysis.md` (F3, which built this)
 **Fork note:** `hms-cpapdash-parser-philips` hoisted this code into
 `BreathAnalysis.{h,cpp}`. Whatever lands here has to be replayed there.
 

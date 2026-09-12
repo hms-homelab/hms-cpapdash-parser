@@ -5,7 +5,7 @@
 #include <chrono>
 #include <vector>
 
-// Apneas detected from the flow waveform -- see sdd/006-flow-derived-events.md.
+// Apneas detected from the flow waveform -- see sdlc/sdd/006-flow-derived-events.md.
 //
 // For machines that do not report their own events, or whose event encoding we
 // cannot read. A Sefam S.Box writes its detections as a bitfield whose bits mean

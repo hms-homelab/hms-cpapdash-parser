@@ -149,5 +149,5 @@ re-derives either.**
 already caused one wrong conclusion in review, and the next reader will hit the same trap.
 Not in this spec's scope.
 It has its own display path though; the two-decimal formatting there was part of the
-uncommitted 2026-08-29 sweep and is tracked in `cpapdash-app/sdd/079-index-precision.md`
+uncommitted 2026-08-29 sweep and is tracked in `cpapdash-app/sdlc/sdd/079-index-precision.md`
 alongside the app's.

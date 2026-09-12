@@ -12,7 +12,7 @@
 #include <vector>
 #include <cstdint>
 
-// Sefam S.Box -- see sdd/005-sefam-sbox-support.md and docs/SEFAM_FORMAT.md.
+// Sefam S.Box -- see sdlc/sdd/005-sefam-sbox-support.md and docs/SEFAM_FORMAT.md.
 //
 // Rewritten 2026-09-05 against a real 242-session card. The first cut of this
 // parser derived the file layout from first principles because there was no card

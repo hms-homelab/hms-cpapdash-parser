@@ -3,7 +3,7 @@
 **Status:** Draft
 **Date:** 2026-06-14
 **Consumers:** `hms-cpap` and the CpapDash apps (a Dart port mirrors this model)
-**Companion:** `hms-cpap/docs/SDD-001-advanced-signal-charts.md`
+**Companion:** `hms-cpap/sdlc/sdd/SDD-001-advanced-signal-charts.md`
 
 ## Problem
 
