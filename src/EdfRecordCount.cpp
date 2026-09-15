@@ -33,7 +33,8 @@ bool isResmedSignalEdf(const std::string& name) {
     std::string tail = name;
     std::transform(tail.begin(), tail.end(), tail.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return endsWith(tail, "_brp.edf") || endsWith(tail, "_pld.edf") || endsWith(tail, "_sad.edf");
+    return endsWith(tail, "_brp.edf") || endsWith(tail, "_pld.edf") || endsWith(tail, "_sad.edf") ||
+           endsWith(tail, "_sa2.edf") || endsWith(tail, "_tcv.edf");
 }
 
 std::size_t edfHeaderBytes(const char* buf, std::size_t buf_len) {

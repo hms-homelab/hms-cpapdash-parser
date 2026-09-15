@@ -106,6 +106,9 @@ TEST(EdfRecordCount, OnlyResMedSignalFilesAreNamed) {
     EXPECT_TRUE(isResmedSignalEdf("20260913_233206_BRP.edf"));
     EXPECT_TRUE(isResmedSignalEdf("20260913_233206_PLD.EDF"));
     EXPECT_TRUE(isResmedSignalEdf("DATALOG/20260913/20260913_233206_SAD.edf"));
+    // The 11 series (an AirCurve 11 VAuto card, hms-cpap #33).
+    EXPECT_TRUE(isResmedSignalEdf("20260911_225616_SA2.edf"));
+    EXPECT_TRUE(isResmedSignalEdf("20260911_225616_TCV.edf"));
     EXPECT_FALSE(isResmedSignalEdf("20260913_233200_EVE.edf"));
     EXPECT_FALSE(isResmedSignalEdf("20260913_233200_CSL.edf"));
     EXPECT_FALSE(isResmedSignalEdf("STR.edf"));

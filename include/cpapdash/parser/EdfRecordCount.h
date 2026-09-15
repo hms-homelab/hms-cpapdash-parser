@@ -23,9 +23,11 @@
 
 namespace cpapdash::parser {
 
-/// A ResMed per-session SIGNAL file (*_BRP/_PLD/_SAD.edf), by its name,
-/// case-insensitively. EVE/CSL (annotations) and STR (summary) are not: they
-/// read fine and are left untouched.
+/// A ResMed per-session SIGNAL file, by its name, case-insensitively:
+/// *_BRP/_PLD/_SAD.edf, and on the 11 series *_SA2.edf (pulse and SpO2) and
+/// *_TCV.edf (trigger/cycle events), written the same way. EVE/CSL
+/// (annotations) and STR (summary) are not: they read fine and are left
+/// untouched.
 bool isResmedSignalEdf(const std::string& name);
 
 /// Repair num-data-records IN [buf], which holds the whole file ([n] bytes).
