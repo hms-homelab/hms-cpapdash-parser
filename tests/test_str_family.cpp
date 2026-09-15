@@ -152,6 +152,39 @@ TEST(STRFamily, TheSameModeNumberMeansDifferentThingsPerFamily) {
     EXPECT_EQ(ra[0].family, STRDailyRecord::Family::Asv);
 }
 
+// hms-cpap #33, a real AirCurve 10 VAuto card (2026-09-15): VAuto is Mode 6
+// there (8 on an AirCurve 11), and its STR carries TgtIPAP/TgtEPAP. The targets
+// used to be read only in the ASV modes 7/8, so this card's were dropped.
+TEST(STRFamily, AnAirCurve10VautoKeepsItsTargetsUnderMode6) {
+    auto data = buildSTR(
+        {"Duration", "MaskEvents", "Mode", "S.VA.MaxIPAP", "S.VA.MinEPAP", "S.VA.PS",
+         "TgtIPAP.95", "TgtEPAP.95"},
+        {367, 1, 6, 15, 8, 3, 12.6, 9.6});
+
+    auto recs = EDFParser::parseSTRFromBuffer(data.data(), data.size(), "dev");
+    ASSERT_FALSE(recs.empty());
+    const auto& r = recs[0];
+    EXPECT_EQ(r.family, STRDailyRecord::Family::BiLevel);
+    EXPECT_EQ(r.mode, 6);
+    ASSERT_TRUE(r.tgt_ipap_95.has_value()); EXPECT_NEAR(*r.tgt_ipap_95, 12.6, 0.01);
+    ASSERT_TRUE(r.tgt_epap_95.has_value()); EXPECT_NEAR(*r.tgt_epap_95, 9.6, 0.01);
+    // Not an ASV: its ASV settings stay empty.
+    EXPECT_FALSE(r.asv_epap.has_value());
+}
+
+// The targets move out of the ASV branch, but a machine that writes none still
+// has none.
+TEST(STRFamily, AnAutoSetWithoutTargetSignalsHasNoTargets) {
+    auto data = buildSTR(
+        {"Duration", "MaskEvents", "Mode", "S.AS.MaxPress", "S.AS.MinPress"},
+        {480, 1, 1, 14, 6});
+    auto recs = EDFParser::parseSTRFromBuffer(data.data(), data.size(), "dev");
+    ASSERT_FALSE(recs.empty());
+    EXPECT_FALSE(recs[0].tgt_ipap_95.has_value());
+    EXPECT_FALSE(recs[0].tgt_epap_95.has_value());
+    EXPECT_FALSE(recs[0].tgt_vent_95.has_value());
+}
+
 // A fixed-pressure CPAP has only S.C.*, and a file we cannot place must say so
 // rather than be guessed into a family.
 TEST(STRFamily, PlainCpapAndUnknownAreDistinguished) {

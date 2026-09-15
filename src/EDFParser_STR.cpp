@@ -272,8 +272,18 @@ std::vector<STRDailyRecord> EDFParser::parseSTRInternal(
                 r.asvauto_min_epap = optVal(asvauto_min_epap_data, rec);
                 r.asvauto_max_epap = optVal(asvauto_max_epap_data, rec);
             }
+        }
 
-            // Target percentiles
+        // Target percentiles. Read whenever the card wrote them, like the
+        // bi-level settings above, NOT only in the ASV modes: an AirCurve 10
+        // VAuto writes TgtIPAP/TgtEPAP under Mode 6 (hms-cpap #33, a real card
+        // 2026-09-15), and gating them on 7/8 dropped them. A machine without
+        // the signals gets empty values, as before.
+        {
+            auto optVal = [&val](const std::vector<double>& v, int i) -> std::optional<double> {
+                double d = val(v, i);
+                return (d > 0) ? std::optional<double>(d) : std::nullopt;
+            };
             r.tgt_ipap_50  = optVal(tgt_ipap_50_data, rec);
             r.tgt_ipap_95  = optVal(tgt_ipap_95_data, rec);
             r.tgt_ipap_max = optVal(tgt_ipap_max_data, rec);
