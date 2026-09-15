@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [2026.8.3] - 2026-09-15
+
+### EDF: the ResMed record-count repair
+
+ResMed writes `num-data-records` (header offset 236) as `-1`, or a count lower
+than the data, while a signal file records, and the true count only when it
+finalizes the file. A copy pulled mid-recording keeps that header. This
+library computes the count from the file size and reads such a file whole;
+OSCAR trusts the field and imports a night of a minute or two (CpapDash
+support ticket 127, hms-cpap `sdlc/sdd/SDD-032`).
+
+`EdfRecordCount.h`: `isResmedSignalEdf` (BRP/PLD/SAD) and
+`repairEdfDataRecords`, which rewrites the field only when the data divides
+evenly into records and the stored value differs. These are the rules
+cpapdash-ingest-lib has applied to the OSCAR download and the SleepHQ archive
+since 2026-07-16, now in one public place. New: a header-only form that reads
+nothing past its buffer, for a caller repairing a file on disk, and
+`edfHeaderBytes` to size that read.
+
 ## [2026.8.2] - 2026-09-15
 
 ### STR: the daily targets are read on every machine that writes them
