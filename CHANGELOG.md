@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [2026.8.2] - 2026-09-15
+
+### STR: the daily targets are read on every machine that writes them
+
+`TgtIPAP.*`, `TgtEPAP.*` and `TgtVent.*` were read only inside the ASV branch
+(Mode 7 or 8). An AirCurve 11 VAuto reports Mode 8 and got them by accident;
+an AirCurve 10 VAuto reports Mode 6 and lost them (hms-cpap #33, checked on a
+real card: 12.84 / 9.84 on its latest day). They are now read like the
+bi-level settings, present when the signal is and empty otherwise; the ASV
+settings stay in their branch.
+
 ## [2026.8.1] - 2026-09-06
 
 Everything below shipped after v2026.8.0 was cut and had never been released,
