@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [2026.8.4] - 2026-09-15
+
+### EDF: SA2 and TCV are signal files too
+
+The 11 series writes `*_SA2.edf` (pulse and SpO2) and `*_TCV.edf` (trigger and
+cycle events) the same way it writes BRP, PLD and SAD, so a copy pulled while
+the machine is recording carries the same stale `num-data-records`.
+`isResmedSignalEdf` names them, which puts them under the repair added in
+2026.8.3. Found on an AirCurve 11 VAuto card (hms-cpap #33,
+`hms-cpap/sdlc/sdd/SDD-033`).
+
 ## [2026.8.3] - 2026-09-15
 
 ### EDF: the ResMed record-count repair
