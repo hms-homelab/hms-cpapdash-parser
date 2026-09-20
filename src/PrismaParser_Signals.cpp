@@ -14,16 +14,6 @@ namespace {
 constexpr double HPA_TO_CMH2O = 1.0197;
 constexpr int SAMPLES_PER_MINUTE = 60;  // 1s record duration
 
-double percentile(std::vector<double>& data, double p) {
-    if (data.empty()) return 0;
-    std::sort(data.begin(), data.end());
-    double idx = p / 100.0 * (data.size() - 1);
-    size_t lo = static_cast<size_t>(idx);
-    size_t hi = std::min(lo + 1, data.size() - 1);
-    double frac = idx - lo;
-    return data[lo] * (1.0 - frac) + data[hi] * frac;
-}
-
 struct SignalData {
     std::vector<double> pressure;
     std::vector<double> resp_flow;
