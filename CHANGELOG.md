@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [8.5.1] - 2026-10-02
+
+The year leaves the version: 2026.8.5 is followed by 8.5.1.
+
 ### BMC / React Health Luna, as an off-by-default beta
 
 `BmcParser` behind `CPAPDASH_PARSER_WITH_BMC` (default OFF) reads a G2S-family
