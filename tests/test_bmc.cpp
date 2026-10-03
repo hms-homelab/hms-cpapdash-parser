@@ -279,6 +279,11 @@ TEST(BmcSession, UnitsAreTheOnesTheFormatDocumentNames) {
     ASSERT_EQ(s->breathing_summary.size(), 2u);
     EXPECT_DOUBLE_EQ(*s->breathing_summary[0].leak_rate, 5.0) << "0.1 L/min per unit";
     EXPECT_DOUBLE_EQ(*s->breathing_summary[0].therapy_pressure, 12.0) << "0.5 cmH2O per unit";
+    ASSERT_TRUE(s->breathing_summary[0].epr_pressure.has_value()) << "EPAP per minute";
+    EXPECT_DOUBLE_EQ(*s->breathing_summary[0].epr_pressure, 8.0) << "EPAP, 0.5 cmH2O per unit";
+    ASSERT_TRUE(s->metrics.has_value());
+    EXPECT_DOUBLE_EQ(*s->metrics->avg_therapy_pressure, 12.0);
+    EXPECT_DOUBLE_EQ(*s->metrics->avg_epr_pressure, 8.0) << "the night's EPAP, from the minutes";
     EXPECT_DOUBLE_EQ(*s->breathing_summary[0].respiratory_rate, 15.0);
     EXPECT_DOUBLE_EQ(*s->breathing_summary[0].ie_ratio, 2.0);
     EXPECT_EQ(s->duration_seconds, 120);
@@ -296,6 +301,7 @@ TEST(BmcSession, ANotValidWordIsLeftOut) {
         if (i < 30) {
             sec.leak = kBmcInvalid;
             sec.rr = kBmcInvalid;
+            sec.epap = kBmcInvalid;
         }
         const auto p = packet(sec);
         bytes.insert(bytes.end(), p.begin(), p.end());
@@ -305,6 +311,8 @@ TEST(BmcSession, ANotValidWordIsLeftOut) {
     EXPECT_EQ(s->native_samples.leak.size(), 30u);
     EXPECT_DOUBLE_EQ(*s->breathing_summary[0].respiratory_rate, 15.0)
         << "a 0xFFFF must not pull the mean toward 65535";
+    EXPECT_DOUBLE_EQ(*s->breathing_summary[0].epr_pressure, 8.0)
+        << "nor the EPAP mean";
 }
 
 // ── events file ──────────────────────────────────────────────────────────────

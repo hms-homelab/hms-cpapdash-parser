@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [8.5.3] - 2026-10-03
+
+### BMC: EPAP per minute
+
+A BMC session's per-minute rows now carry EPAP (word 2, 0.5 cmH2O per unit) in
+`epr_pressure`, beside IPAP in `therapy_pressure`, so `avg_epr_pressure` is the
+night's EPAP. It is the field an AirCurve's EPAP (PLD `EprPress.2s`) already lands
+in, so a consumer reads a BMC bi-level's IPAP and EPAP the way it reads a ResMed
+one. On the measurement card's scored night: IPAP 12.36, EPAP 8.36 (night means;
+the independent reader's medians 12.5 and 8.5), pressure support 4.
+
 ## [8.5.2] - 2026-10-02
 
 ### BMC: the index is an AHI

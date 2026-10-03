@@ -76,6 +76,9 @@ names hold junk when no oximeter is attached and are not read.
 On the measurement card word 3 is always word 2 + 8 (4 cmH2O of pressure support) and
 both move during the night: an auto bi-level.
 
+The parser reports IPAP per minute as `therapy_pressure` and EPAP per minute as
+`epr_pressure`, the fields a ResMed AirCurve's IPAP and EPAP use.
+
 ### Sessions
 
 Packets are grouped into sessions by time: a gap of more than 60 seconds between

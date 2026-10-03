@@ -50,10 +50,11 @@ int main(int argc, char** argv) {
         BmcNotes per;
         auto s = BmcParser::sessionFromCard(*card, span, "probe", "BMC", &per);
         const auto& m = *s->metrics;
-        std::printf("  %s -> %s  %6d s  (#%d)  OA %d  CA %d  AHI %.2f%s\n",
+        std::printf("  %s -> %s  %6d s  (#%d)  OA %d  CA %d  AHI %.2f  IPAP %.2f  EPAP %.2f%s\n",
                     fmt(*s->session_start).c_str(), fmt(*s->session_end).c_str(),
                     *s->duration_seconds, span.session_number, m.obstructive_apneas,
-                    m.clear_airway_apneas, m.ahi,
+                    m.clear_airway_apneas, m.ahi, m.avg_therapy_pressure.value_or(-1),
+                    m.avg_epr_pressure.value_or(-1),
                     m.index_kind == SessionMetrics::IndexKind::Ungraded ? " (ungraded)" : "");
         total_events += per.events_emitted;
         for (const auto& [type, count] : per.span_types) all.span_types[type] += count;

@@ -321,8 +321,8 @@ std::unique_ptr<ParsedSession> BmcParser::sessionFromCard(const BmcCard& card,
     // 25 Hz pressure channels are not reported: their physical scale is not known
     // (docs/BMC_FORMAT.md), and a number in the wrong unit is worse than none.
     struct Minute {
-        double leak_sum = 0, ipap_sum = 0, rr_sum = 0, ie_sum = 0;
-        int leak_n = 0, ipap_n = 0, rr_n = 0, ie_n = 0;
+        double leak_sum = 0, ipap_sum = 0, epap_sum = 0, rr_sum = 0, ie_sum = 0;
+        int leak_n = 0, ipap_n = 0, epap_n = 0, rr_n = 0, ie_n = 0;
         double leak_min = 0, leak_max = 0;
     };
     std::map<int64_t, Minute> minutes;
@@ -348,6 +348,12 @@ std::unique_ptr<ParsedSession> BmcParser::sessionFromCard(const BmcCard& card,
             if (w[bmc_word::kEpap] != kBmcInvalid && w[bmc_word::kIpap] > w[bmc_word::kEpap])
                 bilevel = true;
         }
+        if (w[bmc_word::kEpap] != kBmcInvalid) {
+            // EPAP lands where an AirCurve's does (PLD EprPress.2s), so a consumer's
+            // IPAP/EPAP reading of a bi-level is the same for both machines.
+            m.epap_sum += w[bmc_word::kEpap] / 2.0;
+            ++m.epap_n;
+        }
         if (w[bmc_word::kRespRate] != kBmcInvalid) {
             m.rr_sum += w[bmc_word::kRespRate];
             ++m.rr_n;
@@ -365,6 +371,7 @@ std::unique_ptr<ParsedSession> BmcParser::sessionFromCard(const BmcCard& card,
             row.leak_max = m.leak_max;
         }
         if (m.ipap_n) row.therapy_pressure = m.ipap_sum / m.ipap_n;
+        if (m.epap_n) row.epr_pressure = m.epap_sum / m.epap_n;
         if (m.rr_n) row.respiratory_rate = m.rr_sum / m.rr_n;
         if (m.ie_n) row.ie_ratio = m.ie_sum / m.ie_n;
         session->breathing_summary.push_back(row);
