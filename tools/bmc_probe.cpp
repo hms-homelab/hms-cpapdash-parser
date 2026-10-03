@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
         BmcNotes per;
         auto s = BmcParser::sessionFromCard(*card, span, "probe", "BMC", &per);
         const auto& m = *s->metrics;
-        std::printf("  %s -> %s  %6d s  (#%d)  OA %d  CA %d  index %.2f%s\n",
+        std::printf("  %s -> %s  %6d s  (#%d)  OA %d  CA %d  AHI %.2f%s\n",
                     fmt(*s->session_start).c_str(), fmt(*s->session_end).c_str(),
                     *s->duration_seconds, span.session_number, m.obstructive_apneas,
                     m.clear_airway_apneas, m.ahi,

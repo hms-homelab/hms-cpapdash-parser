@@ -399,10 +399,11 @@ std::unique_ptr<ParsedSession> BmcParser::sessionFromCard(const BmcCard& card,
     session->has_events = !session->events.empty();
     if (notes) notes->events_emitted = emitted;
 
+    // A real AHI (the default IndexKind). The machine classifies its own apneas,
+    // and on the night an independent reader also scored, this index equals its
+    // AHI exactly. No hypopnea record has been seen on a BMC card yet; if one turns
+    // up under a type not handled here, it lands in span_types and is visible.
     session->calculateMetrics();
-    // No hypopnea record has been seen on a BMC card yet, so this index is
-    // apneas only: computed and stored, never graded (Models.h, IndexKind).
-    if (session->metrics) session->metrics->index_kind = SessionMetrics::IndexKind::Ungraded;
     return session;
 }
 

@@ -108,8 +108,10 @@ falls inside a recorded session under this anchor.
 | 4, 5, 7 | spans of minutes to hours; meaning unknown | measured |
 | 8, 9, 10 | span a whole session; meaning unknown | measured |
 
-No hypopnea type appeared on the measurement card, so a BMC session's index is apneas
-only. The parser marks it `IndexKind::Ungraded` until a card shows the hypopnea record.
+The index is reported as an AHI (`IndexKind::AHI`): the machine classifies its own
+apneas, and on the night the independent reader also scored, the two indices are equal
+(9.61). No hypopnea type appeared on the measurement card; a record of a type not listed
+here is counted in the parser's notes rather than dropped, so one would be visible.
 
 The span types (4, 5, 7-10) are not emitted as events: they are periods of state, not
 annotations, and counting hours-long records as events would wreck every event

@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [8.5.2] - 2026-10-02
+
+### BMC: the index is an AHI
+
+A BMC session's index is now reported as an AHI (`IndexKind::AHI`) instead of
+`Ungraded`. The machine classifies its own apneas (clear airway and
+obstructive), and on the night an independent reader also scored, the two
+indices are equal. No hypopnea record has been seen on a BMC card; a record of
+an unhandled type is counted in `lastNotes().span_types`, so one would show.
+
 ## [8.5.1] - 2026-10-02
 
 The year leaves the version: 2026.8.5 is followed by 8.5.1.

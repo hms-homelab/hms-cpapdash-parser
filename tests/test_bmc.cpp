@@ -252,7 +252,7 @@ TEST(BmcSession, ApneasAcrossMidnightAreAnchoredToNoon) {
     EXPECT_EQ(notes.span_types[7], 1) << "a span type is counted, never emitted as an event";
 }
 
-TEST(BmcSession, TheIndexIsApneasOnlyAndUngraded) {
+TEST(BmcSession, TheIndexIsARealAhi) {
     const auto card = buildBmcCard(kSerial, {run(kEvening, 3600)},
                                    evtFile({{1, bmc_event::kObstructive, 11 * 3600 + 60, 12},
                                             {1, bmc_event::kClearAirway, 11 * 3600 + 120, 10}}));
@@ -261,8 +261,8 @@ TEST(BmcSession, TheIndexIsApneasOnlyAndUngraded) {
     EXPECT_DOUBLE_EQ(s->metrics->ahi, 2.0) << "two apneas in one hour";
     EXPECT_EQ(s->metrics->obstructive_apneas, 1);
     EXPECT_EQ(s->metrics->clear_airway_apneas, 1);
-    EXPECT_EQ(s->metrics->index_kind, SessionMetrics::IndexKind::Ungraded)
-        << "no hypopnea record is known, so this is not an AHI";
+    EXPECT_EQ(s->metrics->index_kind, SessionMetrics::IndexKind::AHI)
+        << "the machine classifies its apneas; the index matched an independent AHI";
 }
 
 TEST(BmcSession, AnEventOutsideEverySessionIsCountedNotPlaced) {
