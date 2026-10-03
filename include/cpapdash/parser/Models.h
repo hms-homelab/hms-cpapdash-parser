@@ -30,10 +30,10 @@ enum class EventType {
 };
 
 /**
- * Device manufacturer identifier. PHILIPS and BMC are DETECT-only: named by
+ * Device manufacturer identifier. PHILIPS is DETECT-only: named by
  * detectManufacturer() so a foreign card is labeled and rejected cleanly, but
- * createParser() has no parser for them (returns nullptr) -- detection is
- * broader than parse support.
+ * createParser() has no parser for it (returns nullptr) -- detection is broader
+ * than parse support. BMC parses only when built with CPAPDASH_WITH_BMC.
  */
 enum class DeviceManufacturer {
     UNKNOWN,

@@ -51,6 +51,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DCPAPDASH_PARSER_WITH_LOWENSTEIN=ON \
             -DCPAPDASH_PARSER_WITH_SEFAM=ON \
+            -DCPAPDASH_PARSER_WITH_BMC=ON \
             -DCPAPDASH_PARSER_BUILD_TESTS=ON
           cmake --build build -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
           cd build && ctest --output-on-failure

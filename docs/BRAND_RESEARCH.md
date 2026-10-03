@@ -69,7 +69,7 @@ Medical, and Resvent.
 - **Format:** proprietary, but the best-covered of the four outside OSCAR.
 - **Independent documentation / non-GPL code:** `github.com/headrotor/BMC_RESmart` —
   "Decode data files from BMC Medical RESmart GII systems. Reverse-engineered from undocumented
-  data." **MIT licensed**, actively maintained (last updated Oct 2025). A second repo,
+  data." **MIT licensed**; last pushed 2019 (an earlier note here said Oct 2025). A second repo,
   `pauleaster/bmc_cpap`, builds SD-card reading on top of it but itself carries **no license
   file** — treat that one as unusable-as-is until its terms are clarified; the underlying MIT
   decoder is the real asset.
@@ -82,6 +82,10 @@ Medical, and Resvent.
 - **Verdict:** highest priority of the four. Real permissive license, real growth, real prior
   art. Needs verification that BMC_RESmart's GII-era reverse-engineering still covers current
   G2S/G3 model output before assuming drop-in compatibility.
+- **Status:** supported as an off-by-default beta (`CPAPDASH_PARSER_WITH_BMC`). Checked
+  against a real G2S card: BMC_RESmart's packet framing holds, but several of its field
+  labels do not, and a G2S serial is eight digits rather than `NNCNNNNN`. The format as
+  measured is in [BMC_FORMAT.md](BMC_FORMAT.md).
 
 ## 5. Resvent iBreeze
 

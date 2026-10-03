@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+### BMC / React Health Luna, as an off-by-default beta
+
+`BmcParser` behind `CPAPDASH_PARSER_WITH_BMC` (default OFF) reads a G2S-family
+card: the serial-named `.000`, `.001`, ... raw files (one 256-byte packet per
+second) and the machine's own `.evt` records. The format, with the source of
+every fact, is in `docs/BMC_FORMAT.md`. Built on the packet framing of
+BMC_RESmart (MIT), corrected where a real G2S card disagrees with it.
+
+- Packets are sorted by their timestamp, not file order: a clock set mid-card
+  leaves later-written seconds stamped earlier. A duplicate second keeps the
+  first. A gap over 60 s starts a new session; duration is the packet count.
+- Per minute: leak (0.1 L/min), IPAP as therapy pressure (0.5 cmH2O),
+  respiratory rate, I:E ratio. Flow and the 25 Hz pressure channels are not
+  reported: their physical scale is not known.
+- Events: type 1 is a clear-airway apnea, type 2 obstructive, onset in seconds
+  since noon of the sleep day. Other record types are spans of state, counted
+  in `lastNotes()` and never emitted as events. The index is marked
+  `IndexKind::Ungraded`: no hypopnea record has been seen.
+- `listSessions(dir)` names the sessions on a card; `parseSession` takes the
+  one containing the hint, or the latest.
+- `tools/bmc_probe` (with `CPAPDASH_PARSER_BUILD_TOOLS`) reports a card.
+
+### Detection: an eight-digit BMC serial
+
+`detectManufacturer` named BMC only for a `\d\dC\d{5}.usr` serial, the RESmart
+GII shape, so a G2S card (eight digits) was detected as nothing. It now takes
+an eight-character alphanumeric `.usr` base name with at least six digits.
+
 ## [2026.8.4] - 2026-09-15
 
 ### EDF: SA2 and TCV are signal files too

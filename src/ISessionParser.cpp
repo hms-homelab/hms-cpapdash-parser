@@ -64,18 +64,22 @@ bool endsWithCI(const std::string& s, const std::string& suffix_lower) {
     return toLower(s.substr(s.size() - suffix_lower.size())) == suffix_lower;
 }
 
-// BMC / React Health-3B Luna identity file: a serial-named basename matching
-// "\d\dC\d{5}.usr" (e.g. "16C01034.usr").
+// BMC / React Health-3B Luna identity file: the serial number as an eight-
+// character base name, ".usr" (docs/BMC_FORMAT.md). The RESmart GII serial has
+// the shape "16C01034"; a G2S writes eight digits ("12345678"), which the old
+// \d\dC\d{5} rule refused, so a real G2S card was detected as nothing. At least
+// six digits keeps an unrelated eight-letter ".usr" from naming the brand.
 bool isBmcUsrFilename(const std::string& filename) {
     std::string base = basenameOf(filename);
-    if (base.size() != 12) return false;  // NNCNNNNN.usr
-    if (!std::isdigit(static_cast<unsigned char>(base[0])) ||
-        !std::isdigit(static_cast<unsigned char>(base[1]))) return false;
-    if (std::tolower(static_cast<unsigned char>(base[2])) != 'c') return false;
-    for (int i = 3; i <= 7; ++i)
-        if (!std::isdigit(static_cast<unsigned char>(base[i]))) return false;
-    if (base[8] != '.') return false;
-    return toLower(base.substr(9)) == "usr";
+    if (base.size() != 12 || base[8] != '.') return false;
+    if (toLower(base.substr(9)) != "usr") return false;
+    int digits = 0;
+    for (int i = 0; i < 8; ++i) {
+        const auto c = static_cast<unsigned char>(base[i]);
+        if (!std::isalnum(c)) return false;
+        if (std::isdigit(c)) ++digits;
+    }
+    return digits >= 6;
 }
 
 // Philips Respironics identity manifest.
@@ -264,6 +268,16 @@ std::unique_ptr<ISessionParser> createParser(DeviceManufacturer manufacturer) {
         {
             extern std::unique_ptr<ISessionParser> createSefamParser();
             return createSefamParser();
+        }
+#else
+            return nullptr;
+#endif
+
+        case DeviceManufacturer::BMC:
+#ifdef CPAPDASH_WITH_BMC
+        {
+            extern std::unique_ptr<ISessionParser> createBmcParser();
+            return createBmcParser();
         }
 #else
             return nullptr;

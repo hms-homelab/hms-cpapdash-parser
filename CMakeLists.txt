@@ -59,6 +59,15 @@ if(CPAPDASH_PARSER_WITH_SEFAM)
     target_compile_definitions(cpapdash_parser PUBLIC CPAPDASH_WITH_SEFAM=1)
 endif()
 
+# BMC / React Health Luna parser (optional, no extra dependencies) -- SDD-007,
+# format in docs/BMC_FORMAT.md.
+option(CPAPDASH_PARSER_WITH_BMC "Build BMC / React Health Luna parser" OFF)
+
+if(CPAPDASH_PARSER_WITH_BMC)
+    target_sources(cpapdash_parser PRIVATE src/BmcParser.cpp)
+    target_compile_definitions(cpapdash_parser PUBLIC CPAPDASH_WITH_BMC=1)
+endif()
+
 # Command-line tools. Off by default: nothing consumes the library through them.
 option(CPAPDASH_PARSER_BUILD_TOOLS "Build the command-line tools" OFF)
 
@@ -68,6 +77,11 @@ if(CPAPDASH_PARSER_BUILD_TOOLS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         # asks for exactly this against a donor card.
         add_executable(sefam_probe tools/sefam_probe.cpp)
         target_link_libraries(sefam_probe cpapdash_parser)
+    endif()
+    if(CPAPDASH_PARSER_WITH_BMC)
+        # Reads a BMC card and reports what the parser made of it (SDD-007 gate 2).
+        add_executable(bmc_probe tools/bmc_probe.cpp)
+        target_link_libraries(bmc_probe cpapdash_parser)
     endif()
 
     # Measures the flow-derived apnea detector against a machine that reports its
@@ -107,6 +121,9 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         list(APPEND TEST_SOURCES tests/test_sefam_ini.cpp)
         list(APPEND TEST_SOURCES tests/test_sefam_channels.cpp)
         list(APPEND TEST_SOURCES tests/test_sefam.cpp)
+    endif()
+    if(CPAPDASH_PARSER_WITH_BMC)
+        list(APPEND TEST_SOURCES tests/test_bmc.cpp)
     endif()
 
     add_executable(run_tests ${TEST_SOURCES})

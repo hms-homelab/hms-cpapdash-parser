@@ -67,16 +67,19 @@ public:
  *   2. SEFAM      -- a session folder's own manifest, "DATA_<n>/DATA_<n>.ini"
  *                    (the folder and the file share a name, which is what makes
  *                    a bare ".ini" specific enough to gate on)
- *   3. BMC        -- any filename matches the serial-named identity file
- *                    "\d\dC\d{5}.usr" (React Health/3B Luna share this format)
+ *   3. BMC        -- any filename is the serial-named identity file: an
+ *                    eight-character alphanumeric base name with at least six
+ *                    digits, ".usr" ("16C01034.usr" on a RESmart GII,
+ *                    eight digits on a G2S / React Health Luna)
  *   4. PHILIPS    -- any filename is "properties.txt" (the Properties.txt
  *                    identity manifest; gated on this, not on .001/.002, which
  *                    collide with BMC's raw-data numbering)
  *   5. RESMED     -- "STR.edf" present, or a DATALOG subdir, or any .edf file
  *   6. else UNKNOWN
  *
- * Detection is broader than parse support: PHILIPS and BMC are named here even
- * though createParser() has no parser for them (returns nullptr for both).
+ * Detection is broader than parse support: PHILIPS is named here though
+ * createParser() has no parser for it, and BMC has one only when built with
+ * CPAPDASH_WITH_BMC (otherwise nullptr).
  */
 DeviceManufacturer detectManufacturer(const std::vector<std::string>& filenames);
 
@@ -96,7 +99,7 @@ std::unique_ptr<ISessionParser> createParser(const std::string& data_dir);
  * Create a parser for a known manufacturer.
  *
  * @return Parser instance, or nullptr if the manufacturer is not compiled in
- *         or has no parser (PHILIPS, BMC, UNKNOWN)
+ *         or has no parser (PHILIPS, UNKNOWN; BMC without CPAPDASH_WITH_BMC)
  */
 std::unique_ptr<ISessionParser> createParser(DeviceManufacturer manufacturer);
 
