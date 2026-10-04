@@ -92,6 +92,9 @@ std::unique_ptr<ParsedSession> EDFParser::parseSession(
     auto session = std::make_unique<ParsedSession>();
     session->device_id = device_id;
     session->device_name = device_name;
+    // SDD-008: an EDF session is a ResMed one whichever entry point read it,
+    // not only when it came through the manufacturer dispatch.
+    session->manufacturer = DeviceManufacturer::RESMED;
 
     // Use filename timestamp as session identifier
     if (session_start_from_filename.has_value()) {
@@ -201,6 +204,7 @@ std::unique_ptr<ParsedSession> EDFParser::parseSessionFromBuffers(
     auto session = std::make_unique<ParsedSession>();
     session->device_id = device_id;
     session->device_name = device_name;
+    session->manufacturer = DeviceManufacturer::RESMED;   // SDD-008
 
     // Parse session_start_str if provided ("YYYYMMDD_HHMMSS"). Same
     // non-throwing treatment the single-buffer form has always used: the string

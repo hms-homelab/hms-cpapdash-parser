@@ -318,6 +318,8 @@ std::unique_ptr<ParsedSession> SefamParser::parseSessionNamed(
     session->device_name = device_name.empty() ? ini.created_by : device_name;
     session->manufacturer = DeviceManufacturer::SEFAM;
     session->serial_number = ini.serial_number;
+    session->product_name = ini.created_by;   // SDD-008
+    session->firmware = ini.firmware;
 
     session->session_start = ini.start ? ini.start
                            : (notes_.header.stamp ? notes_.header.stamp : session_start);

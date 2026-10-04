@@ -258,6 +258,22 @@ TEST_F(BrpCheckpoints, HeaderIsUsedWhenThereIsNoFilename) {
     EXPECT_EQ(hhmm(sp->breathing_summary[0].timestamp), "22:00:00");
 }
 
+// SDD-008: an EDF session says it is a ResMed one from either entry point,
+// not only when it came through the manufacturer dispatch.
+TEST_F(BrpCheckpoints, AnEdfSessionIsResMedFromEitherEntryPoint) {
+    auto buf = buildBRP("01.07.26", "22.00.00", 2);
+    auto from_buffers = EDFParser::parseSessionFromBuffers(
+        buf.data(), buf.size(), nullptr, 0, nullptr, 0, nullptr, 0,
+        "dev-test", "Test Machine");
+    ASSERT_TRUE(from_buffers != nullptr);
+    EXPECT_EQ(from_buffers->manufacturer, DeviceManufacturer::RESMED);
+
+    writeCheckpoint(dir_, "20260701_220000", "01.07.26", "22.00.00", 2);
+    auto from_dir = parseDir();
+    ASSERT_TRUE(from_dir != nullptr);
+    EXPECT_EQ(from_dir->manufacturer, DeviceManufacturer::RESMED);
+}
+
 // ── PLD claims the NEAREST BRP minute, not the first one in tolerance ───────
 //
 // A machine writes BRP and PLD a second or two apart, so with several

@@ -310,6 +310,10 @@ struct ParsedSession {
     std::string device_id;
     std::string device_name;
     std::string serial_number;
+    // SDD-008: what the machine calls itself and the firmware it runs, as the
+    // card writes them. Empty when this card format does not say.
+    std::string product_name;
+    std::string firmware;
     std::optional<int> model_id;
     std::optional<int> version_id;
     DeviceManufacturer manufacturer = DeviceManufacturer::UNKNOWN;

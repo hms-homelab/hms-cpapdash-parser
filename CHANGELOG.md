@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [8.5.4] - 2026-10-04
+
+### The session says what machine wrote it
+
+`ParsedSession` gains `product_name` and `firmware`, as the card writes them,
+empty when it does not say:
+
+| Parser | `product_name` | `firmware` |
+|---|---|---|
+| Sefam S.Box | INI `Created By` (e.g. `S.Box_AUTO`) | INI `Version` |
+| Lowenstein Prisma | empty: `DeviceType` is a number with no verified name (it stays in `model_id`) | `FWVersion` |
+| BMC / Luna | empty | empty |
+| ResMed EDF | empty: the model is in the card's identification file | empty |
+
+A ResMed EDF session now has `manufacturer = RESMED` from
+`EDFParser::parseSession` and `parseSessionFromBuffers` themselves. Only the
+manufacturer dispatch set it before, so a consumer calling the EDF parser
+directly got `UNKNOWN`.
+
+Additive: no existing field changes meaning.
+
 ## [8.5.3] - 2026-10-03
 
 ### BMC: EPAP per minute

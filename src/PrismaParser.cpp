@@ -107,6 +107,9 @@ std::unique_ptr<ParsedSession> PrismaParser::parseSession(
         auto dev = parseDeviceXml(device_file);
         session->serial_number = dev.serial_number;
         session->model_id = dev.device_type;
+        // SDD-008: no product_name. DeviceType is a number and we hold no
+        // verified name for any of its values.
+        session->firmware = dev.fw_version;
     }
 
     if (!parseSignalWmedf(signal_file, *session)) {

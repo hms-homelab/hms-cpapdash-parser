@@ -291,6 +291,9 @@ TEST(BmcSession, UnitsAreTheOnesTheFormatDocumentNames) {
     EXPECT_EQ(s->settings->therapy_mode, 2) << "IPAP above EPAP: bi-level";
     EXPECT_EQ(s->manufacturer, DeviceManufacturer::BMC);
     EXPECT_EQ(s->serial_number, kSerial);
+    // SDD-008: a Luna card names neither its model nor its firmware.
+    EXPECT_EQ(s->product_name, "");
+    EXPECT_EQ(s->firmware, "");
 }
 
 TEST(BmcSession, ANotValidWordIsLeftOut) {

@@ -248,6 +248,9 @@ TEST(PrismaParser, FullSessionParse) {
     EXPECT_EQ(session->manufacturer, DeviceManufacturer::LOWENSTEIN);
     EXPECT_EQ(session->device_id, "prisma_test");
     EXPECT_EQ(session->serial_number, "TESTSN00");
+    // SDD-008: the firmware rides with the session; DeviceType has no name.
+    EXPECT_EQ(session->firmware, "5.05");
+    EXPECT_EQ(session->product_name, "");
     EXPECT_TRUE(session->session_start.has_value());
     EXPECT_TRUE(session->session_end.has_value());
     EXPECT_TRUE(session->duration_seconds.has_value());

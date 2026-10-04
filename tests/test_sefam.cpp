@@ -111,6 +111,9 @@ TEST(SefamParse, ReadsTheIdentityFromBothTheIniAndTheData) {
 
     EXPECT_EQ(s->manufacturer, DeviceManufacturer::SEFAM);
     EXPECT_EQ(s->serial_number, "1263R24337476");
+    // SDD-008: the model and firmware out of the INI ride with the session.
+    EXPECT_EQ(s->product_name, "S.Box_AUTO");
+    EXPECT_EQ(s->firmware, "VER :A020400");
     // The caller passed no name, so the model string out of the INI stands in.
     EXPECT_EQ(s->device_name, "S.Box_AUTO");
 
