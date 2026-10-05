@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [8.6.0] - 2026-10-05
+
 ### The O2Ring-S recording format
 
 The Wellue O2Ring-S (model T8520) does not write `.vld` files. Its recordings
