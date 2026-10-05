@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### The O2Ring-S recording format
+
+The Wellue O2Ring-S (model T8520) does not write `.vld` files. Its recordings
+are a 10-byte header (`01 03 00 00 00 00 00 00 04 00`), 3-byte samples
+(SpO2, heart rate, flags) at one per second, and, once finalised, a 48-byte
+trailer of session statistics; the start time is the file's name,
+`YYYYMMDDhhmmss`. Layout as documented in
+[nglessner/o2ring-s-protocol](https://github.com/nglessner/o2ring-s-protocol).
+
+- **`O2RingSParser::parse`** returns the same `OximetrySession` that
+  `VLDParser::parse` does, so a consumer stores an O2Ring-S night with the
+  code that stores a `.vld` night. The ring's "no reading" values (SpO2 0,
+  heart rate 0 or 255) become the existing `0xFF` sentinel, a sample with
+  flags set is invalid, and the trailer is never read as samples.
+- **`O2RingSParser::isComplete`**: the trailer's sub-magic `48 12 5a da` at
+  `size - 44`. A file at full size without it is still being written.
+- **`parseOximetryFile` / `detectOximetryFormat`**: one entry point that
+  tells `.vld` v3 from O2Ring-S by the bytes, not the name.
+
+Additive: `VLDParser` is unchanged.
+
 ## [8.5.4] - 2026-10-04
 
 ### The session says what machine wrote it
