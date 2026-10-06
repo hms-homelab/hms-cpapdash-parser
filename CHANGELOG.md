@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## [8.7.0] - 2026-10-06
+
+### The AirSense 11's own daily summary, read over its Bluetooth
+
+An AirSense 11 (and AirCurve 11) answers a "Summary" spool over its own
+Bluetooth radio: a protobuf stream with one record per therapy day, noon to
+noon, carrying the figures the machine writes to `STR.edf` on its card, in
+hundredths. Field numbers as decoded and matched against `STR.edf` over 70+
+nights in [maroliar/hass-resmed-airsense](https://github.com/maroliar/hass-resmed-airsense)
+(`docs/PROTOCOL.md` §7). It is what a night is when the card cannot be read.
+
+- **`AirSense11SummaryParser::parse`** returns every day record
+  (`AirSense11Day`: usage, sessions, the indices, leak, pressures, tidal
+  volume, minute ventilation, respiratory rate, the humidifier and blower
+  figures), oldest first. A day without usage carries no indices: the zeros
+  the machine reports there are not a perfect night. Unknown fields are
+  skipped in every wire type; a stream cut short yields the whole days and
+  nothing throws.
+- **`AirSense11SummaryParser::toStrRecord` / `toStrRecords`**: a day as the
+  `STRDailyRecord` `EDFParser::parseSTR*` returns, in the same units (leak in
+  L/min, pressures in cmH2O, the sessions as mask on/off pairs, the IPAP and
+  EPAP targets), days with usage only. A consumer stores a Bluetooth night
+  with the code that stores an STR day. What the spool does not carry (mode,
+  the pressure settings, the family) stays at the reader's defaults.
+- **`AirSense11SummaryParser::looksLike`**: decided by the bytes. The stored
+  spool's extension is `.as11`; its name is informational, every date is in
+  the bytes.
+
+Additive: nothing else changes.
+
 ## [8.6.0] - 2026-10-05
 
 ### The O2Ring-S recording format

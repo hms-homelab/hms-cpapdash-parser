@@ -18,6 +18,7 @@ Shared C++ library for parsing CPAP therapy data into a unified, standards-based
 | Manufacturer | Devices | Files | Build flag |
 |--------------|---------|-------|------------|
 | ResMed | AirSense 10 / 11 | EDF+ (`BRP`, `PLD`, `SAD`, `EVE`, `STR`) | on by default |
+| ResMed | AirSense 11 / AirCurve 11 over Bluetooth | the `Summary` spool (`.as11`, one record per therapy day) | on by default |
 | Lowenstein | Prisma | WMEDF + event XML (`VLD`) | `CPAPDASH_PARSER_WITH_LOWENSTEIN` |
 
 ## Quick Start
@@ -124,6 +125,7 @@ Headers are then available under the `cpapdash/parser/` prefix, e.g.
 | `ParsedSession` | Device info + `events`, `vitals`, breathing summaries, settings |
 | `SessionMetrics` | Derived per-session metrics (AHI, pressures, durations) |
 | `EventType`, `DeviceManufacturer` | Enums for events and source device |
+| `AirSense11SummaryParser` | The AirSense 11's Bluetooth `Summary` spool → `AirSense11Day` records, and `toStrRecords(...)` → the same `STRDailyRecord`s `EDFParser::parseSTR*` returns |
 
 ## Related Projects
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cpapdash_parser VERSION 8.6.0 LANGUAGES CXX)
+project(cpapdash_parser VERSION 8.7.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,6 +18,7 @@ add_library(cpapdash_parser STATIC
     src/DesatDetector.cpp
     src/VLDParser.cpp
     src/O2RingSParser.cpp
+    src/AirSense11Summary.cpp
     src/SleepIndex.cpp
     src/FlowEvents.cpp
     src/EdfRecordCount.cpp
@@ -106,6 +107,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         tests/test_models.cpp
         tests/test_vld_parser.cpp
         tests/test_o2ring_s_parser.cpp
+        tests/test_airsense11_summary.cpp
         tests/test_o2ring_csv.cpp
         tests/test_str_family.cpp
         tests/test_desat_detector.cpp
