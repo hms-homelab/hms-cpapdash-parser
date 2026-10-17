@@ -197,3 +197,74 @@ TEST(EDFWriter, AStreamLandsAsACardSession) {
     EXPECT_GT(minute.max_flow_rate, 0.0) << "the blower's flow was there";
     EXPECT_GE(minute.max_pressure, 0.0);
 }
+
+TEST(EDFWriter, TheRingLandsAsASADFileBesideTheBreathing) {
+    const auto fast = readCsv(fixturePath("as11_stream_sample_fast.csv"), 2);
+    ASSERT_EQ(fast[0].size(), 2000u);
+    StreamedBRP brp;
+    brp.start  = sampleStart();
+    brp.serial = kSerial;
+    for (double v : fast[0]) brp.flow_lpm.push_back(v * 60.0);
+    brp.press_cmh2o = fast[1];
+    const auto brp_bytes = writeResMedBRP(brp);
+    ASSERT_FALSE(brp_bytes.empty());
+
+    // 80 s of a ring read every 2 s, each reading held for its two seconds;
+    // seconds 10 and 11 had no reading (the ring off the finger).
+    StreamedSAD sad;
+    sad.start  = sampleStart();
+    sad.serial = kSerial;
+    for (int s = 0; s < 80; s++) {
+        const bool none = (s == 10 || s == 11);
+        sad.spo2_pct.push_back(none ? std::nan("") : 96.0 + (s / 2) % 3);
+        sad.pulse_bpm.push_back(none ? std::nan("") : 60.0 + (s / 2) % 5);
+    }
+    const auto sad_bytes = writeResMedSAD(sad);
+    ASSERT_FALSE(sad_bytes.empty());
+
+    {
+        EDFFile edf;
+        ASSERT_TRUE(edf.open(sad_bytes.data(), sad_bytes.size()));
+        EXPECT_EQ(edf.num_records_header, 80);
+        EXPECT_DOUBLE_EQ(edf.record_duration, 1.0);
+        EXPECT_EQ(edf.recording, "Startdate 17-OCT-2026 X X X SRN=" + kSerial);
+        ASSERT_GE(edf.findSignal("SpO2"), 0);
+        ASSERT_GE(edf.findSignal("Pulse"), 0);
+        std::vector<double> spo2;
+        ASSERT_EQ(edf.readSignal(edf.findSignal("SpO2"), spo2), 80);
+        EXPECT_NEAR(spo2[0], 96.0, 0.01);
+        EXPECT_NEAR(spo2[2], 97.0, 0.01);
+        EXPECT_NEAR(spo2[10], 0.0, 0.01) << "no reading is written as 0";
+    }
+
+    // Parsed as a card's session: the vitals are per second, and the seconds
+    // without a reading carry none (not a zero).
+    auto session = EDFParser::parseSessionFromBuffers(
+        brp_bytes.data(), brp_bytes.size(), nullptr, 0, sad_bytes.data(), sad_bytes.size(),
+        std::vector<EDFParser::ByteView>{}, "device-1", "sample", "20261017_064452");
+    ASSERT_TRUE(session);
+    ASSERT_EQ(session->vitals.size(), 80u);
+    ASSERT_TRUE(session->vitals[0].spo2.has_value());
+    EXPECT_NEAR(*session->vitals[0].spo2, 96.0, 0.01);
+    ASSERT_TRUE(session->vitals[0].heart_rate.has_value());
+    EXPECT_EQ(*session->vitals[0].heart_rate, 60);
+    EXPECT_FALSE(session->vitals[10].spo2.has_value());
+    EXPECT_FALSE(session->vitals[11].heart_rate.has_value());
+    EXPECT_TRUE(session->vitals[12].spo2.has_value());
+}
+
+TEST(EDFWriter, ASADWithNoReadingsIsNoFile) {
+    StreamedSAD sad;
+    sad.start  = sampleStart();
+    sad.serial = kSerial;
+    EXPECT_TRUE(writeResMedSAD(sad).empty());
+    sad.pulse_bpm = {62.0, 63.0};
+    const auto bytes = writeResMedSAD(sad);
+    ASSERT_FALSE(bytes.empty()) << "one signal is enough; the other is padded with no-reading";
+    EDFFile edf;
+    ASSERT_TRUE(edf.open(bytes.data(), bytes.size()));
+    EXPECT_EQ(edf.num_records_header, 2);
+    std::vector<double> spo2;
+    ASSERT_EQ(edf.readSignal(edf.findSignal("SpO2"), spo2), 2);
+    EXPECT_NEAR(spo2[1], 0.0, 0.01);
+}

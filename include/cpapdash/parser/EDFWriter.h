@@ -17,6 +17,8 @@
 //                      (L/s: the reader multiplies by 60), RespRate.2s (/min),
 //                      TidVol.2s (L: the reader multiplies by 1000), MinVent.2s
 //                      (L/min), Snore.2s, FlowLim.2s (0..1), one per record
+//   SAD, 1 s records:  SpO2 (%), Pulse (bpm), one per record; 0 is "no
+//                      reading", which parseSADFile() already filters out
 //
 // The recording field carries "SRN=<serial>" the way the machine writes it, so
 // parseDeviceInfo() reads the machine's serial from a streamed file as from a
@@ -96,5 +98,17 @@ struct StreamedPLD {
     std::vector<double> flow_limitation;    // 0..1
 };
 std::vector<uint8_t> writeResMedPLD(const StreamedPLD& pld);
+
+/// A streamed night's oximetry, one value per second in the units the SAD
+/// reader expects. A NaN is "no reading" and is written as 0, which the
+/// readers take as the sensor absent for that second (never as a value). The
+/// shorter vector is padded with NaN to the longer; both empty, no file.
+struct StreamedSAD {
+    WallClock   start;
+    std::string serial;
+    std::vector<double> spo2_pct;       // 0..100
+    std::vector<double> pulse_bpm;      // beats per minute
+};
+std::vector<uint8_t> writeResMedSAD(const StreamedSAD& sad);
 
 }  // namespace cpapdash::parser

@@ -193,4 +193,34 @@ std::vector<uint8_t> writeResMedPLD(const StreamedPLD& pld) {
     return writeEDF(spec);
 }
 
+std::vector<uint8_t> writeResMedSAD(const StreamedSAD& sad) {
+    const size_t n = std::max(sad.spo2_pct.size(), sad.pulse_bpm.size());
+    if (n == 0) return {};
+    auto padded = [n](const std::vector<double>& v) {
+        std::vector<double> out(n, 0.0);
+        for (size_t i = 0; i < v.size(); i++) out[i] = std::isnan(v[i]) ? 0.0 : v[i];
+        return out;
+    };
+    EDFWriteSpec spec;
+    spec.recording       = resmedRecordingField(sad.start, sad.serial);
+    spec.start           = sad.start;
+    spec.record_duration = 1.0;
+    EDFWriteSignal spo2;
+    spo2.label              = "SpO2";
+    spo2.phys_dim           = "%";
+    spo2.phys_min           = 0.0;
+    spo2.phys_max           = 100.0;
+    spo2.samples_per_record = 1;
+    spo2.samples            = padded(sad.spo2_pct);
+    EDFWriteSignal pulse;
+    pulse.label              = "Pulse";
+    pulse.phys_dim           = "bpm";
+    pulse.phys_min           = 0.0;
+    pulse.phys_max           = 300.0;
+    pulse.samples_per_record = 1;
+    pulse.samples            = padded(sad.pulse_bpm);
+    spec.signals = {spo2, pulse};
+    return writeEDF(spec);
+}
+
 }  // namespace cpapdash::parser
