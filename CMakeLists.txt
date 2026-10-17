@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cpapdash_parser VERSION 8.7.0 LANGUAGES CXX)
+project(cpapdash_parser VERSION 8.8.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -13,6 +13,7 @@ add_library(cpapdash_parser STATIC
     src/EDFParser_EVE.cpp
     src/OximetryCsv.cpp
     src/EDFParser_STR.cpp
+    src/EDFWriter.cpp
     src/ISessionParser.cpp
     src/Models.cpp
     src/DesatDetector.cpp
@@ -116,6 +117,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         tests/test_event_indexes.cpp
         tests/test_breath_analysis.cpp
         tests/test_edf_record_count.cpp
+        tests/test_edf_writer.cpp
     )
     if(CPAPDASH_PARSER_WITH_LOWENSTEIN)
         list(APPEND TEST_SOURCES tests/test_prisma.cpp)

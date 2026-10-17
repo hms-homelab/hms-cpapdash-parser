@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## [8.8.0] - 2026-10-17
+
+### An EDF writer, for a night that arrives as a stream
+
+An AirSense 11 streams its breathing over its own Bluetooth: `PatientFlow`
+and `MaskPressure` at 25 Hz, with leak, respiratory rate, tidal volume,
+minute ventilation, snore and flow limitation beside them. A night that
+arrives that way has no card files, and everything in this library and
+after it reads card files. So `EDFWriter.h` lays the stream out as the files
+the card would have carried:
+
+- `writeEDF()` writes any plain EDF (main header, signal headers, int16
+  little-endian records), quantising physical values into each signal's
+  digital range exactly as `EDFFile::readSignal()` scales them back. The
+  record count is the whole records every signal can fill; a trailing
+  partial record is dropped, never padded.
+- `writeResMedBRP()` and `writeResMedPLD()` name and scale the signals the
+  way `parseBRPFile()` and `parsePLDFile()` look for them, in the units those
+  readers assume (BRP flow in L/min; PLD leak in L/s and tidal volume in
+  litres, which the reader converts as it does for a card). The recording
+  field carries `SRN=<serial>` so `parseDeviceInfo()` reads the serial as
+  from a card.
+- `resmedFileName()` and `resmedRecordingField()` give the names and the
+  header text a ResMed writes.
+
+Proven in `tests/test_edf_writer.cpp`: a plain EDF round-trips through
+`EDFFile`, and an 80 s stream sample (`tests/fixtures/as11_stream_sample_*`,
+blower running, nobody on the mask) parses through `parseSessionFromBuffers`
+into a session with the serial, its breathing minute and its slow channels.
+
 ## [8.7.0] - 2026-10-06
 
 ### The AirSense 11's own daily summary, read over its Bluetooth
