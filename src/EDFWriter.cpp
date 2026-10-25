@@ -223,4 +223,75 @@ std::vector<uint8_t> writeResMedSAD(const StreamedSAD& sad) {
     return writeEDF(spec);
 }
 
+namespace {
+
+// CRC-16/CCITT-FALSE: polynomial 0x1021, initial 0xFFFF, no reflection, no
+// final XOR. Measured on a machine's own EVE and CSL: every record checks.
+uint16_t crc16CcittFalse(const uint8_t* data, size_t n) {
+    uint16_t c = 0xFFFF;
+    for (size_t i = 0; i < n; i++) {
+        c = static_cast<uint16_t>(c ^ (static_cast<uint16_t>(data[i]) << 8));
+        for (int b = 0; b < 8; b++)
+            c = static_cast<uint16_t>((c & 0x8000) ? ((c << 1) ^ 0x1021) : (c << 1));
+    }
+    return c;
+}
+
+}  // namespace
+
+std::vector<uint8_t> writeResMedAnnotations(const ResMedAnnotationFile& file) {
+    constexpr size_t kAnnBytes = 62;   // 31 two-byte samples
+    std::vector<EDFWriteAnnotation> all;
+    all.push_back({0.0, 0.0, "Recording starts"});
+    all.insert(all.end(), file.annotations.begin(), file.annotations.end());
+
+    std::vector<uint8_t> out;
+    out.reserve(768 + all.size() * (kAnnBytes + 2));
+    // ── main header (256), as the machine writes it ──
+    putField(out, "0", 8);
+    putField(out, "X X X X", 80);
+    putField(out, resmedRecordingField(file.start, file.serial, file.model_id, file.vid), 80);
+    putField(out, two(file.start.day) + "." + two(file.start.month) + "." + two(file.start.year % 100), 8);
+    putField(out, two(file.start.hour) + "." + two(file.start.minute) + "." + two(file.start.second), 8);
+    putField(out, "768", 8);
+    putField(out, "EDF+D", 44);
+    putField(out, intField(static_cast<long long>(all.size())), 8);
+    putField(out, "0.00", 8);
+    putField(out, "2", 4);
+    // ── two signal headers ──
+    putField(out, "EDF Annotations", 16);
+    putField(out, "Crc16", 16);
+    putField(out, "", 160);                                      // transducer x2
+    putField(out, "", 16);                                       // dimension x2
+    putField(out, "-32768.0", 8); putField(out, "-32768.0", 8);  // physical min
+    putField(out, "32767.00", 8); putField(out, "32767.00", 8);  // physical max
+    putField(out, "-32768", 8);   putField(out, "-32768", 8);    // digital min
+    putField(out, "32767", 8);    putField(out, "32767", 8);     // digital max
+    putField(out, "", 160);                                      // prefiltering x2
+    putField(out, "31", 8);       putField(out, "1", 8);         // samples per record
+    putField(out, "", 64);                                       // reserved x2
+
+    // ── one record per annotation ──
+    for (const auto& a : all) {
+        std::vector<uint8_t> rec;
+        const std::string keep = std::string("+0") + '\x14' + '\x14' + '\0';
+        rec.insert(rec.end(), keep.begin(), keep.end());
+        const std::string head = "+" + numberField(a.onset_s) + '\x15' +
+                                 numberField(std::max(0.0, a.duration_s)) + '\x14';
+        // The text takes what is left of the record, less its closing 0x14 0x00.
+        const size_t room = kAnnBytes - std::min(kAnnBytes, rec.size() + head.size() + 2);
+        const std::string text = a.text.substr(0, room);
+        rec.insert(rec.end(), head.begin(), head.end());
+        rec.insert(rec.end(), text.begin(), text.end());
+        rec.push_back(0x14);
+        rec.push_back(0x00);
+        rec.resize(kAnnBytes, 0x00);
+        const uint16_t crc = crc16CcittFalse(rec.data(), rec.size());
+        rec.push_back(static_cast<uint8_t>(crc & 0xFF));
+        rec.push_back(static_cast<uint8_t>(crc >> 8));
+        out.insert(out.end(), rec.begin(), rec.end());
+    }
+    return out;
+}
+
 }  // namespace cpapdash::parser

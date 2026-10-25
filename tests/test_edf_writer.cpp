@@ -268,3 +268,86 @@ TEST(EDFWriter, ASADWithNoReadingsIsNoFile) {
     ASSERT_EQ(edf.readSignal(edf.findSignal("SpO2"), spo2), 2);
     EXPECT_NEAR(spo2[1], 0.0, 0.01);
 }
+
+// ── EVE / CSL: the machine's event files ─────────────────────────────────────
+
+TEST(EDFWriter, AnEveIsTheMachinesLayoutRecordForRecord) {
+    // Two records and their CRCs as an AirSense 11 wrote them on its own EVE
+    // (the CRC is the only thing here not derived from the format itself).
+    ResMedAnnotationFile f;
+    f.start = WallClock{2026, 10, 25, 9, 35, 15};
+    f.serial = kSerial;
+    f.annotations.push_back({679, 21, "Obstructive Apnea"});
+    const auto b = writeResMedAnnotations(f);
+    ASSERT_EQ(b.size(), 768u + 2u * 64u) << "a 768-byte header, a 64-byte record each";
+    const std::string hdr(b.begin(), b.begin() + 256);
+    EXPECT_EQ(hdr.substr(192, 5), "EDF+D");
+    EXPECT_EQ(hdr.substr(236, 8), "2       ") << "Recording starts, then the event";
+
+    const std::string r0(b.begin() + 768, b.begin() + 768 + 64);
+    const std::string want0 = std::string("+0\x14\x14\0+0\x15", 8) + "0\x14Recording starts\x14";
+    EXPECT_EQ(r0.substr(0, want0.size()), want0);
+    EXPECT_EQ(static_cast<uint8_t>(r0[62]), 0x94);
+    EXPECT_EQ(static_cast<uint8_t>(r0[63]), 0xD7);
+
+    const std::string r1(b.begin() + 768 + 64, b.begin() + 768 + 128);
+    const std::string want1 = std::string("+0\x14\x14\0+679\x15", 10) + "21\x14Obstructive Apnea\x14";
+    EXPECT_EQ(r1.substr(0, want1.size()), want1);
+    EXPECT_EQ(static_cast<uint8_t>(r1[62]), 0xD6);
+    EXPECT_EQ(static_cast<uint8_t>(r1[63]), 0x3F);
+}
+
+TEST(EDFWriter, AWrittenEveReadsBackAsTheMachinesAnnotationsOnItsClock) {
+    ResMedAnnotationFile f;
+    f.start = sampleStart();
+    f.serial = kSerial;
+    f.model_id = 46;
+    f.annotations.push_back({120, 21, "Obstructive Apnea"});
+    f.annotations.push_back({300, 11, "Central Apnea"});
+    f.annotations.push_back({450, 0, "Hypopnea"});
+    const auto b = writeResMedAnnotations(f);
+
+    EDFFile edf;
+    ASSERT_TRUE(edf.open(b.data(), b.size()));
+    EXPECT_TRUE(edf.isEDFPlus());
+    EXPECT_NE(edf.recording.find("SRN=" + kSerial + " MID=46"), std::string::npos);
+    // The reader leaves the "Recording starts" marker out, as for a card's.
+    const auto ann = edf.readAnnotations();
+    ASSERT_EQ(ann.size(), 3u);
+    EXPECT_EQ(ann[0].description, "Obstructive Apnea");
+    EXPECT_DOUBLE_EQ(ann[0].onset_sec, 120.0) << "stamped at its end";
+    EXPECT_DOUBLE_EQ(ann[0].duration_sec, 21.0);
+    EXPECT_EQ(ann[1].description, "Central Apnea");
+    EXPECT_EQ(ann[2].description, "Hypopnea");
+    EXPECT_DOUBLE_EQ(ann[2].duration_sec, 0.0);
+}
+
+TEST(EDFWriter, ACslCarriesTheMachinesCsrMarkersAndAnEmptyOneOnlyItsStart) {
+    ResMedAnnotationFile f;
+    f.start = sampleStart();
+    f.serial = kSerial;
+    EXPECT_EQ(writeResMedAnnotations(f).size(), 768u + 64u) << "an event-free night: Recording starts";
+    f.annotations.push_back({7687, 0, "CSR Start"});
+    f.annotations.push_back({8400, 0, "CSR End"});
+    const auto b = writeResMedAnnotations(f);
+    EDFFile edf;
+    ASSERT_TRUE(edf.open(b.data(), b.size()));
+    const auto ann = edf.readAnnotations();
+    ASSERT_EQ(ann.size(), 2u);
+    EXPECT_EQ(ann[0].description, "CSR Start");
+    EXPECT_DOUBLE_EQ(ann[0].onset_sec, 7687.0);
+    EXPECT_EQ(ann[1].description, "CSR End");
+}
+
+TEST(EDFWriter, AnAnnotationTooLongForARecordIsCutToFitNotSpilled) {
+    ResMedAnnotationFile f;
+    f.start = sampleStart();
+    f.annotations.push_back({100000, 120, std::string(80, 'x')});
+    const auto b = writeResMedAnnotations(f);
+    ASSERT_EQ(b.size(), 768u + 2u * 64u);
+    const std::string r1(b.begin() + 768 + 64, b.begin() + 768 + 126);
+    EXPECT_EQ(r1.back(), '\0') << "the record still closes inside its 62 bytes";
+    EDFFile edf;
+    ASSERT_TRUE(edf.open(b.data(), b.size()));
+    EXPECT_EQ(edf.readAnnotations().size(), 1u);
+}

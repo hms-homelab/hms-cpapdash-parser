@@ -111,4 +111,29 @@ struct StreamedSAD {
 };
 std::vector<uint8_t> writeResMedSAD(const StreamedSAD& sad);
 
+/// One EDF+ annotation. A ResMed stamps a respiratory event at its END:
+/// `onset_s` is when the event finished, seconds from the file's start, and
+/// `duration_s` how long it lasted (0 for a marker such as "CSR Start").
+struct EDFWriteAnnotation {
+    double      onset_s    = 0.0;
+    double      duration_s = 0.0;
+    std::string text;                  // "Obstructive Apnea", "CSR Start", ...
+};
+
+/// The machine's event files (EVE: its scored events; CSL: its Cheyne-Stokes
+/// stretches), in the layout an AirSense 11 writes them: EDF+D, two signals,
+/// "EDF Annotations" (31 samples, 62 bytes) and "Crc16" (1 sample), records
+/// of no duration, ONE annotation per record after the record's own time-
+/// keeping TAL, the first record always "Recording starts", and each record's
+/// 62 annotation bytes followed by their CRC-16/CCITT-FALSE, little-endian.
+/// An annotation whose text does not fit a record is cut to fit.
+struct ResMedAnnotationFile {
+    WallClock   start;
+    std::string serial;
+    int         model_id = 0;   // MID= in the recording field, left out when 0
+    int         vid      = 0;   // VID=, likewise
+    std::vector<EDFWriteAnnotation> annotations;   // in onset order; "Recording starts" is added
+};
+std::vector<uint8_t> writeResMedAnnotations(const ResMedAnnotationFile& file);
+
 }  // namespace cpapdash::parser

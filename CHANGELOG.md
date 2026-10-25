@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [8.9.1] - 2026-10-25
+
+### The machine's event files, written
+
+`writeResMedAnnotations()` writes an EVE (the machine's scored respiratory
+events) or a CSL (its Cheyne-Stokes stretches) in the layout an AirSense 11
+writes them, so a night that arrives as a stream can carry the machine's own
+events the way a card does: to this library's readers, to OSCAR and to
+SleepHQ.
+
+- EDF+D, a 768-byte header, two signals (`EDF Annotations`, 31 samples, and
+  `Crc16`, 1), records of no duration with one annotation each after the
+  record's own time-keeping TAL, the first always `Recording starts`.
+- An event is stamped at its END, with its duration in whole seconds, as the
+  machine stamps it; a CSR marker has duration 0.
+- Each record's 62 annotation bytes are followed by their CRC-16/CCITT-FALSE,
+  little-endian. Two records checked byte for byte, CRC included, against a
+  machine's own file.
+- Text too long for a record is cut so the record still closes inside it.
+
 ## [8.8.0] - 2026-10-17
 
 ### An EDF writer, for a night that arrives as a stream
