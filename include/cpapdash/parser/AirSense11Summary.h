@@ -33,6 +33,7 @@
 // returns, in the same units, so a consumer stores a Bluetooth night with the
 // code that stores an STR day.
 
+#include "cpapdash/parser/EDFWriter.h"   // STRDayValues
 #include "cpapdash/parser/Models.h"
 
 #include <chrono>
@@ -108,6 +109,16 @@ public:
     // therapy: a night off is not a night of zeros.
     static std::vector<STRDailyRecord> toStrRecords(const std::vector<AirSense11Day>& days,
                                                     const std::string& device_id);
+
+    // One day as the STR signals it fills, for writeResMedSTRRecord(): each
+    // value under the STR.edf label it was matched to, in that signal's unit
+    // (Leak in L/s, as the STR stores it), and the sessions as MaskOn/MaskOff
+    // minutes from the day's start. Only what the summary carries: a figure
+    // it did not send is left out, never written as zero, and the settings,
+    // the mode and SpO2, which it never carries, are never named. MaskEvents
+    // is named only when above zero. A day without usage fills nothing: it is
+    // the machine's day-off record.
+    static STRDayValues toStrDay(const AirSense11Day& day);
 
     // The stored spool's extension, so a consumer can tell one apart on disk.
     static constexpr const char* kExtension = ".as11";

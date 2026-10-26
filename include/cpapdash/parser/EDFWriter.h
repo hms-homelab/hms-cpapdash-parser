@@ -24,8 +24,14 @@
 // parseDeviceInfo() reads the machine's serial from a streamed file as from a
 // card's.
 //
+// writeResMedSTRRecord() writes one day of an STR into the layout of an STR
+// the same machine wrote, so a day the machine reported another way (its
+// Bluetooth summary) can sit among the days its card carried.
+//
+#include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace cpapdash::parser {
@@ -135,5 +141,39 @@ struct ResMedAnnotationFile {
     std::vector<EDFWriteAnnotation> annotations;   // in onset order; "Recording starts" is added
 };
 std::vector<uint8_t> writeResMedAnnotations(const ResMedAnnotationFile& file);
+
+/// One day of a ResMed STR, as a writer fills it. `values` sets one-sample
+/// signals by label, each in that signal's own physical unit (Leak.50 in L/s,
+/// Duration in minutes, ...). `sessions` sets MaskOn/MaskOff: {on, off} in
+/// minutes from the day's start (its noon), in order. A label the layout does
+/// not carry is ignored.
+struct STRDayValues {
+    std::vector<std::pair<std::string, double>> values;
+    std::vector<std::pair<double, double>>      sessions;
+    bool empty() const { return values.empty() && sessions.empty(); }
+};
+
+/// One daily record of an STR (records of 86400 s, one per day), in the layout
+/// of `str`: an STR.edf the machine wrote, whose header gives the signals,
+/// their ranges and their order (its records are not read). The record starts
+/// as `base`, a record of that same layout (the machine's own record of the
+/// day), or, when `base` is empty, as the machine's day-off record: every
+/// sample -1, the value a ResMed writes for "no data". Then:
+///
+///   - each value whose label the layout carries is quantised into its
+///     signal's digital range as EDFFile::readSignal() scales it back, a value
+///     beyond the physical range clamped to it, never wrapped;
+///   - when `sessions` is not empty, MaskOn/MaskOff take them in order, as
+///     many as the layout has slots for, and every slot after them is -1;
+///   - Date (when the layout has one) is `day`, days since 1970-01-01;
+///   - Crc16 (when the layout has one) is the CRC-16/CCITT-FALSE of the
+///     record's bytes before it, little-endian.
+///
+/// Anything `values` does not name keeps the base's sample, so nothing is
+/// written that the caller did not have. Empty when `str` is not an STR or a
+/// non-empty `base` is not one record of its layout.
+std::vector<uint8_t> writeResMedSTRRecord(const uint8_t* str, size_t len,
+                                          const std::vector<uint8_t>& base, long long day,
+                                          const STRDayValues& values);
 
 }  // namespace cpapdash::parser

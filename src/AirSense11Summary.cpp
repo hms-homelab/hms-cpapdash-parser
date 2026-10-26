@@ -287,6 +287,55 @@ STRDailyRecord AirSense11SummaryParser::toStrRecord(const AirSense11Day& day,
     return r;
 }
 
+STRDayValues AirSense11SummaryParser::toStrDay(const AirSense11Day& day) {
+    STRDayValues out;
+    if (!day.used()) return out;
+    auto& v = out.values;
+    auto opt = [&v](const char* label, const std::optional<double>& x) {
+        if (x) v.emplace_back(label, *x);
+    };
+    auto stats = [&opt](const std::string& name, const AirSense11Stats& s) {
+        opt((name + ".5").c_str(), s.p5);
+        opt((name + ".50").c_str(), s.p50);
+        opt((name + ".70").c_str(), s.p70);
+        opt((name + ".95").c_str(), s.p95);
+        opt((name + ".Max").c_str(), s.max);
+    };
+
+    v.emplace_back("Duration", static_cast<double>(day.usage_minutes));
+    if (day.mask_events > 0) v.emplace_back("MaskEvents", static_cast<double>(day.mask_events));
+    opt("AHI", day.ahi);
+    opt("HI", day.hi);
+    opt("AI", day.ai);
+    opt("OAI", day.oai);
+    opt("CAI", day.cai);
+    opt("UAI", day.uai);
+    opt("RIN", day.rin);
+    opt("CSR", day.csr_minutes);
+    stats("Leak", day.leak_lps);
+    stats("MaskPress", day.mask_pressure);
+    stats("TgtIPAP", day.target_ipap);
+    stats("TgtEPAP", day.target_epap);
+    stats("TidVol", day.tidal_volume_l);
+    stats("MinVent", day.minute_vent);
+    stats("RespRate", day.resp_rate);
+    stats("BlowPress", day.blower_pressure);
+    stats("Flow", day.flow_lps);
+    opt("BlowFlow.50", day.blower_flow_lps);
+    opt("AmbHumidity.50", day.ambient_humidity);
+    opt("HumTemp.50", day.humidifier_temp);
+    opt("HTubeTemp.50", day.heated_tube_temp);
+    opt("HumPow.50", day.humidifier_power);
+    opt("HTubePow.50", day.heated_tube_power);
+
+    for (const auto& s : day.sessions) {
+        const double on =
+            std::chrono::duration<double, std::ratio<60>>(s.start - day.day_start).count();
+        out.sessions.emplace_back(on, on + s.minutes);
+    }
+    return out;
+}
+
 std::vector<STRDailyRecord> AirSense11SummaryParser::toStrRecords(
     const std::vector<AirSense11Day>& days, const std::string& device_id) {
     std::vector<STRDailyRecord> out;

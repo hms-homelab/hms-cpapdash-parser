@@ -1,5 +1,7 @@
 #include "cpapdash/parser/EDFWriter.h"
 
+#include "cpapdash/parser/EDFFile.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -292,6 +294,84 @@ std::vector<uint8_t> writeResMedAnnotations(const ResMedAnnotationFile& file) {
         out.insert(out.end(), rec.begin(), rec.end());
     }
     return out;
+}
+
+std::vector<uint8_t> writeResMedSTRRecord(const uint8_t* str, size_t len,
+                                          const std::vector<uint8_t>& base, long long day,
+                                          const STRDayValues& values) {
+    EDFFile edf;
+    if (!str || len == 0 || !edf.open(str, len)) return {};
+    if (static_cast<long long>(std::lround(edf.record_duration)) != 86400) return {};
+
+    // Where each signal's samples sit in a record.
+    struct Slot {
+        const EDFSignal* sig;
+        size_t           at;
+    };
+    std::vector<Slot> slots;
+    size_t record_bytes = 0;
+    for (const auto& s : edf.signals) {
+        if (s.bytes_per_sample != 2 || s.samples_per_record < 0) return {};
+        slots.push_back({&s, record_bytes});
+        record_bytes += static_cast<size_t>(s.samples_per_record) * 2;
+    }
+    if (record_bytes == 0) return {};
+    if (!base.empty() && base.size() != record_bytes) return {};
+
+    std::vector<uint8_t> rec = base.empty() ? std::vector<uint8_t>(record_bytes, 0xFF) : base;
+    auto put = [&rec](size_t at, long d) {
+        const auto u = static_cast<uint16_t>(static_cast<int16_t>(d));
+        rec[at]     = static_cast<uint8_t>(u & 0xFF);
+        rec[at + 1] = static_cast<uint8_t>(u >> 8);
+    };
+    auto digital = [](const EDFSignal& s, double v) {
+        if (!(v == v)) return -1L;                       // NaN: no data
+        const double lo = std::min(s.phys_min, s.phys_max), hi = std::max(s.phys_min, s.phys_max);
+        v = std::clamp(v, lo, hi);
+        const double span_phys = s.phys_max - s.phys_min;
+        const double span_dig  = static_cast<double>(s.dig_max - s.dig_min);
+        long d = s.dig_min;
+        if (span_phys != 0 && span_dig != 0)
+            d = std::lround(s.dig_min + (v - s.phys_min) * span_dig / span_phys);
+        return std::clamp(d, static_cast<long>(std::min(s.dig_min, s.dig_max)),
+                          static_cast<long>(std::max(s.dig_min, s.dig_max)));
+    };
+    auto find = [&slots](const std::string& label) -> const Slot* {
+        for (const auto& sl : slots)
+            if (sl.sig->label == label && sl.sig->samples_per_record >= 1) return &sl;
+        return nullptr;
+    };
+
+    for (const auto& [label, v] : values.values) {
+        if (label == "Date" || label == "Crc16" || label == "MaskOn" || label == "MaskOff") continue;
+        if (const Slot* sl = find(label)) put(sl->at, digital(*sl->sig, v));
+    }
+
+    if (!values.sessions.empty()) {
+        const Slot* on  = find("MaskOn");
+        const Slot* off = find("MaskOff");
+        for (const Slot* sl : {on, off}) {
+            if (!sl) continue;
+            const bool is_on = sl == on;
+            for (int k = 0; k < sl->sig->samples_per_record; k++) {
+                long d = -1;
+                if (static_cast<size_t>(k) < values.sessions.size()) {
+                    const auto& s = values.sessions[static_cast<size_t>(k)];
+                    d = digital(*sl->sig, is_on ? s.first : s.second);
+                }
+                put(sl->at + static_cast<size_t>(k) * 2, d);
+            }
+        }
+    }
+
+    // The Date is the day's number itself, as the machine writes it.
+    if (const Slot* sl = find("Date")) put(sl->at, static_cast<long>(day));
+    if (const Slot* sl = find("Crc16")) {
+        const uint16_t crc = crc16CcittFalse(rec.data(), sl->at);
+        rec[sl->at]     = static_cast<uint8_t>(crc & 0xFF);
+        rec[sl->at + 1] = static_cast<uint8_t>(crc >> 8);
+    }
+    return rec;
 }
 
 }  // namespace cpapdash::parser

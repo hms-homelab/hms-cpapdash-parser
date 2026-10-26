@@ -1,4 +1,5 @@
 #include "cpapdash/parser/EDFParser.h"
+#include <algorithm>
 #include <iostream>
 #include <cmath>
 
@@ -144,12 +145,21 @@ std::vector<STRDailyRecord> EDFParser::parseSTRInternal(
     auto tgt_vent_95_data  = readSig("TgtVent.95");
     auto tgt_vent_max_data = readSig("TgtVent.Max");
 
-    // MaskOn/MaskOff have 10 samples per record
+    // MaskOn/MaskOff carry several slots per record: 10 on an AirSense 10, 20
+    // on an AirSense 11. The count is the signal header's, never assumed: a
+    // fixed 10 read an AirSense 11's second day from the first day's slots.
     int mask_on_idx  = edf.findSignalExact("MaskOn");
     int mask_off_idx = edf.findSignalExact("MaskOff");
     std::vector<double> mask_on_data, mask_off_data;
     if (mask_on_idx >= 0)  edf.readSignal(mask_on_idx, mask_on_data);
     if (mask_off_idx >= 0) edf.readSignal(mask_off_idx, mask_off_data);
+    const int mask_slots =
+        (mask_on_idx >= 0 && mask_off_idx >= 0)
+            ? std::min(edf.signals[mask_on_idx].samples_per_record,
+                       edf.signals[mask_off_idx].samples_per_record)
+            : 0;
+    const int mask_stride_on  = mask_on_idx >= 0 ? edf.signals[mask_on_idx].samples_per_record : 0;
+    const int mask_stride_off = mask_off_idx >= 0 ? edf.signals[mask_off_idx].samples_per_record : 0;
 
     // Helper: safe index access for 1-sample-per-record signals
     auto val = [](const std::vector<double>& v, int i) -> double {
@@ -295,15 +305,15 @@ std::vector<STRDailyRecord> EDFParser::parseSTRInternal(
             r.tgt_vent_max = optVal(tgt_vent_max_data, rec);
         }
 
-        // MaskOn/MaskOff -- 10 slots per record, values are minutes since noon
+        // MaskOn/MaskOff -- the header's slots per record, values are minutes since noon
         if (!mask_on_data.empty() && !mask_off_data.empty()) {
-            int base = rec * 10;  // 10 samples per record
-            for (int slot = 0; slot < 10; ++slot) {
-                int idx = base + slot;
-                if (static_cast<size_t>(idx) >= mask_on_data.size()) break;
+            for (int slot = 0; slot < mask_slots; ++slot) {
+                const size_t on_idx  = static_cast<size_t>(rec) * mask_stride_on + slot;
+                const size_t off_idx = static_cast<size_t>(rec) * mask_stride_off + slot;
+                if (on_idx >= mask_on_data.size() || off_idx >= mask_off_data.size()) break;
 
-                double on_min  = mask_on_data[idx];
-                double off_min = mask_off_data[idx];
+                double on_min  = mask_on_data[on_idx];
+                double off_min = mask_off_data[off_idx];
 
                 // -1 means unused slot
                 if (on_min < 0 || off_min < 0) continue;

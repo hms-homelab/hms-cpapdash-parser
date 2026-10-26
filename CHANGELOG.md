@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+## [8.9.2] - 2026-10-26
+
+### One day of an STR, written in the machine's own layout
+
+An AirSense 11 read over its Bluetooth reports each day's figures (its
+summary) but no STR.edf. `writeResMedSTRRecord()` writes one daily record in
+the layout of an STR the same machine wrote, so such a day can sit among the
+days its card carried and be read by OSCAR, SleepHQ and this library alike.
+
+- The layout (signals, ranges, order, samples per record) is read from the
+  given STR's header. Values are named by STR label in the signal's own unit
+  and quantised the way `EDFFile::readSignal()` scales them back; a value
+  beyond the range is clamped, never wrapped.
+- The record starts from a base: the machine's own record of the day, or,
+  without one, the machine's day-off record (every sample -1, its "no data").
+  Anything the caller does not name keeps the base's sample.
+- MaskOn/MaskOff take the sessions in order up to the layout's slots, the rest
+  -1; Date is the day's number; Crc16 is the CRC-16/CCITT-FALSE of the bytes
+  before it.
+- `AirSense11SummaryParser::toStrDay()` names what a summary day fills: the
+  duration, sessions, mask events, indices, CSR and the leak, pressure,
+  target, respiratory, blower, flow and humidifier figures it carries. Never
+  the mode, the settings or SpO2, which it does not carry; a figure it did
+  not send is left out, not written as zero.
+
+### Fixed
+
+- The STR reader took MaskOn/MaskOff as 10 slots per day. An AirSense 11
+  writes 20, so every day after the first read its sessions from the wrong
+  slots. The count now comes from the signal header.
+
 ## [8.9.1] - 2026-10-25
 
 ### The machine's event files, written
