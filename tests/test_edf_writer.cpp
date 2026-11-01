@@ -11,6 +11,8 @@
 #include "cpapdash/parser/EDFWriter.h"
 
 #include <cmath>
+#include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -267,6 +269,164 @@ TEST(EDFWriter, ASADWithNoReadingsIsNoFile) {
     std::vector<double> spo2;
     ASSERT_EQ(edf.readSignal(edf.findSignal("SpO2"), spo2), 2);
     EXPECT_NEAR(spo2[1], 0.0, 0.01);
+}
+
+// ── The card's own scale ─────────────────────────────────────────────────────
+// A reader that takes raw * gain without the offset, as ResMed's files allow,
+// reads a written value right only if physical zero sits at digital zero. The
+// ranges are the ones an AirSense 11 writes on its card.
+
+namespace {
+
+// One signal of an EDF, read straight from the header and the data records.
+struct RawSignal {
+    std::string label, dim;
+    double pmin = 0, pmax = 0;
+    int dmin = 0, dmax = 0, spr = 0;
+    std::vector<int> samples;   // as stored
+    double gain() const { return (pmax - pmin) / (dmax - dmin); }
+    // What a reader gets that has no offset: the stored number times the gain.
+    double noOffset(size_t i) const { return samples[i] * gain(); }
+};
+
+std::string headerField(const std::vector<uint8_t>& b, size_t at, size_t n) {
+    std::string s(b.begin() + static_cast<long>(at), b.begin() + static_cast<long>(at + n));
+    while (!s.empty() && s.back() == ' ') s.pop_back();
+    return s;
+}
+
+std::vector<RawSignal> rawSignals(const std::vector<uint8_t>& b) {
+    const int ns = std::atoi(headerField(b, 252, 4).c_str());
+    const int hl = std::atoi(headerField(b, 184, 8).c_str());
+    const int nr = std::atoi(headerField(b, 236, 8).c_str());
+    std::vector<RawSignal> out(static_cast<size_t>(ns));
+    size_t o = 256;
+    auto each = [&](size_t width, auto&& set) {
+        for (int i = 0; i < ns; i++)
+            set(out[static_cast<size_t>(i)], headerField(b, o + static_cast<size_t>(i) * width, width));
+        o += width * static_cast<size_t>(ns);
+    };
+    each(16, [](RawSignal& r, const std::string& s) { r.label = s; });
+    o += 80 * static_cast<size_t>(ns);
+    each(8, [](RawSignal& r, const std::string& s) { r.dim = s; });
+    each(8, [](RawSignal& r, const std::string& s) { r.pmin = std::atof(s.c_str()); });
+    each(8, [](RawSignal& r, const std::string& s) { r.pmax = std::atof(s.c_str()); });
+    each(8, [](RawSignal& r, const std::string& s) { r.dmin = std::atoi(s.c_str()); });
+    each(8, [](RawSignal& r, const std::string& s) { r.dmax = std::atoi(s.c_str()); });
+    o += 80 * static_cast<size_t>(ns);
+    each(8, [](RawSignal& r, const std::string& s) { r.spr = std::atoi(s.c_str()); });
+
+    size_t rec = 0;
+    for (const auto& r : out) rec += static_cast<size_t>(r.spr) * 2;
+    for (int k = 0; k < nr; k++) {
+        size_t at = static_cast<size_t>(hl) + static_cast<size_t>(k) * rec;
+        for (auto& r : out)
+            for (int j = 0; j < r.spr; j++, at += 2)
+                r.samples.push_back(static_cast<int16_t>(b[at] | (b[at + 1] << 8)));
+    }
+    return out;
+}
+
+StreamedPLD steadyPld(size_t n) {
+    StreamedPLD p;
+    p.start  = sampleStart();
+    p.serial = kSerial;
+    p.mask_press_cmh2o.assign(n, 10.0);
+    p.press_cmh2o.assign(n, 10.5);
+    p.epr_press_cmh2o.assign(n, 8.5);
+    p.leak_lps.assign(n, 0.1);
+    p.resp_rate.assign(n, 16.0);
+    p.tidal_volume_l.assign(n, 0.5);
+    p.minute_vent_lpm.assign(n, 8.0);
+    p.snore.assign(n, 0.2);
+    p.flow_limitation.assign(n, 0.3);
+    return p;
+}
+
+}  // namespace
+
+TEST(EDFWriter, EveryResMedSignalHasZeroAtZero) {
+    StreamedBRP brp;
+    brp.start = sampleStart();
+    brp.flow_lpm.assign(50, 30.0);
+    brp.press_cmh2o.assign(50, 9.0);
+    StreamedSAD sad;
+    sad.start = sampleStart();
+    sad.spo2_pct.assign(10, 95.0);
+    sad.pulse_bpm.assign(10, 70.0);
+    for (const auto& file : {writeResMedBRP(brp), writeResMedPLD(steadyPld(10)), writeResMedSAD(sad)}) {
+        ASSERT_FALSE(file.empty());
+        const auto sigs = rawSignals(file);
+        ASSERT_FALSE(sigs.empty());
+        for (const auto& s : sigs)
+            EXPECT_NEAR(s.pmin, s.dmin * s.gain(), 1e-9) << s.label << " has an offset";
+    }
+}
+
+TEST(EDFWriter, ThePldRangesAreTheCards) {
+    const auto sigs = rawSignals(writeResMedPLD(steadyPld(10)));
+    ASSERT_EQ(sigs.size(), 9u);
+    struct Want { const char* label; const char* dim; double hi; int dig_hi; };
+    const Want want[] = {
+        {"MaskPress.2s", "cmH2O", 40, 2000}, {"Press.2s", "cmH2O", 50, 2500},
+        {"EprPress.2s", "cmH2O", 30, 1500},  {"Leak.2s", "L/s", 2, 100},
+        {"RespRate.2s", "bpm", 90, 450},     {"TidVol.2s", "L", 4, 200},
+        {"MinVent.2s", "L/min", 30, 240},    {"Snore.2s", "", 5, 250},
+        {"FlowLim.2s", "", 1, 100},
+    };
+    for (size_t i = 0; i < 9; i++) {
+        EXPECT_EQ(sigs[i].label, want[i].label);
+        EXPECT_EQ(sigs[i].dim, want[i].dim);
+        EXPECT_EQ(sigs[i].pmin, 0.0);
+        EXPECT_EQ(sigs[i].pmax, want[i].hi) << want[i].label;
+        EXPECT_EQ(sigs[i].dmin, 0);
+        EXPECT_EQ(sigs[i].dmax, want[i].dig_hi) << want[i].label;
+        EXPECT_EQ(sigs[i].spr, 1);
+    }
+}
+
+TEST(EDFWriter, ARespiratoryRateOf16IsReadAs16WithoutAnOffset) {
+    const auto sigs = rawSignals(writeResMedPLD(steadyPld(10)));
+    ASSERT_EQ(sigs[4].label, "RespRate.2s");
+    for (size_t i = 0; i < sigs[4].samples.size(); i++) EXPECT_NEAR(sigs[4].noOffset(i), 16.0, 0.1);
+    ASSERT_EQ(sigs[0].label, "MaskPress.2s");
+    EXPECT_NEAR(sigs[0].noOffset(0), 10.0, 0.02);
+    EXPECT_GE(sigs[0].samples[0], 0) << "never below zero";
+}
+
+TEST(EDFWriter, FlowIsWrittenInLitresPerSecondAndParsesBackAsTheLitresPerMinuteGiven) {
+    StreamedBRP brp;
+    brp.start  = sampleStart();
+    brp.serial = kSerial;
+    // Two minutes of a steady breath: +30 L/min in, -30 L/min out, 2 s each.
+    for (int i = 0; i < 25 * 120; i++) {
+        brp.flow_lpm.push_back((i / 50) % 2 == 0 ? 30.0 : -30.0);
+        brp.press_cmh2o.push_back(9.0);
+    }
+    brp.flow_lpm[0] = 90.0;
+    brp.flow_lpm[1] = -60.0;
+    const auto file = writeResMedBRP(brp);
+    const auto sigs = rawSignals(file);
+    ASSERT_EQ(sigs.size(), 2u);
+    EXPECT_EQ(sigs[0].label, "Flow.40ms");
+    EXPECT_EQ(sigs[0].dim, "L/s");
+    EXPECT_EQ(sigs[0].pmin, -2.0);
+    EXPECT_EQ(sigs[0].pmax, 3.0);
+    EXPECT_EQ(sigs[0].dmin, -1000);
+    EXPECT_EQ(sigs[0].dmax, 1500);
+    EXPECT_NEAR(sigs[0].noOffset(0), 1.5, 0.003);    // 90 L/min
+    EXPECT_NEAR(sigs[0].noOffset(1), -1.0, 0.003);   // -60 L/min
+    EXPECT_EQ(sigs[1].label, "Press.40ms");
+    EXPECT_NEAR(sigs[1].noOffset(2), 9.0, 0.02);
+
+    // Parsed as a card's night, the minute's peak is the L/min that went in,
+    // not sixty times it.
+    auto session = EDFParser::parseSessionFromBuffers(
+        file.data(), file.size(), nullptr, 0, nullptr, 0, std::vector<EDFParser::ByteView>{},
+        "device-1", "sample", "20261017_064452");
+    ASSERT_TRUE(session);
+    ASSERT_GE(session->breathing_summary.size(), 1u);
+    EXPECT_NEAR(session->breathing_summary.front().max_flow_rate, 90.0, 0.5);
 }
 
 // ── EVE / CSL: the machine's event files ─────────────────────────────────────

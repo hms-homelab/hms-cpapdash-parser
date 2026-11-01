@@ -128,25 +128,38 @@ std::string resmedFileName(const WallClock& start, const std::string& kind) {
     return buf;
 }
 
+namespace {
+
+// A signal in a ResMed file's own scale: its physical range over a digital
+// range that puts physical zero at digital zero, as the machine's card files
+// do, so a reader that takes raw * gain without the offset reads the value.
+EDFWriteSignal cardSignal(const char* label, const char* dim, double lo, double hi, int dig_lo,
+                          int dig_hi, int per_record) {
+    EDFWriteSignal s;
+    s.label              = label;
+    s.phys_dim           = dim;
+    s.phys_min           = lo;
+    s.phys_max           = hi;
+    s.dig_min            = dig_lo;
+    s.dig_max            = dig_hi;
+    s.samples_per_record = per_record;
+    return s;
+}
+
+}  // namespace
+
 std::vector<uint8_t> writeResMedBRP(const StreamedBRP& brp) {
     const size_t n = std::min(brp.flow_lpm.size(), brp.press_cmh2o.size());
     EDFWriteSpec spec;
     spec.recording       = resmedRecordingField(brp.start, brp.serial);
     spec.start           = brp.start;
     spec.record_duration = 1.0;
-    EDFWriteSignal flow;
-    flow.label              = "Flow.40ms";
-    flow.phys_dim           = "L/min";
-    flow.phys_min           = -300.0;   // 0.0092 L/min a step, the machine's own 0.01
-    flow.phys_max           = 300.0;
-    flow.samples_per_record = 25;
-    flow.samples.assign(brp.flow_lpm.begin(), brp.flow_lpm.begin() + static_cast<long>(n));
-    EDFWriteSignal press;
-    press.label              = "Press.40ms";
-    press.phys_dim           = "cmH2O";
-    press.phys_min           = 0.0;
-    press.phys_max           = 40.0;
-    press.samples_per_record = 25;
+    // Flow in L/s as the card has it (the BRP reader multiplies by 60), 0.002
+    // L/s a step; the caller's L/min is divided here.
+    EDFWriteSignal flow = cardSignal("Flow.40ms", "L/s", -2.0, 3.0, -1000, 1500, 25);
+    flow.samples.reserve(n);
+    for (size_t i = 0; i < n; i++) flow.samples.push_back(brp.flow_lpm[i] / 60.0);
+    EDFWriteSignal press = cardSignal("Press.40ms", "cmH2O", 0.0, 40.0, 0, 2000, 25);
     press.samples.assign(brp.press_cmh2o.begin(), brp.press_cmh2o.begin() + static_cast<long>(n));
     spec.signals = {flow, press};
     return writeEDF(spec);
@@ -156,21 +169,23 @@ std::vector<uint8_t> writeResMedPLD(const StreamedPLD& pld) {
     struct Chan {
         const char*                label;
         const char*                dim;
-        double                     lo, hi;
+        double                     hi;
+        int                        dig_hi;
         const std::vector<double>* v;
     };
     // In the machine's order: the three pressures first (the reader's prefix
-    // logic relies on nothing but the labels, the order is for a human).
+    // logic relies on nothing but the labels, the order is for a human). The
+    // ranges are an AirSense 11's own, each from zero.
     const Chan chans[] = {
-        {"MaskPress.2s", "cmH2O", 0.0, 40.0, &pld.mask_press_cmh2o},
-        {"Press.2s", "cmH2O", 0.0, 40.0, &pld.press_cmh2o},
-        {"EprPress.2s", "cmH2O", 0.0, 40.0, &pld.epr_press_cmh2o},
-        {"Leak.2s", "L/s", 0.0, 4.0, &pld.leak_lps},
-        {"RespRate.2s", "bpm", 0.0, 60.0, &pld.resp_rate},
-        {"TidVol.2s", "L", 0.0, 4.0, &pld.tidal_volume_l},
-        {"MinVent.2s", "L/min", 0.0, 60.0, &pld.minute_vent_lpm},
-        {"Snore.2s", "", 0.0, 10.0, &pld.snore},
-        {"FlowLim.2s", "", 0.0, 1.0, &pld.flow_limitation},
+        {"MaskPress.2s", "cmH2O", 40.0, 2000, &pld.mask_press_cmh2o},
+        {"Press.2s", "cmH2O", 50.0, 2500, &pld.press_cmh2o},
+        {"EprPress.2s", "cmH2O", 30.0, 1500, &pld.epr_press_cmh2o},
+        {"Leak.2s", "L/s", 2.0, 100, &pld.leak_lps},
+        {"RespRate.2s", "bpm", 90.0, 450, &pld.resp_rate},
+        {"TidVol.2s", "L", 4.0, 200, &pld.tidal_volume_l},
+        {"MinVent.2s", "L/min", 30.0, 240, &pld.minute_vent_lpm},
+        {"Snore.2s", "", 5.0, 250, &pld.snore},
+        {"FlowLim.2s", "", 1.0, 100, &pld.flow_limitation},
     };
     size_t n = SIZE_MAX;
     for (const auto& c : chans)
@@ -183,12 +198,7 @@ std::vector<uint8_t> writeResMedPLD(const StreamedPLD& pld) {
     spec.record_duration = 2.0;
     for (const auto& c : chans) {
         if (c.v->empty()) continue;
-        EDFWriteSignal s;
-        s.label              = c.label;
-        s.phys_dim           = c.dim;
-        s.phys_min           = c.lo;
-        s.phys_max           = c.hi;
-        s.samples_per_record = 1;
+        EDFWriteSignal s = cardSignal(c.label, c.dim, 0.0, c.hi, 0, c.dig_hi, 1);
         s.samples.assign(c.v->begin(), c.v->begin() + static_cast<long>(n));
         spec.signals.push_back(std::move(s));
     }
@@ -207,20 +217,11 @@ std::vector<uint8_t> writeResMedSAD(const StreamedSAD& sad) {
     spec.recording       = resmedRecordingField(sad.start, sad.serial);
     spec.start           = sad.start;
     spec.record_duration = 1.0;
-    EDFWriteSignal spo2;
-    spo2.label              = "SpO2";
-    spo2.phys_dim           = "%";
-    spo2.phys_min           = 0.0;
-    spo2.phys_max           = 100.0;
-    spo2.samples_per_record = 1;
-    spo2.samples            = padded(sad.spo2_pct);
-    EDFWriteSignal pulse;
-    pulse.label              = "Pulse";
-    pulse.phys_dim           = "bpm";
-    pulse.phys_min           = 0.0;
-    pulse.phys_max           = 300.0;
-    pulse.samples_per_record = 1;
-    pulse.samples            = padded(sad.pulse_bpm);
+    // One digital step a unit, physical equal to digital, as the machine's SAD.
+    EDFWriteSignal spo2 = cardSignal("SpO2", "%", 0.0, 100.0, 0, 100, 1);
+    spo2.samples        = padded(sad.spo2_pct);
+    EDFWriteSignal pulse = cardSignal("Pulse", "bpm", 0.0, 300.0, 0, 300, 1);
+    pulse.samples        = padded(sad.pulse_bpm);
     spec.signals = {spo2, pulse};
     return writeEDF(spec);
 }

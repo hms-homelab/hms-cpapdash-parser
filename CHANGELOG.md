@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [8.10.0] - 2026-11-01
+
+### A written BRP, PLD and SAD are scaled as the machine's card files are
+
+`writeResMedBRP()`, `writeResMedPLD()` and `writeResMedSAD()` spread every
+signal over the whole int16 range, and wrote flow in L/min. Two things followed
+for a night written from a stream:
+
+- **Flow read back 60 times too large.** The BRP reader multiplies a ResMed
+  flow by 60, as a card's is in L/s, so a written night's peak came out near
+  7,000 L/min.
+- **A reader without the offset read every value half a range low.** ResMed's
+  own files put physical zero at digital zero, so a reader may take a value as
+  `raw * gain`; OSCAR does, and dropped a respiratory rate of 16 as -14, along
+  with the other PLD signals.
+
+Each signal now has the range an AirSense 11 writes on its card, from digital
+zero, and flow is written in L/s over -2..3 (-1000..1500). The ranges were read
+off AirSense 11 cards on two firmware variants and match an AirSense 10's step
+for step. `StreamedBRP::flow_lpm` is still given in L/min; the writer divides.
+Record lengths, sample counts, labels and file names are unchanged. The ranges
+come from hms-cpap #45 (Rob Coleman).
+
 ## [8.9.2] - 2026-10-26
 
 ### One day of an STR, written in the machine's own layout

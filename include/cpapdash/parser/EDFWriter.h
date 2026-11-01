@@ -10,15 +10,25 @@
 // int16, physical values quantised into each signal's digital range exactly
 // as EDFFile::readSignal() scales them back. writeResMedBRP() and
 // writeResMedPLD() name and scale the signals the way parseBRPFile() and
-// parsePLDFile() look for them, with the units those readers assume:
+// parsePLDFile() look for them, in the units and ranges an AirSense 11 writes
+// on its own card:
 //
-//   BRP, 1 s records:  Flow.40ms (L/min, 25 per record), Press.40ms (cmH2O, 25)
-//   PLD, 2 s records:  MaskPress.2s, Press.2s, EprPress.2s (cmH2O), Leak.2s
-//                      (L/s: the reader multiplies by 60), RespRate.2s (/min),
-//                      TidVol.2s (L: the reader multiplies by 1000), MinVent.2s
-//                      (L/min), Snore.2s, FlowLim.2s (0..1), one per record
-//   SAD, 1 s records:  SpO2 (%), Pulse (bpm), one per record; 0 is "no
-//                      reading", which parseSADFile() already filters out
+//   BRP, 1 s records:  Flow.40ms (L/s, -2..3 over -1000..1500: the reader
+//                      multiplies by 60), Press.40ms (cmH2O, 0..40 over
+//                      0..2000), 25 per record
+//   PLD, 2 s records:  MaskPress.2s (0..40), Press.2s (0..50), EprPress.2s
+//                      (0..30) in cmH2O at 0.02 a step, Leak.2s (L/s, 0..2:
+//                      the reader multiplies by 60), RespRate.2s (/min, 0..90),
+//                      TidVol.2s (L, 0..4: the reader multiplies by 1000),
+//                      MinVent.2s (L/min, 0..30), Snore.2s (0..5), FlowLim.2s
+//                      (0..1), one per record
+//   SAD, 1 s records:  SpO2 (%), Pulse (bpm), one per record, a unit a step;
+//                      0 is "no reading", which parseSADFile() already filters
+//                      out
+//
+// Physical zero is digital zero on every signal, as on the card, so a reader
+// that takes a value as raw * gain without the offset (as ResMed's own files
+// allow) reads it right.
 //
 // The recording field carries "SRN=<serial>" the way the machine writes it, so
 // parseDeviceInfo() reads the machine's serial from a streamed file as from a
@@ -77,8 +87,9 @@ std::string resmedRecordingField(const WallClock& start, const std::string& seri
 /// machine's wall clock; kind is "BRP", "PLD", "SAD", "EVE" or "CSL".
 std::string resmedFileName(const WallClock& start, const std::string& kind);
 
-/// A streamed night's breathing, 25 Hz each, in the units the BRP reader
-/// expects. The two vectors are trimmed to the shorter.
+/// A streamed night's breathing, 25 Hz each. Flow is given in L/min and
+/// written in L/s, as the card has it. The two vectors are trimmed to the
+/// shorter.
 struct StreamedBRP {
     WallClock   start;
     std::string serial;
