@@ -29,7 +29,8 @@ Medical, and Resvent.
 - **Non-GPL code:** `github.com/jieter/fph-parser` (.FPH files) exists but carries **no license
   file** — defaults to all-rights-reserved under GitHub ToS, cannot be legally reused or forked
   without contacting the author first.
-- **SD card:** yes (SmartStick behaves like SD-card storage).
+- **SD card:** **no.** Data goes to F&P's USB SmartStick, the same stick the SleepStyle uses
+  (corrected 2026-10-25; an earlier note here said "yes").
 - **Market:** discontinued/legacy line; also had an FDA Class 2 recall. F&P's active product is
   SleepStyle.
 - **SleepHQ:** not listed as supported (SleepHQ's F&P support is SleepStyle only).
