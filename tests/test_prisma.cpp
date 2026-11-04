@@ -14,12 +14,21 @@ namespace fs = std::filesystem;
 
 static const std::string FIXTURES = "tests/fixtures/lowenstein";
 
+#ifndef CPAPDASH_PARSER_SOURCE_DIR
+#define CPAPDASH_PARSER_SOURCE_DIR "."
+#endif
+
+// The source dir first, so ctest (which runs from the build dir, however deep)
+// and a run from the repository root both find the fixtures.
 static std::string fixturePath(const std::string& name) {
-    // Try relative to build dir first, then source dir
-    if (fs::exists(std::string("../") + FIXTURES + "/" + name))
-        return std::string("../") + FIXTURES + "/" + name;
-    if (fs::exists(FIXTURES + "/" + name))
-        return FIXTURES + "/" + name;
+    const std::string rel = FIXTURES + "/" + name;
+    for (const std::string& base : {std::string(CPAPDASH_PARSER_SOURCE_DIR) + "/",
+                                    std::string(""),
+                                    std::string("../"),
+                                    std::string("../../")}) {
+        std::error_code ec;
+        if (fs::exists(base + rel, ec)) return base + rel;
+    }
     return "";
 }
 
