@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cpapdash_parser VERSION 8.10.0 LANGUAGES CXX)
+project(cpapdash_parser VERSION 8.11.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -47,6 +47,21 @@ if(CPAPDASH_PARSER_WITH_LOWENSTEIN)
         src/PrismaParser_Signals.cpp
     )
     target_compile_definitions(cpapdash_parser PUBLIC CPAPDASH_WITH_LOWENSTEIN=1)
+endif()
+
+# Philips Respironics PRS1 parser (optional, no extra dependencies) -- see
+# sdlc/sdd/002, format in docs/PHILIPS_FORMAT.md.
+option(CPAPDASH_PARSER_WITH_PHILIPS "Build Philips Respironics PRS1 parser" OFF)
+
+if(CPAPDASH_PARSER_WITH_PHILIPS)
+    target_sources(cpapdash_parser PRIVATE
+        src/PhilipsParser.cpp
+        src/PhilipsParser_Chunks.cpp
+        src/PhilipsParser_Summary.cpp
+        src/PhilipsParser_Events.cpp
+        src/PhilipsParser_Waveform.cpp
+    )
+    target_compile_definitions(cpapdash_parser PUBLIC CPAPDASH_WITH_PHILIPS=1)
 endif()
 
 # Sefam S.Box parser (optional, no extra dependencies) -- see sdlc/sdd/005.
@@ -131,6 +146,9 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
     endif()
     if(CPAPDASH_PARSER_WITH_BMC)
         list(APPEND TEST_SOURCES tests/test_bmc.cpp)
+    endif()
+    if(CPAPDASH_PARSER_WITH_PHILIPS)
+        list(APPEND TEST_SOURCES tests/test_philips.cpp)
     endif()
 
     add_executable(run_tests ${TEST_SOURCES})

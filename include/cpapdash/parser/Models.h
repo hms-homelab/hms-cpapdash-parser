@@ -30,10 +30,12 @@ enum class EventType {
 };
 
 /**
- * Device manufacturer identifier. PHILIPS is DETECT-only: named by
- * detectManufacturer() so a foreign card is labeled and rejected cleanly, but
- * createParser() has no parser for it (returns nullptr) -- detection is broader
- * than parse support. BMC parses only when built with CPAPDASH_WITH_BMC.
+ * Device manufacturer identifier. Detection is broader than parse support:
+ * detectManufacturer() names a card so a foreign one is labeled and rejected
+ * cleanly even when createParser() returns nullptr for it. PHILIPS is
+ * parse-supported behind CPAPDASH_WITH_PHILIPS (System One + DreamStation 1,
+ * Family 0; DreamStation 2 remains detect-only) and detect-only when that flag
+ * is off. BMC parses only when built with CPAPDASH_WITH_BMC.
  */
 enum class DeviceManufacturer {
     UNKNOWN,
@@ -352,6 +354,11 @@ struct ParsedSession {
     Status status = Status::IN_PROGRESS;
     bool has_summary = false;
     bool has_events = false;
+
+    // Count of non-fatal parse problems (corrupt chunks, unknown event codes,
+    // unsupported sub-format blocks). 0 = clean parse. Populated by parsers
+    // that degrade gracefully (Philips); 0 elsewhere.
+    int parse_warnings = 0;
 
     // File path references (optional, populated when parsing from disk)
     std::optional<std::string> brp_file_path;

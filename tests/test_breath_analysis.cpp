@@ -173,3 +173,54 @@ TEST(BreathAnalysis, WholeFileDetectionMatchesASliceWithNoStraddlingBreath) {
         EXPECT_NEAR(whole[i].tidal_volume, sliced[i].tidal_volume, 1.0);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Philips PRS1 rate: the same shared detector at 5 Hz
+//
+// The Philips .005 flow waveform is ~5 Hz against ResMed's 25 Hz, and the
+// Philips parser feeds it straight into EDFParser::detectBreaths and
+// calculateRespiratoryMetrics. 15 bpm, 30 L/min peak: expected tidal volume is
+// amp * (period/2) * (2/pi) L/min*s, about 637 mL, independent of sample rate.
+// ---------------------------------------------------------------------------
+
+constexpr double PHILIPS_RATE = 5.0;
+
+TEST(BreathAnalysis, DetectBreathsAtThePhilipsFiveHzRate) {
+    const auto flow = sineTrain(15, /*ti=*/2.0, /*te=*/2.0, /*amp=*/30.0,
+                                PHILIPS_RATE);
+    const auto breaths = EDFParser::detectBreaths(flow, PHILIPS_RATE);
+
+    EXPECT_GE(breaths.size(), 13u);
+    EXPECT_LE(breaths.size(), 15u);
+    for (const auto& b : breaths) {
+        EXPECT_NEAR(b.tidal_volume, 637.0, 80.0);
+        EXPECT_NEAR(b.inspiratory_time, 2.0, 0.5);
+        EXPECT_NEAR(b.expiratory_time, 2.0, 0.5);
+    }
+}
+
+// The Philips path has no pressure series: flow-only metrics fill in and the
+// pressure percentile stays unset.
+TEST(BreathAnalysis, FlowOnlyMetricsAtFiveHzLeavePressureUnset) {
+    const auto flow = sineTrain(30, /*ti=*/2.0, /*te=*/2.0, /*amp=*/30.0,
+                                PHILIPS_RATE);  // two minutes
+    const auto breaths = EDFParser::detectBreaths(flow, PHILIPS_RATE);
+
+    const int samples_per_minute = static_cast<int>(PHILIPS_RATE * 60);
+    std::vector<EDFParser::BreathCycle> minute1;
+    for (const auto& b : breaths) {
+        if (b.start_idx / samples_per_minute == 1) minute1.push_back(b);
+    }
+    ASSERT_FALSE(minute1.empty());
+
+    BreathingSummary summary(std::chrono::system_clock::now());
+    EDFParser::calculateRespiratoryMetrics(flow, /*pressure_data=*/{}, minute1,
+                                           PHILIPS_RATE, 1, summary);
+
+    ASSERT_TRUE(summary.respiratory_rate.has_value());
+    EXPECT_NEAR(summary.respiratory_rate.value(), 15.0, 2.0);
+    ASSERT_TRUE(summary.tidal_volume.has_value());
+    EXPECT_NEAR(summary.tidal_volume.value(), 637.0, 80.0);
+    ASSERT_TRUE(summary.flow_p95.has_value());
+    EXPECT_FALSE(summary.pressure_p95.has_value());
+}

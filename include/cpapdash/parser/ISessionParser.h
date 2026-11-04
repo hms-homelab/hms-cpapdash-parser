@@ -18,6 +18,7 @@ namespace cpapdash::parser {
  * Implementations:
  *   ResMedParser     - wraps EDFParser (EDF+ files from ResMed AirSense 10/11)
  *   LowensteinParser - Prisma Smart/Line (WMEDF signals + XML events; requires CPAPDASH_WITH_LOWENSTEIN)
+ *   PhilipsParser    - PRS1 System One / DreamStation 1 (requires CPAPDASH_WITH_PHILIPS)
  */
 class ISessionParser {
 public:
@@ -77,9 +78,9 @@ public:
  *   5. RESMED     -- "STR.edf" present, or a DATALOG subdir, or any .edf file
  *   6. else UNKNOWN
  *
- * Detection is broader than parse support: PHILIPS is named here though
- * createParser() has no parser for it, and BMC has one only when built with
- * CPAPDASH_WITH_BMC (otherwise nullptr).
+ * Detection is broader than parse support: PHILIPS resolves to PhilipsParser
+ * only when built with CPAPDASH_WITH_PHILIPS, and BMC has a parser only when
+ * built with CPAPDASH_WITH_BMC (otherwise nullptr for either).
  */
 DeviceManufacturer detectManufacturer(const std::vector<std::string>& filenames);
 
@@ -99,7 +100,8 @@ std::unique_ptr<ISessionParser> createParser(const std::string& data_dir);
  * Create a parser for a known manufacturer.
  *
  * @return Parser instance, or nullptr if the manufacturer is not compiled in
- *         or has no parser (PHILIPS, UNKNOWN; BMC without CPAPDASH_WITH_BMC)
+ *         (LOWENSTEIN, SEFAM, BMC, PHILIPS without their build flags) or has
+ *         no parser (UNKNOWN)
  */
 std::unique_ptr<ISessionParser> createParser(DeviceManufacturer manufacturer);
 

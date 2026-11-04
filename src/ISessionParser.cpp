@@ -283,6 +283,16 @@ std::unique_ptr<ISessionParser> createParser(DeviceManufacturer manufacturer) {
             return nullptr;
 #endif
 
+        case DeviceManufacturer::PHILIPS:
+#ifdef CPAPDASH_WITH_PHILIPS
+        {
+            extern std::unique_ptr<ISessionParser> createPhilipsParser();
+            return createPhilipsParser();
+        }
+#else
+            return nullptr;
+#endif
+
         default:
             return nullptr;
     }

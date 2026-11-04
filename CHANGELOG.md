@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+## [8.11.0] - 2026-11-04
+
+### Philips Respironics PRS1 parser, off-by-default beta
+
+`PhilipsParser` reads a PRS1 card (System One and DreamStation 1, Family 0),
+behind the new `CPAPDASH_PARSER_WITH_PHILIPS` option and `CPAPDASH_WITH_PHILIPS`
+define, the same optional-parser pattern as Lowenstein, Sefam and BMC. With the
+flag on, `createParser()` resolves `PHILIPS` to it; without it, Philips stays
+detect-only, exactly as before. DreamStation 2 (format v3) is detected and
+rejected cleanly.
+
+- Chunk container: v2 framing, CRC-16/Kermit data checksum and additive-8 header
+  checksum. A corrupt chunk is skipped and counted, never fatal.
+- `.001` summary (FamilyVersion 4): mask-on/off session times and
+  `DeviceSettings` (mode, pressures, ramp, flex, humidifier, hose diameter).
+- `.002` events (FamilyVersion 4): OA, CA, H, RERA, FL, VS, PB and LL, with the
+  PRS1 end-stamp converted to onset at decode time. An unknown code abandons the
+  block, never the session.
+- `.005` waveform: flow only, sample rate derived per block (about 5 Hz), gaps
+  left empty rather than zero-filled. Breaths come from the same single pass of
+  `EDFParser::detectBreaths` the ResMed and Sefam paths use.
+- System One era (sub-V4) `.001`/`.002` blocks are detected and counted as
+  unsupported.
+
+New `ParsedSession.parse_warnings` counts non-fatal parse problems (corrupt
+chunks, unknown event codes, unsupported blocks); 0 means a clean parse, and
+parsers that do not degrade this way leave it at 0.
+
+The format reference is `docs/PHILIPS_FORMAT.md`, a cited transcription of the
+Apnea Board wiki and MIT-licensed cpap-lib (attribution in `THIRD_PARTY.md`).
+It is a clean-room implementation: no OSCAR or SleepyHead source was consulted.
+
+Tested against synthetic card fixtures only (`tests/fixtures/philips/`, from the
+deterministic generator in `gen/make_fixtures.py`). It has not been validated
+against a real card yet, which is why it is off by default.
+
 ## [8.10.0] - 2026-11-01
 
 ### A written BRP, PLD and SAD are scaled as the machine's card files are

@@ -1,0 +1,11 @@
+SerialNumber=PXTEST000DS21
+ModelNumber=410X150C
+ProductType=0x35
+Family=0
+FamilyVersion=0
+DataFormatVersion=2
+PatientFolderNum=0
+PatientFileNum=1
+FirstDate=1750000000
+LastDate=1750086400
+
