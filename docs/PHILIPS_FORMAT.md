@@ -15,15 +15,28 @@ Every fact below carries a citation. Sources:
   https://github.com/EEGKit/cpap-lib pinned at commit `f760b21205e0d3f49342eacf2eed11912881aa01`.
   Files cited: `cpap-lib/PRS1DataLoader.cs`, `cpap-lib/Calculations/CRC.cs`,
   `cpaplib_tests/PRS1_tests.cs`. Attribution in `THIRD_PARTY.md`.
-- **[S fixture @offset]** Observed in sample data (added as real cards arrive; none yet).
+- **[C section]** mattjoyce/dreamstation, Apache-2.0,
+  https://github.com/mattjoyce/dreamstation pinned at commit
+  `268d7864ddd23504ea38c0ed92bcbc992f1d20f8`, file `docs/FORMAT.md` only (prose and tables; its
+  code was not read). Used for section 9 (DataFormatVersion 3, FamilyVersion 6). Its author
+  states that field meanings were learned partly by reading OSCAR's loader and that nothing of
+  it was copied. Every [C] fact used in section 9 is checked against [S] before it is relied
+  on, and section 9 says where a [C] fact is NOT confirmed. Attribution in `THIRD_PARTY.md`.
+- **[S]** Measured on a real card. Section 9's card: a DreamStation 2 Auto CPAP, ModelNumber
+  `520X110C`, software `V1.0.2.3590`, 1,897 sessions, files decrypted by the card's owner.
+  The same physical SD card also holds a DreamStation 1 Auto CPAP (`500X110`) on v3 firmware,
+  150 sessions, unencrypted; it is used where section 9 or section 8 says so. No identifier
+  from either machine appears in this document or in any fixture.
 
 Forbidden source reminder: OSCAR / SleepyHead code was NOT consulted for any fact in this
 document and must never be. The wiki page is authored by the OSCAR documentation team but
 contains only format description; where it defers to their code ("see sleepyhead code"), that
 gap is filled from [B] or marked OPEN, never from their code.
 
-Scope note: v1 targets Family 0 (CPAP/APAP/BiPAP), System One + DreamStation 1.
-DataFormatVersion 3 files (DreamStation 2) are out of scope and must be rejected cleanly.
+Scope note: Family 0 (CPAP/APAP/BiPAP). DataFormatVersion 2: System One + DreamStation 1
+(sections 1-8). DataFormatVersion 3 with FamilyVersion 6: DreamStation 2, and DreamStation 1
+on later firmware (section 9). Encrypted DreamStation 2 files are out of scope: the parser
+reads decrypted files only.
 
 ---
 
@@ -73,7 +86,8 @@ DataFormatVersion 3 files (DreamStation 2) are out of scope and must be rejected
   | 400X110..400X150 | DreamStation CPAP Pro |
   | 700X110..700X150 | DreamStation Auto BiPAP |
   | 900X110/120/150 | DreamStation BiPAP autoSV |
-  | 410X150C / 420X150C | DreamStation 2 (DETECT ONLY, format v3, rejected) |
+  | 410X150C / 420X150C | DreamStation 2 (format v3, section 9) |
+  | 520X110C | DreamStation 2 Auto CPAP (format v3; ModelNumber from [S] `PROP.BIN`, not in [B]'s table) |
 
 ## 3. Chunk container (all file types)
 
@@ -89,7 +103,7 @@ All multi-byte integers little-endian [B PRS1DataLoader.cs:L1509-1516 uses Binar
 
 | Offset | Size | Field | Notes |
 |---|---|---|---|
-| 0x00 | 1 | DataFormatVersion | Must be 2 for this parser; 3 = DreamStation 2, reject [A #Standard-PRS1-Header-Example] [B L1524-1527,L875-899] |
+| 0x00 | 1 | DataFormatVersion | 2 for sections 3-6; 3 is a different container, section 9 [A #Standard-PRS1-Header-Example] [B L1524-1527,L875-899] |
 | 0x01 | 2 | BlockLength | Bytes, including header and checksums [A] |
 | 0x03 | 1 | FileType (HeaderType) | 0 = standard, 1 = signal/interval data [A #Known-FileType-values] [B L845-850] |
 | 0x04 | 1 | Family | 0 = CPAP/APAP/BiPAP line; 5 = ASV (v2 scope) [A] |
@@ -124,8 +138,8 @@ Block duration in seconds = interval records * seconds per interval [B L1454-145
   `crc = table[(byte ^ crc) & 0xFF] ^ (crc >> 8)` computed over the data area only
   [B CRC.cs CRC16 table (first entries 0x0000, 0x1189, 0x2312...) + Calc loop;
   B PRS1DataLoader.cs:L880-888].
-- DataFormatVersion 3 uses a 4-byte data checksum and a different container; reject
-  [B PRS1DataLoader.cs:L875,L893-899].
+- DataFormatVersion 3 uses a 4-byte data checksum and a different container
+  [B PRS1DataLoader.cs:L875,L893-899]; see section 9.
 
 ### 3.4 Data area size
 
@@ -317,3 +331,240 @@ before the first donated fixture is committed [S pending].
    "breathing not detected" event; we do neither (no zero-fill, no synthetic event) per SDD
    simplicity. Revisit if consumers want explicit gap flags.
 7. **`.004` files** are unparsed in v1 (two timestamps, purpose unclear [A #.004-files]).
+8. **v3 timestamp timezone.** [C] reports the v3 header timestamp is true UTC, from FAT
+   modification times on its card. On a real DreamStation 1 v3 card's original files, the
+   FAT wall-clock time of each summary file equals header timestamp + session duration
+   (147 of 150, within 2 s, after a constant one-hour shift from how the copy was taken).
+   That shows the header and the machine's wall clock agree; it cannot tell "true UTC on a
+   machine whose clock is UTC" from "local time stored as epoch". Treat as unix epoch UTC
+   (same as Q1) until one night with a known real start time decides it.
+9. **v3 event placement bytes.** The "seconds since it ended" readings of the one-byte field
+   in RERA/OA/CA/FL/hypopnea records, and the 2-second duration unit of 0x0e/0x0f/0x10, are
+   from [C] only. [S] confirms the 0x0f unit indirectly (statistics word 6, section 9.6) but
+   cannot confirm the others without an independent clock.
+10. **Black-box check against OSCAR (the released app, never its source).** OSCAR's import of
+   the same original card agrees with this parser in every session on obstructive,
+   clear-airway and RERA counts (1,872 DreamStation 2 sessions, 149 DreamStation 1 v3
+   sessions). Two deliberate differences: OSCAR's hypopnea count includes the 0x0b variant
+   (OSCAR = ours + 0x0b in every session), which this parser keeps out to match the
+   machine's own total (section 9.6); and OSCAR's session duration is first mask-on to last
+   mask-off, where ours is the summed mask-on time (section 9.5).
+11. **Events file longer than the summary.** In 106 [S] sessions the events file's elapsed
+   total exceeds the summary's equipment-off offset by more than a minute (67 by under 10
+   minutes, 26 by under an hour, 13 by an hour or more); never the other way. The waveform's
+   end agrees with the summary in 62 of the 83 that have a waveform and with the events file
+   in 21. The apnea, hypopnea, RERA and flow-limitation counts still equal the machine's own
+   in every one of them, so the extra event time carries no index event. The parser takes
+   the session's span from the summary. Why 21 waveforms run past the summary is open.
+12. **v3 summary codes 0x0a, 0x0c, 0x0e and the `.B03`/`.B04` files** occur on [S] and are
+   not described by [C]. They are skipped by size (section 9.4), never decoded by guess.
+
+## 9. DataFormatVersion 3, Family 0, FamilyVersion 6 (DreamStation 2)
+
+Every [C] fact here was checked against [S] unless the text says it was not. Counts are over
+the whole [S] card.
+
+### 9.1 Card layout (decrypted DreamStation 2)
+
+| Path | Content | Source |
+|---|---|---|
+| `PROP.BIN` | device properties, `key=value` lines ending CR LF; decrypted it is plain text | [S]; key names as [C] `PROP.TXT` |
+| `LOG.SEQ` | small binary file, not read | [S]; [C] "unknown" |
+| `P0` .. `Pn` | session files `<8 hex digits>.B01` (summary), `.B02` (events), `.B05` (waveform) | [S] |
+| `D/` | `.B03` files, not read | [S] |
+| `E/` | `.B04` files, not read | [S] |
+
+- The `.B0n` number equals the FileExtension header byte (n) and plays the role of the v2
+  `.00n` extension: `.B01` summary, `.B02` events, `.B05` waveform [S, every block on the card].
+- The file stem is the session number in hexadecimal, eight digits, and equals the header's
+  SessionSequenceNumber [C card layout] [S, e.g. stem `0000029F` = session 0x29f].
+- A DreamStation 1 on later firmware writes the same v3 container with plain names
+  (`PROP.TXT`, `.001`/`.002`/`.005`) [C card layout]. Not on [S].
+- `PROP.BIN` keys seen on [S]: `CF`, `SN`, `MN`, `PT`, `DF`, `DFV`, `F`, `FV`, `SV`, `FD`, `LD`,
+  `FN`, `PFN`, `EFN`, `DFN`, `SID`, `BK`, `SK`, `EK`, `DK`, `TS`, `DC`, `VC`. Used:
+  `MN` ModelNumber, `SN` SerialNumber, `F` Family, `FV` FamilyVersion, `DFV`
+  DataFormatVersion, `SV` software version, `FN` current P folder number [C keys table]
+  [S: MN=520X110C, F=0, FV=6, DFV=3]. `SID`, `BK`, `SK`, `EK`, `DK` (meaning unknown; they
+  look like key material) are kept verbatim on the device-info record for a separate
+  decryption step, never copied into the parsed session, never logged, and never taken from
+  a real card into a fixture. The remaining keys are not read.
+
+### 9.2 Chunk container
+
+The 15-byte standard header is laid out exactly as section 3.1 [C chunk container]
+[S: 161,593 of 161,593 blocks frame end to end with BlockLength; DataFormatVersion 3,
+Family 0, FamilyVersion 6 in every block].
+
+**FileType 0 (`.B01`, `.B02`, `.B03`, `.B04`): header block.** Byte 15 is a count N, then N
+pairs (code, record size in bytes), then the 8-bit header checksum: sum of every header byte
+before it [C chunk container] [S: 3,860 of 3,860 FileType 0 blocks]. Record sizes vary by
+device and firmware and must be taken from this table, never assumed [C]; [S] confirms (its
+settings record is 48 bytes against [C]'s 54).
+
+**FileType 1 (`.B05`): signal header.** Not described by [C]; measured on [S]:
+
+| Offset | Size | Field | [S] |
+|---|---|---|---|
+| 15 | 2 | interval records (u16) | 240 typical |
+| 17 | 1 | seconds per interval | 1 |
+| 18 | 1 | nsig | 1 in all 157,733 blocks |
+| 19 | 4 * nsig | per signal: kind (1), interleave (u16), one more byte | kind 0, interleave 5, last byte 8 |
+| then | 1 | terminator, 0 | 0 |
+| then | 1 | header checksum, sum8 of every byte before it | matches in 157,733 of 157,733 |
+
+The per-signal entry is 4 bytes where v2's is 3 (section 3.2). The meaning of the fourth byte
+is OPEN; it is 8 in every block, plausibly bits per sample.
+
+**Data checksum.** The last 4 bytes of the block, little-endian, are a CRC-32 of the data
+block alone: MSB-first, polynomial 0x04C11DB7, initial value 0xFFFFFFFF, no final inversion,
+each data byte fed as the 32-bit word 0x000000bb, i.e. the bytes 00 00 00 bb [C chunk
+container] [S: 3,860 of 3,860 FileType 0 blocks and 3,000 of 3,000 sampled FileType 1
+blocks]. Standard CRC-32 (reflected, final xor) does not match [S].
+
+**Data block** = from after the header checksum to 4 bytes before the end.
+
+### 9.3 Session grouping
+
+[C] reports cards where one file holds chunks of several sessions and says to group chunks by
+the header's session number, not the file name, treating a byte-identical repeat as a
+duplicate. On [S] every file's chunks carry the file stem's session number. Group by the
+header (as v2 already does, section 1).
+
+A session can also straddle patient folders: when the machine opens the next `Pn` folder
+mid-session, part of the session's files land in one folder and part in its neighbour [C
+mentions this for waveforms]. On [S], 8 sessions are split this way, 4 of them with the
+summary in one folder and the events file in the other. A reader that looks at one folder
+only reports those nights with no events; it must collect the session's files from every
+`Pn` folder of the card.
+
+### 9.4 Record stream (FileType 0 data blocks)
+
+The data block is a sequence of records: one code byte, then exactly the size the header
+block gives for that code [C summary file] [S: every data block of every `.B01`, `.B02`,
+`.B03`, `.B04` walks to exactly its end]. An unknown code can therefore be SKIPPED by size,
+unlike v2 (section 4, which must abandon the block): count it and continue.
+
+### 9.5 Summary (`.B01`)
+
+Header-block sizes on [S]: 0x00:1 0x01:48 0x02:9 0x03:4 0x04:2 0x05:4 0x06:1 0x07:4 0x08:31
+0x09:2 0x0a:4 0x0b:11 0x0c:1 0x0d:2 0x0e:6.
+
+| Code | [S] size | Record | Source / check |
+|---|---|---|---|
+| 0x00 | 1 | equipment on, first record | [C]; [S] once per summary |
+| 0x01 | 48 | settings, 9.7 | [C]; [S] once per summary |
+| 0x03 | 4 | mask on: u16 seconds since the previous time record, then 2 humidifier status bytes (9.7) | [C] |
+| 0x04 | 2 | mask off: u16 seconds since the previous time record | [C] |
+| 0x05 | 4 | pressure summary: minimum, maximum, 90th percentile, mean, one byte each, 0.1 cmH2O | [C]; [S] one per mask-on (5,063 each of 0x03/0x04/0x05/0x08) |
+| 0x08 | 31 | statistics, 9.6; ONE PER MASK-ON PERIOD on [S] | [C]; [S] |
+| 0x02 | 9 | equipment off: u16 seconds since the previous time record, 7 bytes unknown | [C] |
+| 0x0a, 0x0c, 0x0e | 4, 1, 6 | unknown, skipped by size | [S] (24, 51 and 1,896 records); not in [C] |
+
+Time records 0x02/0x03/0x04 summed in order give each one's offset from the header
+timestamp; the equipment-off offset is the session duration [C]. The THERAPY time used as
+the AHI and usage denominator is the sum of the mask-on to mask-off periods, not the
+equipment-on to equipment-off span (a mask-off break is not therapy). A summary with no
+mask-on record at all is the machine switched on and off without therapy: 25 such on [S],
+and they yield no session. [S]: that duration equals
+the events file's summed elapsed time exactly in 1,783 of 1,897 sessions, within a minute in
+8, and differs by more in 106 (section 8 Q11). The waveform's total seconds equal the summed
+mask-on time within 1% in 1,823 of 1,870 sessions that have a waveform.
+
+### 9.6 Statistics record (summary code 0x08)
+
+Fifteen u16 words and one byte [C]. [S] holds one record per mask-on period (1 to 10 per
+summary); **sum the words across a summary's records** before comparing with the session's
+events. With that sum, on [S], in every session where the value is non-zero:
+
+| Word | Meaning | [S] check |
+|---|---|---|
+| 1 | obstructive apneas | = count of event 0x06: 1,756 of 1,756 |
+| 3 | clear-airway apneas | = count of event 0x07: 1,617 of 1,617 |
+| 4 | variable breathing, minutes, floored | = event 0x0e minutes in 995 of 1,416 (approximate, as [C]) |
+| 5 | large leak, minutes, floored | = event 0x10 minutes in 552 of 630 (approximate, as [C]) |
+| 6 | periodic breathing, minutes, floored | = event 0x0f minutes: 84 of 84 |
+| 7 | snore count | [C]; not confirmed on [S] |
+| 8 | hypopneas | = count of event 0x14: 1,710 of 1,710 |
+| 9 | hypopneas, the 0x0b variant | = count of event 0x0b: 107 of 107. [C] saw 0 here; [S] counts 0x0b in this word |
+| 10 | RERAs | = count of event 0x05: 1,454 of 1,454 |
+| 11 | flow limitations | = count of event 0x0c: 1,686 of 1,686 |
+| 0, 2, 12-14, byte 30 | unknown | not used |
+
+These are the machine's own counts. The parser's counts come from the event records; the
+statistics words are a reference beside them, never a replacement, and a disagreement between
+the two is worth reporting, not resolving silently.
+
+### 9.7 Settings record (summary code 0x01)
+
+A nested sequence of (code, length, value) triples [C settings] [S: all 1,897 settings
+records walk to exactly 48 bytes]. Codes seen on [S] with their lengths: 0x00/1 0x01/2
+0x0d/2 0x2c/1 0x2d/1 0x2e/1 0x30/1 0x35/2 0x38/1 0x3e/1 0x3f/1 0x42/1 0x46/1 0x4a/1 0x4b/1.
+Meanings per [C] (lengths match [S] where both list the code):
+
+| Code | Meaning [C] |
+|---|---|
+| 0x00 | therapy mode: 0 CPAP, 1 bi-level, 2 auto CPAP, 3 auto bi-level, 4 CPAP-Check |
+| 0x01 | comfort flags (second byte: 0x10 EZ-Start, 0x20 Opti-Start, 0x40 Auto-Trial, 0x80 CPAP-Check+) |
+| 0x0a | CPAP pressure, 0.1 cmH2O |
+| 0x0d | auto CPAP minimum and maximum pressure, 0.1 cmH2O |
+| 0x0e | bi-level EPAP and IPAP |
+| 0x0f | auto bi-level EPAP min, IPAP max, PS min, PS max |
+| 0x2c | ramp time, minutes, 0 off |
+| 0x2d | ramp starting pressure, 0.1 cmH2O |
+| 0x2e | pressure relief: 0 off, 0x80 C-Flex/Bi-Flex, 0x90 C-Flex+/A-Flex, 0xa0 rise time, 0xb0 P-Flex |
+| 0x30 | pressure relief level |
+| 0x35 | humidifier, two status bytes (below) |
+| 0x38 | mask resistance, 0 off or 1-5 |
+| 0x3e / 0x3f | auto on / auto off, 0 or 0x80 |
+| 0x42 | EZ-Start on auto CPAP |
+| 0x46 | tubing type: 0 22 mm, 1 15 mm, 2 15 mm heated, 3 12 mm, 4 12 mm heated |
+| 0x4a, 0x4b | unknown ([S] only) |
+
+Humidifier status bytes (settings 0x35 and the two bytes after a mask-on time) [C]: byte 1
+bits 7-5 mode (0 fixed, 1 adaptive, 2 heated tube, 3 passover, 4 no humidifier, 5 error),
+bits 4-2 humidity level 0-5; byte 2 bits 7-5 tube temperature 0-5, bits 4-2 humidity level.
+
+Mapping to `DeviceSettings.therapy_mode` (0 CPAP, 1 APAP, 2 BiPAP): mode 0 and 4 → 0, 2 → 1,
+1 and 3 → 2.
+
+### 9.8 Events (`.B02`)
+
+Header-block sizes on [S]: 0x00:2 0x01:3 0x02:4 0x03:3 0x04:3 0x05:3 0x06:3 0x07:3 0x08:3
+0x09:2 0x0a:3 0x0b:4 0x0c:3 0x0d:2 0x0e:5 0x0f:5 0x10:5 0x11:5 0x12:4 0x13:3 0x14:3 0x15:3.
+Where [C] lists a code, its size agrees.
+
+Every record except 0x12 starts with a u16 of seconds since the previous record; summing them
+gives the record's time from the header timestamp [C] ([S] totals: section 9.5).
+
+| Code | Fields after the u16 [C] | Placement (onset, section 4 rule) | [S] records |
+|---|---|---|---|
+| 0x01 | pressure now delivered, 0.1 cmH2O | stat at clock | 307,736 |
+| 0x02 | EPAP, IPAP | stat at clock | 0 |
+| 0x03 | auto CPAP starting pressure | ignored | 10,344 |
+| 0x04 | pressure pulse, 1 byte unknown | ignored | 58,895 |
+| 0x05 | RERA; byte = seconds since it ended | clock - byte | 7,699 |
+| 0x06 | obstructive apnea; byte = seconds since | clock - byte | 30,526 |
+| 0x07 | clear-airway apnea; byte = seconds since | clock - byte | 12,091 |
+| 0x0b | hypopnea variant: 1 byte unknown, then seconds since it ended | clock - second byte | 146 |
+| 0x0c | flow limitation; seconds since | clock - byte | 20,366 |
+| 0x0d | vibratory snore, no data | clock | 15,840 |
+| 0x0e | variable breathing: u16 duration in 2-second units, then seconds since it ended | clock - since - duration | 4,577 |
+| 0x0f | periodic breathing: same layout | clock - since - duration | 92 |
+| 0x10 | large leak: same layout | clock - since - duration | 1,500 |
+| 0x11 | two-minute statistics: total leak L/min, snore count, average pressure 0.1 cmH2O | stat at clock | 312,696 |
+| 0x12 | NO time field: pressure kind (0 CPAP, 1 EPAP, 2 IPAP), pressure, u16 snore count | ignored | 12,598 |
+| 0x14 | hypopnea; byte = its duration in seconds | clock - byte | 22,665 |
+| 0x0a, 0x15 | hypopnea variants on other models [C] | clock - byte | 0 |
+
+Every other code in the header block is skipped by size and counted. The 0x12 exception is
+load-bearing: a reader that consumes a u16 delta from it desynchronizes the clock.
+Placement bytes are [C]-only, see section 8 Q9.
+
+### 9.9 Waveform (`.B05`)
+
+Same sample encoding as section 6: one signal, flow, signed 8-bit L/min. [S]: every block has
+nsig 1, kind 0, interleave 5 and a data block of exactly interval records x seconds per
+interval x interleave bytes (5 samples per second); samples span -128..127 and trace breath
+cycles. Consecutive blocks in a file abut exactly (152,664 times on [S]); the other gaps are
+whole minutes plus one second (61, 121, 181 s ...), consistent with mask-off periods. [C]
+does not read waveforms.

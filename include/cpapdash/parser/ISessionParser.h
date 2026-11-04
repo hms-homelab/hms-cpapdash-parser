@@ -72,9 +72,10 @@ public:
  *                    eight-character alphanumeric base name with at least six
  *                    digits, ".usr" ("16C01034.usr" on a RESmart GII,
  *                    eight digits on a G2S / React Health Luna)
- *   4. PHILIPS    -- any filename is "properties.txt" (the Properties.txt
- *                    identity manifest; gated on this, not on .001/.002, which
- *                    collide with BMC's raw-data numbering)
+ *   4. PHILIPS    -- any filename is the identity manifest: "properties.txt"
+ *                    (format v2), "prop.txt" or "prop.bin" (format v3,
+ *                    DreamStation 2); gated on this, not on .001/.002, which
+ *                    collide with BMC's raw-data numbering
  *   5. RESMED     -- "STR.edf" present, or a DATALOG subdir, or any .edf file
  *   6. else UNKNOWN
  *

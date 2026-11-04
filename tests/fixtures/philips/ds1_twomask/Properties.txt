@@ -1,8 +1,8 @@
-SerialNumber=PXTEST000DS21
-ModelNumber=410X150C
+SerialNumber=PXTEST0002MSK
+ModelNumber=500X110
 ProductType=0x35
 Family=0
-FamilyVersion=0
+FamilyVersion=4
 DataFormatVersion=2
 PatientFolderNum=0
 PatientFileNum=1

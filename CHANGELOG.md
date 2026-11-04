@@ -34,9 +34,51 @@ The format reference is `docs/PHILIPS_FORMAT.md`, a cited transcription of the
 Apnea Board wiki and MIT-licensed cpap-lib (attribution in `THIRD_PARTY.md`).
 It is a clean-room implementation: no OSCAR or SleepyHead source was consulted.
 
-Tested against synthetic card fixtures only (`tests/fixtures/philips/`, from the
-deterministic generator in `gen/make_fixtures.py`). It has not been validated
-against a real card yet, which is why it is off by default.
+### DreamStation 2 (decrypted) and DreamStation 1 on newer firmware
+
+The same parser reads PRS1 data format version 3, Family 0, FamilyVersion 6:
+a decrypted DreamStation 2 card (`PROP.BIN`, `.B01`/`.B02`/`.B05`) and a
+DreamStation 1 on newer firmware (`PROP.TXT`, `.001`/`.002`/`.005` with
+8-hex-digit names). Format in `docs/PHILIPS_FORMAT.md` section 9.
+
+- `detectManufacturer()` recognises `PROP.BIN` and `PROP.TXT` as Philips.
+- v3 chunk container: a header block of (record code, size) pairs, then the
+  header checksum, the data, and a CRC-32 of the data. Records are framed by
+  those sizes, so a record code the parser does not know is skipped and
+  counted in `parse_warnings` instead of ending the block.
+- A session's files are grouped by the session number inside them, including
+  a session the machine split across two `Pn` folders.
+- New `ParsedSession.machine_reported` (`MachineReportedCounts`): the
+  machine's own counts from its statistics records, beside ours as reference.
+  It never replaces our counts or AHI, which always come from the event
+  records.
+- The rarer hypopnea record (code 0x0b), which the machine keeps out of its
+  own hypopnea total, is recorded as an OTHER event and is not in AHI, so AHI
+  matches the machine's.
+- `PhilipsParser::isEncryptedCard(dir)` tells an encrypted DreamStation 2 card
+  apart from an unreadable one. This library never decrypts.
+- `PhilipsDeviceInfo` gains the short-key identity fields, including five
+  `PROP.BIN` fields of unknown meaning (`SID`, `BK`, `SK`, `EK`, `DK`), kept for
+  a separate decryption step. They never reach `ParsedSession`.
+- Sessions carry `product_name` and `firmware` from the identity file.
+
+Checked on real cards: a decrypted DreamStation 2 (1,872 sessions) and a
+DreamStation 1 on v3 firmware (149 sessions). On both, our obstructive,
+clear-airway, hypopnea, RERA and flow-limitation counts equal the machine's own
+in every session, with no parse warnings, and the encrypted original of the
+DreamStation 2 card is reported by `isEncryptedCard()`.
+
+### Philips duration is therapy time
+
+For DreamStation 1 too: a session's `duration_seconds`, the denominator of
+AHI and usage, is now the sum of its mask-on periods, not the span from the
+first mask-on to the last mask-off. A night with a mask-off break used to
+count the break as therapy, which inflated usage and deflated AHI.
+
+Tested against synthetic card fixtures (`tests/fixtures/philips/`, from the
+deterministic generator in `gen/make_fixtures.py`). System One and
+DreamStation 1 on the older format (version 2) have not been validated against
+a real card yet, which is part of why the parser is off by default.
 
 ## [8.10.0] - 2026-11-01
 
@@ -990,8 +1032,7 @@ duty cycle, and a flatness scalar alone measures almost none of it.
   required and the `PHILIPS` manufacturer enum.
 
   Supported hardware is ResMed (EDF) and Löwenstein Prisma (WMEDF/XML). A
-  clean-room DreamStation parser may be added later behind the same flag, which
-  is what SDD-002 and the private hms-cpapdash-parser-philips fork exist for.
+  clean-room DreamStation parser may be added later behind the same flag.
 
 ## [2026.1.0] - 2026-04-02
 

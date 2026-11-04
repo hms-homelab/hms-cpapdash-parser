@@ -32,6 +32,16 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## mattjoyce/dreamstation (Apache-2.0)
+
+Format facts for DataFormatVersion 3, Family 0, FamilyVersion 6 in section 9 of
+`docs/PHILIPS_FORMAT.md` (the v3 chunk header block, the CRC-32 form of the data checksum, and
+the summary, statistics, settings and event record meanings) are transcribed from
+`docs/FORMAT.md` of **dreamstation** by Matt Joyce, https://github.com/mattjoyce/dreamstation,
+at commit `268d7864ddd23504ea38c0ed92bcbc992f1d20f8`, licensed under the Apache License,
+Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0). Facts only were transcribed, each
+checked against a real card before use; none of that project's code was read or copied.
+
 ## Apnea Board wiki
 
 The PRS1 format description in `docs/PHILIPS_FORMAT.md` also transcribes format facts from

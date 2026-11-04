@@ -2,7 +2,9 @@
 
 // Chunk container framing + checksums.
 // PROVENANCE: docs/PHILIPS_FORMAT.md sections 3.1-3.4 ([A] wiki header table,
-// [B] cpap-lib HeaderRecord/DataChunk + CRC.cs @f760b21). No OSCAR source.
+// [B] cpap-lib HeaderRecord/DataChunk + CRC.cs @f760b21) and, for
+// DataFormatVersion 3, section 9.2 ([C] header block + CRC-32 form, the signal
+// entry layout measured on [S]). No OSCAR source.
 
 #include "cpapdash/parser/PhilipsParser.h"
 #include <iostream>
@@ -10,6 +12,31 @@
 namespace cpapdash::parser {
 
 namespace {
+
+// v3 data checksum (doc 9.2): CRC-32, MSB-first, polynomial 0x04C11DB7, initial
+// value 0xFFFFFFFF, no final inversion, each data byte fed as the 32-bit word
+// 0x000000bb, i.e. the byte sequence 00 00 00 bb.
+uint32_t crc32WordFed(const uint8_t* data, size_t len) {
+    static const auto kTable = [] {
+        std::array<uint32_t, 256> t{};
+        for (uint32_t i = 0; i < 256; ++i) {
+            uint32_t c = i << 24;
+            for (int b = 0; b < 8; ++b) {
+                c = (c & 0x80000000u) ? (c << 1) ^ 0x04C11DB7u : (c << 1);
+            }
+            t[i] = c;
+        }
+        return t;
+    }();
+    uint32_t crc = 0xFFFFFFFFu;
+    auto feed = [&](uint8_t byte) {
+        crc = (crc << 8) ^ kTable[((crc >> 24) ^ byte) & 0xFFu];
+    };
+    for (size_t i = 0; i < len; ++i) {
+        feed(0); feed(0); feed(0); feed(data[i]);
+    }
+    return crc;
+}
 
 // CRC-16/Kermit (reflected CCITT, poly 0x8408, init 0, no final xor).
 // Computed bitwise; equivalent to the table in doc 3.3.
@@ -73,30 +100,46 @@ std::vector<PhilipsChunk> PhilipsParser::readChunks(const uint8_t* data, size_t 
             break;
         }
 
-        // DataFormatVersion 2 only; 3 = DreamStation 2 container (doc 3.1/3.3).
-        if (chunk.data_format_version != 2) {
+        // DataFormatVersion 2 (doc 3) and 3 (doc 9.2); anything else is skipped.
+        const bool v3 = chunk.data_format_version == 3;
+        if (chunk.data_format_version != 2 && !v3) {
             warnings.unsupported_chunks++;
             pos += chunk.block_length;
             continue;
         }
+        const size_t data_crc_len = v3 ? 4 : 2;
 
-        // Optional signal extra header (doc 3.2)
         size_t header_len = STD_HEADER_LEN;
         if (chunk.file_type == 1) {
+            // Signal extra header (doc 3.2). v3 per-signal entries are 4 bytes,
+            // v2's are 3 (doc 9.2).
             if (pos + STD_HEADER_LEN + 4 > len) { warnings.truncated_chunks++; break; }
             const uint8_t* s = h + STD_HEADER_LEN;
             chunk.interval_records    = readU16(s);
             chunk.seconds_per_interval = s[2];
             uint8_t nsig = s[3];
-            size_t sig_table = 4 + static_cast<size_t>(nsig) * 3 + 1;  // + terminator
+            const size_t entry = v3 ? 4 : 3;
+            size_t sig_table = 4 + static_cast<size_t>(nsig) * entry + 1;  // + terminator
             if (pos + STD_HEADER_LEN + sig_table > len) { warnings.truncated_chunks++; break; }
             for (uint8_t i = 0; i < nsig; ++i) {
+                const uint8_t* e = s + 4 + i * entry;
                 PhilipsChunk::WaveformInfo w;
-                w.sample_format = s[4 + i * 3];
-                w.interleave    = readU16(s + 4 + i * 3 + 1);
+                w.sample_format = e[0];
+                w.interleave    = readU16(e + 1);
+                if (v3) w.extra = e[3];
                 chunk.waveforms.push_back(w);
             }
             header_len += sig_table;
+        } else if (chunk.file_type == 0 && v3) {
+            // v3 header block (doc 9.2): count N, then N (code, record size) pairs.
+            if (pos + STD_HEADER_LEN + 1 > len) { warnings.truncated_chunks++; break; }
+            size_t n = h[STD_HEADER_LEN];
+            if (pos + STD_HEADER_LEN + 1 + 2 * n > len) { warnings.truncated_chunks++; break; }
+            for (size_t i = 0; i < n; ++i) {
+                chunk.record_size[h[STD_HEADER_LEN + 1 + 2 * i]] =
+                    h[STD_HEADER_LEN + 2 + 2 * i];
+            }
+            header_len += 1 + 2 * n;
         } else if (chunk.file_type != 0) {
             // Unknown FileType: we cannot know its extra-header size, so we
             // cannot locate the data area. Skip the whole block by length.
@@ -114,14 +157,19 @@ std::vector<PhilipsChunk> PhilipsParser::readChunks(const uint8_t* data, size_t 
             break;
         }
 
-        // Data area (doc 3.4): BlockLength - header - 1 (hdr sum) - 2 (CRC).
-        size_t data_size = chunk.block_length - header_len - 1 - 2;
+        // Data area (doc 3.4 / 9.2): BlockLength - header - 1 (hdr sum) - CRC.
+        if (chunk.block_length < header_len + 1 + data_crc_len) {
+            warnings.truncated_chunks++;
+            break;
+        }
+        size_t data_size = chunk.block_length - header_len - 1 - data_crc_len;
         size_t data_pos = pos + header_len + 1;
-        if (data_pos + data_size + 2 > len) { warnings.truncated_chunks++; break; }
+        if (data_pos + data_size + data_crc_len > len) { warnings.truncated_chunks++; break; }
 
-        uint16_t crc_stored = readU16(data + data_pos + data_size);
-        uint16_t crc_calc = crc16Kermit(data + data_pos, data_size);
-        if (crc_calc != crc_stored) {
+        const bool crc_ok = v3
+            ? readU32(data + data_pos + data_size) == crc32WordFed(data + data_pos, data_size)
+            : readU16(data + data_pos + data_size) == crc16Kermit(data + data_pos, data_size);
+        if (!crc_ok) {
             warnings.crc_failures++;
             pos += chunk.block_length;
             continue;  // skip this chunk, keep the session (doc 3.3 / SDD)

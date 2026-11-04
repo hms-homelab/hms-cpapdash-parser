@@ -82,9 +82,12 @@ bool isBmcUsrFilename(const std::string& filename) {
     return digits >= 6;
 }
 
-// Philips Respironics identity manifest.
+// Philips Respironics identity manifest: Properties.txt (format v2), PROP.TXT
+// (DreamStation 1 on v3 firmware) or PROP.BIN (DreamStation 2, encrypted or not).
+// docs/PHILIPS_FORMAT.md sections 2 and 9.1.
 bool isPropertiesTxtFilename(const std::string& filename) {
-    return toLower(basenameOf(filename)) == "properties.txt";
+    const std::string name = toLower(basenameOf(filename));
+    return name == "properties.txt" || name == "prop.txt" || name == "prop.bin";
 }
 
 // "DATA_7" and the like -- a Sefam session folder.

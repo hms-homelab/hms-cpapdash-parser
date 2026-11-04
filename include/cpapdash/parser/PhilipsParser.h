@@ -2,13 +2,18 @@
 
 #ifdef CPAPDASH_WITH_PHILIPS
 
-// PhilipsParser - Philips Respironics PRS1 (System One / DreamStation 1)
+// PhilipsParser - Philips Respironics PRS1 (System One, DreamStation 1, and
+// decrypted DreamStation 2)
 //
-// PROVENANCE (clean-room, SDD-002): implemented exclusively from
-// docs/PHILIPS_FORMAT.md, our cited transcription of
+// PROVENANCE: implemented exclusively from docs/PHILIPS_FORMAT.md, our cited
+// transcription of
 //   [A] Apnea Board wiki "PR System One Data Format"
 //   [B] cpap-lib (MIT, StagPoint) @ f760b21205e0d3f49342eacf2eed11912881aa01
-// OSCAR / SleepyHead source was never consulted and must never be.
+//   [C] mattjoyce/dreamstation docs/FORMAT.md (Apache-2.0) @ 268d786, format v3
+//       only, every fact checked on a real card [S] (doc section 9, SDD-009)
+// OSCAR / SleepyHead source was never consulted and must never be. This parser
+// never decrypts: an encrypted DreamStation 2 card is reported by
+// isEncryptedCard() and left to a separate decryption step.
 
 #include "cpapdash/parser/ISessionParser.h"
 #include "cpapdash/parser/Models.h"
@@ -18,29 +23,41 @@
 #include <chrono>
 #include <map>
 #include <vector>
+#include <array>
 #include <cstdint>
 
 namespace cpapdash::parser {
 
-/** Properties.txt identity manifest (doc section 2). */
+/**
+ * Identity manifest: Properties.txt (v2, doc section 2) or PROP.TXT / PROP.BIN
+ * (v3, doc 9.1, short keys).
+ */
 struct PhilipsDeviceInfo {
     std::string serial_number;
-    std::string model_number;                 // e.g. "560P", "500X110"
+    std::string model_number;                 // e.g. "560P", "500X110", "520X110C"
     std::optional<int> family;
     std::optional<int> family_version;
     std::optional<std::string> data_format_version;
-    std::optional<int> patient_folder_num;
+    std::optional<int> patient_folder_num;    // PatientFolderNum (v2) / FN (v3)
+    std::string software_version;             // SV (v3), "" when absent
+
+    // v3 PROP.BIN keys of unknown meaning that look like key material
+    // (SDD-009 D2): kept verbatim so a SEPARATE decryption step can use them.
+    // Never copied into ParsedSession, never logged.
+    std::string sid, bk, sk, ek, dk;
 };
 
 /** Never-fatal parse problem counters (doc: skip corrupt, keep session). */
 struct PhilipsParseWarnings {
-    int crc_failures = 0;        // data-CRC mismatch, chunk skipped
-    int truncated_chunks = 0;    // header/body ran past EOF, stop clean
-    int unknown_event_codes = 0; // unknown .002 code, rest of block abandoned
-    int unsupported_chunks = 0;  // format v!=2, sub-V4 schema, nsig>1, ...
+    int crc_failures = 0;         // data-CRC mismatch, chunk skipped
+    int truncated_chunks = 0;     // header/body ran past EOF, stop clean
+    int unknown_event_codes = 0;  // v2: unknown .002 code, rest of block abandoned
+    int unknown_record_codes = 0; // v3: unknown record code, skipped by its size
+    int unsupported_chunks = 0;   // unknown format version, sub-V4 schema, nsig>1, ...
 
     int total() const {
-        return crc_failures + truncated_chunks + unknown_event_codes + unsupported_chunks;
+        return crc_failures + truncated_chunks + unknown_event_codes +
+               unknown_record_codes + unsupported_chunks;
     }
 };
 
@@ -57,16 +74,27 @@ struct PhilipsChunk {
     uint32_t timestamp_raw = 0;    // unix epoch seconds (doc 8 Q1: treated as UTC)
     std::chrono::system_clock::time_point timestamp;
 
-    // Signal extra header (doc 3.2), FileType 1 only
+    // Signal extra header (doc 3.2; v3 doc 9.2), FileType 1 only
     struct WaveformInfo {
         uint8_t sample_format = 0;
         uint16_t interleave = 0;
+        uint8_t extra = 0;         // v3 only: 4th byte of the entry (8 on [S]; meaning OPEN)
     };
     uint16_t interval_records = 0;
     uint8_t seconds_per_interval = 0;
     std::vector<WaveformInfo> waveforms;
 
+    // v3 FileType 0 header block (doc 9.2): record size per code, -1 = code absent.
+    // All -1 on a v2 chunk, whose record sizes are implied by the code tables.
+    std::array<int16_t, 256> record_size = makeAbsentSizes();
+
     std::vector<uint8_t> data;     // payload (CRC already verified)
+
+    static std::array<int16_t, 256> makeAbsentSizes() {
+        std::array<int16_t, 256> a{};
+        a.fill(-1);
+        return a;
+    }
 
     /** Block duration in seconds (signal chunks; 0 for standard chunks). */
     int durationSeconds() const {
@@ -74,12 +102,20 @@ struct PhilipsChunk {
     }
 };
 
-/** One session id's file set as discovered on disk. */
+/**
+ * One session's file set as discovered on disk, grouped by the session number in
+ * the chunk headers (doc 9.3), not by file name: a file can hold chunks of
+ * several sessions, and a session's chunks can sit in several files.
+ */
 struct PhilipsSessionFiles {
-    std::string session_id;    // 10-digit stem
-    std::string summary_path;  // .001, "" if absent
-    std::string events_path;   // .002, "" if absent
-    std::string waveform_path; // .005, "" if absent
+    std::string session_id;     // file stem: 10 decimal digits (v2) or 8 hex digits (v3)
+    uint32_t session_number = 0;
+    std::string summary_path;   // first .001 / .B01 holding this session, "" if absent
+    std::string events_path;    // first .002 / .B02, "" if absent
+    std::string waveform_path;  // first .005 / .B05, "" if absent
+    // Every file holding a chunk of this session, per kind (the *_path above is
+    // the first of each).
+    std::vector<std::string> summary_files, events_files, waveform_files;
 };
 
 class PhilipsParser : public ISessionParser {
@@ -103,32 +139,63 @@ public:
     }
 
     // ── Phase 1 modules ──────────────────────────────────────────────
-    /** Parse Properties.txt (key=value, stops at first empty line). */
+    /**
+     * Parse the identity manifest: Properties.txt (long keys) or PROP.TXT /
+     * decrypted PROP.BIN (short keys, doc 9.1). key=value, stops at the first
+     * empty line. nullopt when the file is missing or holds no key=value line.
+     */
     static std::optional<PhilipsDeviceInfo> parseProperties(const std::string& filepath);
 
     /** ModelNumber -> product name (doc section 2 table; MIT cpap-lib derived). */
     static std::optional<std::string> modelName(const std::string& model_number);
 
     /**
-     * Frame + validate all chunks in a buffer (doc section 3).
-     * Chunks failing the data CRC are counted and omitted; a truncated tail
-     * stops cleanly. Non-v2 chunks are counted as unsupported and skipped.
+     * Frame + validate all chunks in a buffer (doc section 3; v3 doc 9.2).
+     * DataFormatVersion 2 and 3 are framed; any other version is counted as
+     * unsupported and skipped. Chunks failing the data CRC are counted and
+     * omitted; a truncated tail stops cleanly.
      */
     static std::vector<PhilipsChunk> readChunks(const uint8_t* data, size_t len,
                                                 PhilipsParseWarnings& warnings);
 
-    /** Group <10-digit>.001/.002/.005 files in dir by session id (sorted ascending). */
+    /**
+     * Discover the sessions in dir: .001/.002/.005 with 10-decimal-digit stems
+     * (v2), and .B01/.B02/.B05 or .001/.002/.005 with 8-hex-digit stems (v3).
+     * Grouped by the session number in the chunk headers, sorted ascending.
+     */
     static std::vector<PhilipsSessionFiles> discoverSessions(const std::string& dir);
+
+    /**
+     * True when dir (or its parent) holds a DreamStation 2 card that is still
+     * encrypted: a PROP.BIN that is not plain key=value text, or session files
+     * that frame as v3 but fail every data CRC. This parser never decrypts; the
+     * caller reports "needs decrypting" instead of a generic failure (SDD-009 D1).
+     */
+    static bool isEncryptedCard(const std::string& dir);
 
     // ── Phase 2 modules ──────────────────────────────────────────────
     /**
-     * .001 summary (doc section 5, FamilyVersion >= 4 only; older schemas are
-     * counted as unsupported and skipped pending real-card confirmation, doc Q3).
-     * Fills session start/end/duration/settings.
+     * .001 / .B01 summary. Dispatches per chunk: v2 FamilyVersion >= 4 (doc
+     * section 5; older schemas counted unsupported, doc Q3) or v3 FamilyVersion 6
+     * (doc 9.5, parseSummaryV3). Fills session start/end, settings, and
+     * duration_seconds as the SUM of mask-on periods (SDD-009 D12).
      */
     static bool parseSummary(const std::vector<PhilipsChunk>& chunks,
                              ParsedSession& session,
                              PhilipsParseWarnings& warnings);
+
+    /**
+     * One v3 FamilyVersion 6 summary chunk (doc 9.5-9.7): time records, settings,
+     * statistics summed into session.machine_reported. Appends this chunk's
+     * mask-on spans to mask_on_spans. Unknown codes are skipped by size and
+     * counted. false when the chunk has no usable mask-on period.
+     */
+    static bool parseSummaryV3(const PhilipsChunk& chunk,
+                               ParsedSession& session,
+                               std::vector<std::pair<std::chrono::system_clock::time_point,
+                                                     std::chrono::system_clock::time_point>>&
+                                   mask_on_spans,
+                               PhilipsParseWarnings& warnings);
 
     /** Machine-graphed stat sample from .002 code 0x11 (doc 4.2). */
     struct EventStat {
@@ -139,13 +206,25 @@ public:
     };
 
     /**
-     * .002 events (doc section 4; FamilyVersion >= 4 table only, doc Q2).
+     * .002 / .B02 events. Dispatches per chunk: v2 FamilyVersion >= 4 (doc 4.2;
+     * table only, doc Q2) or v3 FamilyVersion 6 (doc 9.8, parseEventsV3).
      * Emits onset-stamped SleepEvents (end->onset conversion done here).
      */
     static bool parseEvents(const std::vector<PhilipsChunk>& chunks,
                             ParsedSession& session,
                             std::vector<EventStat>& stats,
                             PhilipsParseWarnings& warnings);
+
+    /**
+     * One v3 FamilyVersion 6 events chunk (doc 9.8). Records framed by the
+     * chunk's record_size table; 0x12 carries no time field; the 0x0b hypopnea
+     * variant is emitted as EventType::OTHER (kept out of AHI, SDD-009 D10);
+     * unknown codes skipped by size and counted.
+     */
+    static bool parseEventsV3(const PhilipsChunk& chunk,
+                              ParsedSession& session,
+                              std::vector<EventStat>& stats,
+                              PhilipsParseWarnings& warnings);
 
     /** Family 0 V4 event code -> unified EventType (nullopt = not an event / unmapped). */
     static std::optional<EventType> mapFamily0EventCode(uint8_t code);

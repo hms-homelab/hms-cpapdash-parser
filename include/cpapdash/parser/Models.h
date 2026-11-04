@@ -33,9 +33,9 @@ enum class EventType {
  * Device manufacturer identifier. Detection is broader than parse support:
  * detectManufacturer() names a card so a foreign one is labeled and rejected
  * cleanly even when createParser() returns nullptr for it. PHILIPS is
- * parse-supported behind CPAPDASH_WITH_PHILIPS (System One + DreamStation 1,
- * Family 0; DreamStation 2 remains detect-only) and detect-only when that flag
- * is off. BMC parses only when built with CPAPDASH_WITH_BMC.
+ * parse-supported behind CPAPDASH_WITH_PHILIPS (System One, DreamStation 1 and
+ * decrypted DreamStation 2, Family 0) and detect-only when that flag is off.
+ * BMC parses only when built with CPAPDASH_WITH_BMC.
  */
 enum class DeviceManufacturer {
     UNKNOWN,
@@ -157,6 +157,28 @@ struct Breath {
     double inspiratory_time = 0;  // s
     double expiratory_time = 0;   // s
     double flow_limitation = 0;   // 0..1
+};
+
+/**
+ * MachineReportedCounts - the machine's OWN tally of a session, as it writes it to
+ * the card (Philips PRS1 v3 statistics record, docs/PHILIPS_FORMAT.md 9.6).
+ *
+ * Reference only, the same standing as ResMed's STR: our counts and AHI always
+ * come from the event records in `events`, and nothing here ever overwrites
+ * `metrics` (calculated metrics supersede the machine's). Kept so a consumer can
+ * show both and notice when they differ. Unset for every parser that has no
+ * such record.
+ */
+struct MachineReportedCounts {
+    int obstructive_apneas = 0;
+    int clear_airway_apneas = 0;
+    int hypopneas = 0;                   ///< the machine's hypopnea total (Philips 0x14)
+    int hypopneas_variant = 0;           ///< Philips 0x0b, which the machine keeps OUT of its total
+    int reras = 0;
+    int flow_limitations = 0;
+    int periodic_breathing_minutes = 0;  ///< floored
+    int variable_breathing_minutes = 0;  ///< floored; approximate against the events
+    int large_leak_minutes = 0;          ///< floored; approximate against the events
 };
 
 /**
@@ -359,6 +381,10 @@ struct ParsedSession {
     // unsupported sub-format blocks). 0 = clean parse. Populated by parsers
     // that degrade gracefully (Philips); 0 elsewhere.
     int parse_warnings = 0;
+
+    // The machine's own counts, beside ours, never instead of them. Set only by
+    // parsers whose format carries them (Philips PRS1 v3); see MachineReportedCounts.
+    std::optional<MachineReportedCounts> machine_reported;
 
     // File path references (optional, populated when parsing from disk)
     std::optional<std::string> brp_file_path;

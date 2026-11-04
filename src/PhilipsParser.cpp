@@ -2,7 +2,8 @@
 
 // Identity, session discovery and assembly.
 // PROVENANCE: docs/PHILIPS_FORMAT.md sections 1-2 ([A] wiki card layout,
-// [B] cpap-lib Properties/model table @f760b21, MIT, see THIRD_PARTY.md).
+// [B] cpap-lib Properties/model table @f760b21, MIT, see THIRD_PARTY.md) and
+// section 9.1/9.3 (v3 card layout, PROP keys, grouping; [C] checked on [S]).
 // No OSCAR source.
 
 #include "cpapdash/parser/PhilipsParser.h"
@@ -23,16 +24,28 @@ std::unique_ptr<ISessionParser> createPhilipsParser() {
     return std::make_unique<PhilipsParser>();
 }
 
-// ── Properties.txt ──────────────────────────────────────────────────────────
+// ── Identity manifest: Properties.txt / PROP.TXT / PROP.BIN ─────────────────
+
+namespace {
+
+// A manifest key is letters and digits only. Holding to that keeps the random
+// bytes of a still-encrypted PROP.BIN from passing as key=value lines.
+bool isManifestKey(const std::string& key) {
+    return !key.empty() &&
+           std::all_of(key.begin(), key.end(),
+                       [](unsigned char c) { return std::isalnum(c) != 0; });
+}
+
+} // namespace
 
 std::optional<PhilipsDeviceInfo> PhilipsParser::parseProperties(const std::string& filepath) {
-    std::ifstream f(filepath);
+    std::ifstream f(filepath, std::ios::binary);
     if (!f.is_open()) return std::nullopt;
 
     PhilipsDeviceInfo info;
     std::string line;
     bool any = false;
-    // key=value per line, reading stops at the first empty line (doc section 2)
+    // key=value per line, reading stops at the first empty line (doc 2, 9.1)
     while (std::getline(f, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.empty()) break;
@@ -40,18 +53,27 @@ std::optional<PhilipsDeviceInfo> PhilipsParser::parseProperties(const std::strin
         if (eq == std::string::npos) continue;
         std::string key = line.substr(0, eq);
         std::string value = line.substr(eq + 1);
+        if (!isManifestKey(key)) continue;
         any = true;
 
         auto toInt = [](const std::string& s) -> std::optional<int> {
             try { return std::stoi(s); } catch (...) { return std::nullopt; }
         };
 
-        if (key == "SerialNumber")      info.serial_number = value;
-        else if (key == "ModelNumber")  info.model_number = value;
-        else if (key == "Family")       info.family = toInt(value);
-        else if (key == "FamilyVersion") info.family_version = toInt(value);
-        else if (key == "DataFormatVersion") info.data_format_version = value;
-        else if (key == "PatientFolderNum")  info.patient_folder_num = toInt(value);
+        // v2 long keys (doc 2) and v3 short keys (doc 9.1)
+        if (key == "SerialNumber" || key == "SN")            info.serial_number = value;
+        else if (key == "ModelNumber" || key == "MN")        info.model_number = value;
+        else if (key == "Family" || key == "F")              info.family = toInt(value);
+        else if (key == "FamilyVersion" || key == "FV")      info.family_version = toInt(value);
+        else if (key == "DataFormatVersion" || key == "DFV") info.data_format_version = value;
+        else if (key == "PatientFolderNum" || key == "FN")   info.patient_folder_num = toInt(value);
+        else if (key == "SV")  info.software_version = value;
+        // Key-like fields, kept for a separate decryption step (SDD-009 D2).
+        else if (key == "SID") info.sid = value;
+        else if (key == "BK")  info.bk = value;
+        else if (key == "SK")  info.sk = value;
+        else if (key == "EK")  info.ek = value;
+        else if (key == "DK")  info.dk = value;
     }
 
     if (!any) return std::nullopt;
@@ -80,6 +102,8 @@ std::optional<std::string> PhilipsParser::modelName(const std::string& model_num
         { "501V", "Dorma 500 Auto (System One 60 Series)" },
         { "420X150C", "DreamStation 2 Advanced CPAP" },
         { "410X150C", "DreamStation 2 CPAP" },
+        // Not in [B]'s table; ModelNumber measured on [S] (doc 2, 9.1).
+        { "520X110C", "DreamStation 2 Auto CPAP" },
         { "700X110", "DreamStation Auto BiPAP" },
         { "700X120", "DreamStation Auto BiPAP" },
         { "700X130", "DreamStation Auto BiPAP" },
@@ -139,37 +163,127 @@ std::optional<std::string> PhilipsParser::modelName(const std::string& model_num
 
 // ── Session discovery ───────────────────────────────────────────────────────
 
-std::vector<PhilipsSessionFiles> PhilipsParser::discoverSessions(const std::string& dir) {
-    std::map<std::string, PhilipsSessionFiles> groups;  // ordered by stem
+namespace {
 
+enum class FileKind { None, Summary, Events, Waveform };
+
+std::string lowercase(std::string s) {
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return s;
+}
+
+bool allOf(const std::string& s, int (*pred)(int)) {
+    return !s.empty() &&
+           std::all_of(s.begin(), s.end(), [&](unsigned char c) { return pred(c) != 0; });
+}
+
+// v2: decimal-digit stem, .001/.002/.005 (doc 1). v3: 8-hex-digit stem, with
+// .B01/.B02/.B05 (DreamStation 2) or .001/.002/.005 (DreamStation 1 on v3
+// firmware) (doc 9.1).
+FileKind kindOf(const fs::path& path) {
+    const std::string stem = path.stem().string();
+    const std::string ext = lowercase(path.extension().string());
+    const bool decimal_stem = allOf(stem, ::isdigit);
+    const bool hex_stem = stem.size() == 8 && allOf(stem, ::isxdigit);
+    if (!decimal_stem && !hex_stem) return FileKind::None;
+
+    if (ext == ".001") return FileKind::Summary;
+    if (ext == ".002") return FileKind::Events;
+    if (ext == ".005") return FileKind::Waveform;
+    if (hex_stem) {
+        if (ext == ".b01") return FileKind::Summary;
+        if (ext == ".b02") return FileKind::Events;
+        if (ext == ".b05") return FileKind::Waveform;
+    }
+    return FileKind::None;
+}
+
+// The session number a file NAME implies: hex for an 8-character v3 stem, else
+// decimal. Only a fallback, for files whose chunk headers cannot be walked.
+std::optional<uint32_t> stemSessionNumber(const std::string& stem) {
+    try {
+        if (stem.size() == 8 && allOf(stem, ::isxdigit))
+            return static_cast<uint32_t>(std::stoul(stem, nullptr, 16));
+        if (allOf(stem, ::isdigit))
+            return static_cast<uint32_t>(std::stoul(stem, nullptr, 10));
+    } catch (...) {}
+    return std::nullopt;
+}
+
+// Session numbers of the chunks in a file, in file order, without validating
+// checksums: a cheap header walk by BlockLength (doc 3.1). Stops at the first
+// header that does not look like a v2/v3 chunk.
+std::vector<uint32_t> sessionNumbersInFile(const fs::path& path) {
+    std::vector<uint32_t> out;
+    std::ifstream f(path, std::ios::binary);
+    if (!f.is_open()) return out;
+    f.seekg(0, std::ios::end);
+    const auto size = static_cast<uint64_t>(f.tellg());
+    uint64_t pos = 0;
+    uint8_t h[15];
+    while (pos + sizeof(h) <= size) {
+        f.seekg(static_cast<std::streamoff>(pos));
+        if (!f.read(reinterpret_cast<char*>(h), sizeof(h))) break;
+        const uint16_t block_len = static_cast<uint16_t>(h[1] | (h[2] << 8));
+        if ((h[0] != 2 && h[0] != 3) || block_len < 18 || pos + block_len > size) break;
+        const uint32_t session = static_cast<uint32_t>(h[7]) | (static_cast<uint32_t>(h[8]) << 8) |
+                                 (static_cast<uint32_t>(h[9]) << 16) |
+                                 (static_cast<uint32_t>(h[10]) << 24);
+        if (std::find(out.begin(), out.end(), session) == out.end()) out.push_back(session);
+        pos += block_len;
+    }
+    return out;
+}
+
+} // namespace
+
+std::vector<PhilipsSessionFiles> PhilipsParser::discoverSessions(const std::string& dir) {
+    // Ordered by session number. Files are visited in name order so the *_path
+    // "first file" of each kind is deterministic.
+    std::map<uint32_t, PhilipsSessionFiles> groups;
+
+    std::vector<fs::path> files;
     std::error_code ec;
     for (const auto& entry : fs::directory_iterator(dir, ec)) {
-        if (!entry.is_regular_file(ec)) continue;
-        const auto path = entry.path();
-        std::string stem = path.stem().string();
-        std::string ext = path.extension().string();
+        if (entry.is_regular_file(ec) && kindOf(entry.path()) != FileKind::None)
+            files.push_back(entry.path());
+    }
+    std::sort(files.begin(), files.end());
 
-        if (stem.empty() ||
-            !std::all_of(stem.begin(), stem.end(),
-                         [](unsigned char c) { return std::isdigit(c); })) {
-            continue;
+    for (const auto& path : files) {
+        const FileKind kind = kindOf(path);
+        const std::string stem = path.stem().string();
+        auto sessions = sessionNumbersInFile(path);
+        if (sessions.empty()) {
+            // Unframeable (corrupt, or still encrypted): fall back to the name so
+            // the file is still accounted for; its chunks will not parse.
+            auto n = stemSessionNumber(stem);
+            if (!n) continue;
+            sessions.push_back(*n);
         }
-
-        auto& g = groups[stem];
-        g.session_id = stem;
-        if (ext == ".001") g.summary_path = path.string();
-        else if (ext == ".002") g.events_path = path.string();
-        else if (ext == ".005") g.waveform_path = path.string();
+        const auto stem_number = stemSessionNumber(stem);
+        for (uint32_t session : sessions) {
+            auto& g = groups[session];
+            g.session_number = session;
+            if (g.session_id.empty() || (stem_number && *stem_number == session))
+                g.session_id = stem;
+            auto add = [&](std::string& first, std::vector<std::string>& all) {
+                if (first.empty()) first = path.string();
+                all.push_back(path.string());
+            };
+            switch (kind) {
+                case FileKind::Summary:  add(g.summary_path, g.summary_files); break;
+                case FileKind::Events:   add(g.events_path, g.events_files); break;
+                case FileKind::Waveform: add(g.waveform_path, g.waveform_files); break;
+                case FileKind::None:     break;
+            }
+        }
     }
 
     std::vector<PhilipsSessionFiles> out;
-    for (auto& [stem, g] : groups) {
-        if (g.summary_path.empty() && g.events_path.empty() && g.waveform_path.empty())
-            continue;
-        out.push_back(std::move(g));
-    }
-    // std::map iterates lexicographically; zero-padded 10-digit stems make
-    // that numeric order too.
+    out.reserve(groups.size());
+    for (auto& [number, g] : groups) out.push_back(std::move(g));
     return out;
 }
 
@@ -184,30 +298,87 @@ std::vector<uint8_t> readFileBytes(const std::string& path) {
                                 std::istreambuf_iterator<char>());
 }
 
-// First chunk header timestamp of a session's best file, for hint matching.
+// Every valid chunk of ONE session across the given files (doc 9.3): chunks of
+// other sessions sharing a file are left out, and a byte-identical repeat of a
+// chunk already taken is dropped as a duplicate.
+std::vector<PhilipsChunk> sessionChunks(const std::vector<std::string>& files,
+                                        uint32_t session_number,
+                                        PhilipsParseWarnings& warnings) {
+    std::vector<PhilipsChunk> out;
+    for (const auto& path : files) {
+        auto bytes = readFileBytes(path);
+        for (auto& c : PhilipsParser::readChunks(bytes.data(), bytes.size(), warnings)) {
+            if (c.session_number != session_number) continue;
+            const bool duplicate = std::any_of(out.begin(), out.end(), [&](const PhilipsChunk& k) {
+                return k.timestamp_raw == c.timestamp_raw &&
+                       k.file_extension == c.file_extension &&
+                       k.block_length == c.block_length && k.data == c.data;
+            });
+            if (!duplicate) out.push_back(std::move(c));
+        }
+    }
+    return out;
+}
+
+// A session can straddle patient folders: the machine opens P<n+1> mid-night and
+// writes the rest of the session there, so one folder holds the summary and a
+// sibling the events or waveform (doc 9.3; [S]: 4 nights split this way). Add
+// the session's files found in sibling P* folders under the same parent, matched
+// by file stem; sessionChunks() still filters by the header session number.
+PhilipsSessionFiles withSiblingFolders(const std::string& session_dir,
+                                       const PhilipsSessionFiles& group) {
+    PhilipsSessionFiles out = group;
+    const fs::path dir(session_dir);
+    if (!dir.has_parent_path() || group.session_id.empty()) return out;
+
+    auto isPatientFolder = [](const std::string& name) {
+        return name.size() >= 2 && (name[0] == 'P' || name[0] == 'p') &&
+               std::all_of(name.begin() + 1, name.end(),
+                           [](unsigned char c) { return std::isdigit(c) != 0; });
+    };
+    std::error_code ec;
+    const auto self = fs::weakly_canonical(dir, ec);
+    for (const auto& entry : fs::directory_iterator(dir.parent_path(), ec)) {
+        if (!entry.is_directory(ec)) continue;
+        if (!isPatientFolder(entry.path().filename().string())) continue;
+        if (fs::weakly_canonical(entry.path(), ec) == self) continue;
+        for (const auto& file : fs::directory_iterator(entry.path(), ec)) {
+            if (!file.is_regular_file(ec) || file.path().stem().string() != group.session_id)
+                continue;
+            switch (kindOf(file.path())) {
+                case FileKind::Summary:  out.summary_files.push_back(file.path().string()); break;
+                case FileKind::Events:   out.events_files.push_back(file.path().string()); break;
+                case FileKind::Waveform: out.waveform_files.push_back(file.path().string()); break;
+                case FileKind::None:     break;
+            }
+        }
+    }
+    return out;
+}
+
+// Header timestamp of a session's first chunk, for hint matching.
 std::optional<std::chrono::system_clock::time_point>
 sessionTimestamp(const PhilipsSessionFiles& g) {
-    const std::string& path = !g.summary_path.empty() ? g.summary_path
-                            : !g.events_path.empty()  ? g.events_path
-                                                      : g.waveform_path;
-    auto bytes = readFileBytes(path);
+    const auto& files = !g.summary_files.empty() ? g.summary_files
+                      : !g.events_files.empty()  ? g.events_files
+                                                 : g.waveform_files;
     PhilipsParseWarnings scratch;
-    auto chunks = PhilipsParser::readChunks(bytes.data(), bytes.size(), scratch);
+    auto chunks = sessionChunks(files, g.session_number, scratch);
     if (chunks.empty()) return std::nullopt;
     return chunks.front().timestamp;
 }
 
-// Case-insensitive Properties.txt lookup in dir, then its parent (doc: card
-// layout puts it in the <serial> folder above the Pn session folders).
+// Case-insensitive identity-manifest lookup in dir, then its parent (the card
+// layout puts it in the folder above the Pn session folders, doc 1 and 9.1).
+// Properties.txt (v2), PROP.TXT (v3 DreamStation 1), PROP.BIN (DreamStation 2).
 std::string findPropertiesFile(const std::string& session_dir) {
     auto scan = [](const fs::path& dir) -> std::string {
         std::error_code ec;
         for (const auto& entry : fs::directory_iterator(dir, ec)) {
             if (!entry.is_regular_file(ec)) continue;
-            std::string name = entry.path().filename().string();
-            std::transform(name.begin(), name.end(), name.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
-            if (name == "properties.txt") return entry.path().string();
+            const std::string name = lowercase(entry.path().filename().string());
+            if (name == "properties.txt" || name == "prop.txt" || name == "prop.bin")
+                return entry.path().string();
         }
         return "";
     };
@@ -218,7 +389,47 @@ std::string findPropertiesFile(const std::string& session_dir) {
     return found;
 }
 
+// A decrypted manifest is printable text (doc 9.1). A still-encrypted PROP.BIN
+// is not.
+bool looksLikePlainManifest(const std::vector<uint8_t>& bytes) {
+    if (bytes.empty()) return false;
+    for (uint8_t b : bytes) {
+        if (b == '\r' || b == '\n' || b == '\t') continue;
+        if (b < 0x20 || b > 0x7e) return false;
+    }
+    return true;
+}
+
 } // namespace
+
+bool PhilipsParser::isEncryptedCard(const std::string& dir) {
+    // 1. A PROP.BIN that is not plain text.
+    const std::string props = findPropertiesFile(dir);
+    if (!props.empty() && lowercase(fs::path(props).filename().string()) == "prop.bin") {
+        auto bytes = readFileBytes(props);
+        if (!looksLikePlainManifest(bytes) || !parseProperties(props)) return true;
+    }
+
+    // 2. Session files whose v3 chunk headers frame but whose data never passes
+    //    its CRC (the header in the clear, the data encrypted).
+    int examined = 0, all_crc_failed = 0;
+    for (const auto& g : discoverSessions(dir)) {
+        for (const auto* files : {&g.summary_files, &g.events_files}) {
+            for (const auto& path : *files) {
+                if (examined >= 8) break;
+                auto bytes = readFileBytes(path);
+                if (bytes.empty() || bytes[0] != 3) continue;
+                PhilipsParseWarnings w;
+                auto chunks = readChunks(bytes.data(), bytes.size(), w);
+                ++examined;
+                if (!chunks.empty()) return false;   // something decodes: not encrypted
+                if (w.crc_failures > 0) ++all_crc_failed;
+            }
+        }
+        if (examined >= 8) break;
+    }
+    return examined > 0 && all_crc_failed == examined;
+}
 
 std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
     const std::string& session_dir,
@@ -234,7 +445,12 @@ std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
 
     auto groups = discoverSessions(session_dir);
     if (groups.empty()) {
-        std::cerr << "PhilipsParser: no PRS1 session files in " << session_dir << std::endl;
+        if (isEncryptedCard(session_dir)) {
+            std::cerr << "PhilipsParser: encrypted DreamStation 2 card in " << session_dir
+                      << " (decrypt it first; this parser never decrypts)" << std::endl;
+        } else {
+            std::cerr << "PhilipsParser: no PRS1 session files in " << session_dir << std::endl;
+        }
         return nullptr;
     }
 
@@ -268,11 +484,15 @@ std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
     session->device_name = device_name;
     session->manufacturer = DeviceManufacturer::PHILIPS;
 
-    // Identity (missing Properties.txt is non-fatal)
+    // Identity (a missing manifest is non-fatal). Only the serial, model and
+    // firmware cross into the session; the key-like fields stay on
+    // PhilipsDeviceInfo (SDD-009 D2).
     std::string props = findPropertiesFile(session_dir);
     if (!props.empty()) {
         if (auto info = parseProperties(props)) {
             session->serial_number = info->serial_number;
+            session->firmware = info->software_version;
+            if (auto name = modelName(info->model_number)) session->product_name = *name;
             // model_id is numeric in the unified model; keep the numeric
             // prefix of the alphanumeric ModelNumber ("560P" -> 560).
             std::string digits;
@@ -293,34 +513,39 @@ std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
     PhilipsParseWarnings warnings;
     std::vector<EventStat> stats;
 
-    if (!selected->summary_path.empty()) {
-        auto bytes = readFileBytes(selected->summary_path);
-        auto chunks = readChunks(bytes.data(), bytes.size(), warnings);
+    const PhilipsSessionFiles files = withSiblingFolders(session_dir, *selected);
+    const uint32_t number = files.session_number;
+
+    if (!files.summary_files.empty()) {
+        auto chunks = sessionChunks(files.summary_files, number, warnings);
         if (parseSummary(chunks, *session, warnings)) {
             session->has_summary = true;
         }
         session->data_records += static_cast<int>(chunks.size());
     }
 
-    if (!selected->events_path.empty()) {
-        auto bytes = readFileBytes(selected->events_path);
-        auto chunks = readChunks(bytes.data(), bytes.size(), warnings);
+    if (!files.events_files.empty()) {
+        auto chunks = sessionChunks(files.events_files, number, warnings);
         if (parseEvents(chunks, *session, stats, warnings)) {
             session->has_events = true;
         }
         session->data_records += static_cast<int>(chunks.size());
     }
 
-    if (!selected->waveform_path.empty()) {
-        auto bytes = readFileBytes(selected->waveform_path);
-        auto chunks = readChunks(bytes.data(), bytes.size(), warnings);
+    if (!files.waveform_files.empty()) {
+        auto chunks = sessionChunks(files.waveform_files, number, warnings);
         parseWaveform(chunks, *session, warnings);
         session->data_records += static_cast<int>(chunks.size());
     }
 
     if (!session->session_start.has_value()) {
-        std::cerr << "PhilipsParser: no usable data for session " << selected->session_id
-                  << " in " << session_dir << std::endl;
+        if (isEncryptedCard(session_dir)) {
+            std::cerr << "PhilipsParser: encrypted DreamStation 2 card in " << session_dir
+                      << " (decrypt it first; this parser never decrypts)" << std::endl;
+        } else {
+            std::cerr << "PhilipsParser: no usable data for session " << selected->session_id
+                      << " in " << session_dir << std::endl;
+        }
         return nullptr;
     }
 
@@ -346,6 +571,7 @@ std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
                   << " parse warnings: crc=" << warnings.crc_failures
                   << " truncated=" << warnings.truncated_chunks
                   << " unknown_events=" << warnings.unknown_event_codes
+                  << " unknown_records=" << warnings.unknown_record_codes
                   << " unsupported=" << warnings.unsupported_chunks << std::endl;
     }
     session->parse_warnings = warnings.total();

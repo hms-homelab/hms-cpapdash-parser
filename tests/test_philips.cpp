@@ -135,15 +135,16 @@ TEST(PhilipsParser, ChunkTruncatedTolerated) {
     EXPECT_EQ(w.truncated_chunks, 1);
 }
 
-TEST(PhilipsParser, DataFormatVersion3Rejected) {
-    auto bytes = readBytes(fixturePath("ds2/0000000012.001"));
+TEST(PhilipsParser, UnknownDataFormatVersionSkipped) {
+    // Versions 2 and 3 are framed; anything else is counted, never guessed at.
+    auto bytes = readBytes(fixturePath("unknownversion/0000000012.001"));
     ASSERT_FALSE(bytes.empty());
 
     PhilipsParseWarnings w;
     auto chunks = PhilipsParser::readChunks(bytes.data(), bytes.size(), w);
 
     EXPECT_TRUE(chunks.empty());
-    EXPECT_GE(w.unsupported_chunks, 1);
+    EXPECT_EQ(w.unsupported_chunks, 1);
 }
 
 TEST(PhilipsParser, SessionDiscoveryGrouping) {
@@ -462,6 +463,274 @@ TEST(PhilipsParser, FactoryAutoDetectsFromDir) {
     EXPECT_EQ(parser->manufacturer(), DeviceManufacturer::PHILIPS);
 
     fs::remove_all(tmp);
+}
+
+// SDD-009 D12: duration is the SUM of the mask-on periods, never the envelope,
+// so a mask-off break is not therapy. v2 summary: 60 min, 30 min break, 20 min.
+TEST(PhilipsParser, DurationIsSumOfMaskOnPeriodsV2) {
+    PhilipsParser parser;
+    auto session = parser.parseSession(fixturePath("ds1_twomask"), "dev1", "");
+
+    ASSERT_NE(session, nullptr);
+    EXPECT_EQ(session->session_start.value(), tp(kBaseTs + 60));
+    EXPECT_EQ(session->session_end.value(), tp(kBaseTs + 6660));
+    EXPECT_EQ(session->duration_seconds.value(), 3600 + 1200);
+}
+
+// ── DataFormatVersion 3: DreamStation 2 and DreamStation 1 on v3 firmware ─────
+// docs/PHILIPS_FORMAT.md section 9, SDD-009. Fixtures from gen/make_fixtures.py.
+
+TEST(PhilipsParser, V3ChunkFraming) {
+    PhilipsParseWarnings w;
+    auto summary = readBytes(fixturePath("ds2v3/P0/0000001E.B01"));
+    auto chunks = PhilipsParser::readChunks(summary.data(), summary.size(), w);
+    ASSERT_EQ(chunks.size(), 1u);
+    EXPECT_EQ(w.total(), 0);
+    const auto& c = chunks[0];
+    EXPECT_EQ(c.data_format_version, 3);
+    EXPECT_EQ(c.family, 0);
+    EXPECT_EQ(c.family_version, 6);
+    EXPECT_EQ(c.file_extension, 1);
+    EXPECT_EQ(c.session_number, 0x1Eu);
+    EXPECT_EQ(c.record_size[0x08], 31);   // from the header block
+    EXPECT_GT(c.record_size[0x01], 0);
+    EXPECT_EQ(c.record_size[0x07], -1);   // absent from this chunk's table
+
+    auto wave = readBytes(fixturePath("ds2v3/P0/0000001E.B05"));
+    auto wchunks = PhilipsParser::readChunks(wave.data(), wave.size(), w);
+    ASSERT_EQ(wchunks.size(), 2u);
+    EXPECT_EQ(w.total(), 0);
+    ASSERT_EQ(wchunks[0].waveforms.size(), 1u);   // 4-byte v3 signal entry
+    EXPECT_EQ(wchunks[0].waveforms[0].interleave, 5);
+    EXPECT_EQ(wchunks[0].waveforms[0].extra, 8);
+    EXPECT_EQ(wchunks[0].durationSeconds(), 240);
+    EXPECT_EQ(wchunks[0].data.size(), 1200u);     // 5 Hz * 240 s
+}
+
+TEST(PhilipsParser, V3CrcFailureSkipsChunk) {
+    auto bytes = readBytes(fixturePath("ds2v3_badcrc/P0/00000032.B02"));
+    PhilipsParseWarnings w;
+    auto chunks = PhilipsParser::readChunks(bytes.data(), bytes.size(), w);
+    EXPECT_TRUE(chunks.empty());
+    EXPECT_EQ(w.crc_failures, 1);
+
+    // The night still parses from its summary (SDD-009 D4).
+    PhilipsParser parser;
+    auto session = parser.parseSession(fixturePath("ds2v3_badcrc/P0"), "dev1", "");
+    ASSERT_NE(session, nullptr);
+    EXPECT_TRUE(session->has_summary);
+    EXPECT_FALSE(session->has_events);
+    EXPECT_GT(session->parse_warnings, 0);
+}
+
+TEST(PhilipsParser, ParsePropBinShortKeys) {
+    auto info = PhilipsParser::parseProperties(fixturePath("ds2v3/PROP.BIN"));
+    ASSERT_TRUE(info.has_value());
+    EXPECT_EQ(info->serial_number, "PXTEST0DS2V3");
+    EXPECT_EQ(info->model_number, "520X110C");
+    EXPECT_EQ(info->family, 0);
+    EXPECT_EQ(info->family_version, 6);
+    EXPECT_EQ(info->data_format_version, "3");
+    EXPECT_EQ(info->software_version, "V1.0.0.0000");
+    EXPECT_EQ(info->patient_folder_num, 0);
+    // Kept for a separate decryption step (SDD-009 D2).
+    EXPECT_EQ(info->sid, "FAKE-SID");
+    EXPECT_EQ(info->bk, "FAKE-BK");
+    EXPECT_EQ(info->sk, "FAKE-SK");
+    EXPECT_EQ(info->ek, "FAKE-EK");
+    EXPECT_EQ(info->dk, "FAKE-DK");
+}
+
+TEST(PhilipsParser, DetectsPropBinAndPropTxt) {
+    EXPECT_EQ(detectManufacturer(fixturePath("ds2v3")), DeviceManufacturer::PHILIPS);
+    EXPECT_EQ(detectManufacturer(fixturePath("ds1v3")), DeviceManufacturer::PHILIPS);
+    EXPECT_EQ(detectManufacturer(fixturePath("ds2_encrypted")), DeviceManufacturer::PHILIPS);
+    EXPECT_EQ(detectManufacturer(std::vector<std::string>{"PROP.BIN", "P0/0000001E.B01"}),
+              DeviceManufacturer::PHILIPS);
+}
+
+TEST(PhilipsParser, Ds2FullSession) {
+    PhilipsParser parser;
+    auto s = parser.parseSession(fixturePath("ds2v3/P0"), "dev1", "", tp(kBaseTs));
+    ASSERT_NE(s, nullptr);
+
+    EXPECT_EQ(s->manufacturer, DeviceManufacturer::PHILIPS);
+    EXPECT_EQ(s->serial_number, "PXTEST0DS2V3");   // PROP.BIN in the parent folder
+    EXPECT_EQ(s->product_name, "DreamStation 2 Auto CPAP");
+    EXPECT_EQ(s->firmware, "V1.0.0.0000");
+    EXPECT_TRUE(s->has_summary);
+    EXPECT_TRUE(s->has_events);
+    // Two records the doc does not describe, each skipped by its size and counted:
+    // summary 0x09 and event 0x20.
+    EXPECT_EQ(s->parse_warnings, 2);
+
+    // Two mask-on periods: 60 min, a 10 min break, 30 min (D12).
+    EXPECT_EQ(s->session_start.value(), tp(kBaseTs + 60));
+    EXPECT_EQ(s->session_end.value(), tp(kBaseTs + 60 + 3600 + 600 + 1800));
+    EXPECT_EQ(s->duration_seconds.value(), 3600 + 1800);
+
+    // Settings (doc 9.7)
+    ASSERT_TRUE(s->settings.has_value());
+    const auto& st = *s->settings;
+    EXPECT_EQ(st.therapy_mode, 1);                  // auto CPAP
+    EXPECT_DOUBLE_EQ(st.min_pressure.value(), 5.0);
+    EXPECT_DOUBLE_EQ(st.max_pressure.value(), 12.0);
+    EXPECT_EQ(st.ramp_time, 20);
+    EXPECT_DOUBLE_EQ(st.ramp_pressure.value(), 4.0);
+    EXPECT_EQ(st.flex_mode, 2);                     // 0x90 on auto CPAP = A-Flex
+    EXPECT_EQ(st.flex_level, 2);
+    EXPECT_EQ(st.humidifier_mode, 3);               // heated tube
+    EXPECT_EQ(st.humidifier_level, 3);
+    EXPECT_EQ(st.tube_temp, 3);
+    EXPECT_EQ(st.hose_diameter, 15);
+
+    // Events (doc 9.8)
+    int oa = 0, ca = 0, h = 0, rera = 0, fl = 0, other = 0, pb = 0, snore = 0;
+    std::optional<SleepEvent> first_oa, first_h, ca_event, pb_event, other_event;
+    for (const auto& e : s->events) {
+        switch (e.event_type) {
+            case EventType::OBSTRUCTIVE: if (!oa++) first_oa = e; break;
+            case EventType::CLEAR_AIRWAY: ++ca; ca_event = e; break;
+            case EventType::HYPOPNEA: if (!h++) first_h = e; break;
+            case EventType::RERA: ++rera; break;
+            case EventType::FLOW_LIMITATION: ++fl; break;
+            case EventType::OTHER: ++other; other_event = e; break;
+            case EventType::PERIODIC_BREATHING: ++pb; pb_event = e; break;
+            case EventType::VIBRATORY_SNORE: ++snore; break;
+            default: break;
+        }
+    }
+    EXPECT_EQ(oa, 3);
+    EXPECT_EQ(ca, 1);
+    EXPECT_EQ(h, 2);
+    EXPECT_EQ(rera, 1);
+    EXPECT_EQ(fl, 1);
+    EXPECT_EQ(other, 1);
+    EXPECT_EQ(pb, 1);
+    EXPECT_EQ(snore, 1);
+
+    // Onsets: clock = header ts + summed deltas; OA ended 20 s before its record.
+    EXPECT_EQ(first_oa->timestamp, tp(kBaseTs + 780 - 20));
+    // 0x14: byte is its duration; placed back from the record.
+    EXPECT_EQ(first_h->timestamp, tp(kBaseTs + 1380 - 12));
+    EXPECT_DOUBLE_EQ(first_h->duration_seconds, 12.0);
+    // 0x12 carries NO time field: the CA after it sits at 1470, not thousands of
+    // seconds later.
+    EXPECT_EQ(ca_event->timestamp, tp(kBaseTs + 1470 - 8));
+    // 0x0f: 60 two-second units, ended 5 s before the record at 2150.
+    EXPECT_EQ(pb_event->timestamp, tp(kBaseTs + 2150 - 5 - 120));
+    EXPECT_DOUBLE_EQ(pb_event->duration_seconds, 120.0);
+    // 0x0b: kept on the timeline as OTHER, out of the index (D10).
+    EXPECT_EQ(other_event->timestamp, tp(kBaseTs + 1440 - 9));
+    ASSERT_TRUE(other_event->details.has_value());
+    EXPECT_NE(other_event->details->find("0x0b"), std::string::npos);
+
+    // Our metrics come from the events; 0x0b is not a hypopnea for AHI.
+    ASSERT_TRUE(s->metrics.has_value());
+    EXPECT_EQ(s->metrics->hypopneas, 2);
+    EXPECT_NEAR(s->metrics->ahi, (3 + 1 + 2) / 1.5, 1e-9);
+
+    // The machine's own counts, summed over its two statistics records, beside ours.
+    ASSERT_TRUE(s->machine_reported.has_value());
+    const auto& m = *s->machine_reported;
+    EXPECT_EQ(m.obstructive_apneas, 3);
+    EXPECT_EQ(m.clear_airway_apneas, 1);
+    EXPECT_EQ(m.hypopneas, 2);
+    EXPECT_EQ(m.hypopneas_variant, 1);
+    EXPECT_EQ(m.reras, 1);
+    EXPECT_EQ(m.flow_limitations, 1);
+    EXPECT_EQ(m.periodic_breathing_minutes, 2);
+
+    EXPECT_FALSE(s->breathing_summary.empty());     // .B05 flow went through
+}
+
+TEST(PhilipsParser, KeyFieldsNeverReachTheSession) {
+    PhilipsParser parser;
+    auto s = parser.parseSession(fixturePath("ds2v3/P0"), "dev1", "", tp(kBaseTs));
+    ASSERT_NE(s, nullptr);
+    for (const std::string* f : {&s->serial_number, &s->device_name, &s->product_name,
+                                 &s->firmware, &s->device_id}) {
+        EXPECT_EQ(f->find("FAKE-"), std::string::npos) << *f;
+    }
+    for (const auto& e : s->events) {
+        if (e.details) EXPECT_EQ(e.details->find("FAKE-"), std::string::npos);
+    }
+}
+
+TEST(PhilipsParser, SessionSplitAcrossPatientFolders) {
+    // Session 0x1F: summary in P1, events in P0 (doc 9.3).
+    PhilipsParser parser;
+    auto s = parser.parseSession(fixturePath("ds2v3/P1"), "dev1", "", tp(kBaseTs + 86400));
+    ASSERT_NE(s, nullptr);
+    EXPECT_TRUE(s->has_summary);
+    EXPECT_TRUE(s->has_events);
+    ASSERT_TRUE(s->machine_reported.has_value());
+    ASSERT_TRUE(s->metrics.has_value());
+    EXPECT_EQ(s->metrics->obstructive_apneas, s->machine_reported->obstructive_apneas);
+}
+
+TEST(PhilipsParser, Ds1OnV3Firmware) {
+    PhilipsParser parser;
+    auto s = parser.parseSession(fixturePath("ds1v3/P0"), "dev1", "");
+    ASSERT_NE(s, nullptr);
+    EXPECT_EQ(s->serial_number, "PXTEST0DS1V3");
+    EXPECT_EQ(s->product_name, "DreamStation Auto CPAP");
+    EXPECT_TRUE(s->has_summary);
+    EXPECT_TRUE(s->has_events);
+    EXPECT_FALSE(s->breathing_summary.empty());
+    ASSERT_TRUE(s->machine_reported.has_value());
+    EXPECT_EQ(s->metrics->obstructive_apneas, s->machine_reported->obstructive_apneas);
+}
+
+TEST(PhilipsParser, MultiSessionFileGroupsByHeader) {
+    const auto dir = fixturePath("ds2v3_multisession/P0");
+    auto groups = PhilipsParser::discoverSessions(dir);
+    ASSERT_EQ(groups.size(), 2u);
+    EXPECT_EQ(groups[0].session_number, 0x3Cu);
+    EXPECT_EQ(groups[1].session_number, 0x3Du);
+    EXPECT_EQ(groups[0].summary_path, groups[1].summary_path);   // one file, two sessions
+
+    // 0x3C's chunk appears twice, byte-identical: counted once.
+    PhilipsParser parser;
+    auto s = parser.parseSession(dir, "dev1", "", tp(kBaseTs));
+    ASSERT_NE(s, nullptr);
+    ASSERT_TRUE(s->machine_reported.has_value());
+    EXPECT_EQ(s->machine_reported->obstructive_apneas, 3);
+    EXPECT_EQ(s->duration_seconds.value(), 3600);
+}
+
+TEST(PhilipsParser, EncryptedCardIsReported) {
+    // Noise PROP.BIN in the card root (SDD-009 D1).
+    EXPECT_TRUE(PhilipsParser::isEncryptedCard(fixturePath("ds2_encrypted/P0")));
+    PhilipsParser parser;
+    EXPECT_EQ(parser.parseSession(fixturePath("ds2_encrypted/P0"), "dev1", ""), nullptr);
+
+    // Headers in the clear, every data CRC failing.
+    EXPECT_TRUE(PhilipsParser::isEncryptedCard(fixturePath("ds2_encrypted_data/P0")));
+
+    // Decrypted and v2 cards are not.
+    EXPECT_FALSE(PhilipsParser::isEncryptedCard(fixturePath("ds2v3/P0")));
+    EXPECT_FALSE(PhilipsParser::isEncryptedCard(fixturePath("ds1v3/P0")));
+    EXPECT_FALSE(PhilipsParser::isEncryptedCard(fixturePath("ds1")));
+}
+
+TEST(PhilipsParser, V3BufferPathParity) {
+    std::map<std::string, std::vector<uint8_t>> storage;
+    for (const auto& entry : fs::directory_iterator(fixturePath("ds2v3/P0")))
+        storage[entry.path().filename().string()] = readBytes(entry.path().string());
+    storage["PROP.BIN"] = readBytes(fixturePath("ds2v3/PROP.BIN"));
+    std::map<std::string, std::pair<const uint8_t*, size_t>> buffers;
+    for (const auto& [name, bytes] : storage) buffers[name] = {bytes.data(), bytes.size()};
+
+    PhilipsParser parser;
+    auto from_buffers = parser.parseSessionFromBuffers(buffers, "dev1", "");
+    auto from_disk = parser.parseSession(fixturePath("ds2v3/P0"), "dev1", "");
+    ASSERT_NE(from_buffers, nullptr);
+    ASSERT_NE(from_disk, nullptr);
+    EXPECT_EQ(from_buffers->session_start, from_disk->session_start);
+    EXPECT_EQ(from_buffers->duration_seconds, from_disk->duration_seconds);
+    EXPECT_EQ(from_buffers->events.size(), from_disk->events.size());
+    EXPECT_EQ(from_buffers->serial_number, from_disk->serial_number);
 }
 
 #endif // CPAPDASH_WITH_PHILIPS
