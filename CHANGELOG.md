@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [2026.8.6] - 2026-11-05
+
+The first tagged release since 2026.8.5. It carries every entry from 8.5.1 to
+8.11.0 below (BMC / React Health Luna beta, O2Ring-S, the AirSense 11 daily
+summary over Bluetooth, the EDF writers, the Philips PRS1 beta) and this fix.
+The optional parsers (Lowenstein, Sefam, BMC, Philips) stay off by default.
+
 ### Fixed: Löwenstein event times and durations were ten times too long
 
 `PrismaParser::parseEventXml` read a `RespEvent`'s `EndTime` and `Duration` as
