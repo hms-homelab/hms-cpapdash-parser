@@ -272,6 +272,45 @@ TEST(PrismaParser, FullSessionParse) {
     ASSERT_TRUE(session->metrics.has_value());
     EXPECT_GE(session->metrics->ahi, 0.0);
     EXPECT_GT(session->metrics->total_events, 0);
+
+    // Every event lies inside the recording it came with. The fixture writes
+    // its times in tenths, as the machine does, so a parser that read them as
+    // seconds would put the later events up to ten times past the end.
+    const auto start = *session->session_start;
+    const auto end = start + std::chrono::seconds(*session->duration_seconds);
+    for (const auto& e : session->events) {
+        EXPECT_GE(e.timestamp, start);
+        EXPECT_LE(e.timestamp + std::chrono::milliseconds(
+                      static_cast<long long>(e.duration_seconds * 1000)), end);
+        EXPECT_LE(e.duration_seconds, 10.0);
+    }
+}
+
+// hms-cpap issue #54: RespEvent EndTime and Duration are tenths of a second.
+// The reporter's example: a recording starting 23:00:00 and an OA with
+// EndTime 36000 and Duration 150 is a 15 s apnea that started at 23:59:45,
+// not a 150 s one at 08:57:30.
+TEST(PrismaParser, EventTimesAreTenthsOfASecond) {
+    auto tmp = fs::temp_directory_path() / "prisma_tenths_event.xml";
+    {
+        std::ofstream out(tmp);
+        out << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<desc>\n"
+            << "<RespEvent RespEventID = \"101\" EndTime = \"36000\" Duration = \"150\"/>\n"
+            << "<RespEvent  RespEventID=\"111\" EndTime=\"36005\" Duration=\"5\"/>\n"
+            << "</desc>\n";
+    }
+    ParsedSession session;
+    const std::chrono::system_clock::time_point start{std::chrono::seconds(1700000000)};
+    ASSERT_TRUE(PrismaParser::parseEventXml(tmp.string(), session, start));
+    fs::remove(tmp);
+
+    ASSERT_EQ(session.events.size(), 2u);
+    EXPECT_EQ(session.events[0].event_type, EventType::OBSTRUCTIVE);
+    EXPECT_DOUBLE_EQ(session.events[0].duration_seconds, 15.0);
+    EXPECT_EQ(session.events[0].timestamp, start + std::chrono::seconds(3585));
+    // Sub-second precision survives: 3600.5 s end, 0.5 s long.
+    EXPECT_DOUBLE_EQ(session.events[1].duration_seconds, 0.5);
+    EXPECT_EQ(session.events[1].timestamp, start + std::chrono::seconds(3600));
 }
 
 // ── Factory detection ───────────────────────────────────────────────────────

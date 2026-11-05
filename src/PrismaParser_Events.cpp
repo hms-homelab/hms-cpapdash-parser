@@ -32,6 +32,9 @@ std::optional<EventType> PrismaParser::mapRespEventId(int id) {
 
 namespace {
 
+// RespEvent EndTime/Duration unit: 0.1 s (see parseEventXml).
+constexpr double kPrismaEventTicksPerSecond = 10.0;
+
 // Extract attr="value", tolerating optional whitespace around '=' and after the
 // opening quote. Löwenstein SMART max writes RespEvent attributes spaced out
 // (RespEventID = "1230") while DeviceEvent uses the tight form, so we accept
@@ -86,8 +89,16 @@ bool PrismaParser::parseEventXml(
             auto event_type = mapRespEventId(resp_id);
             if (!event_type) continue;
 
-            double end_time_sec = std::atof(end_str.c_str());
-            double duration_sec = dur_str.empty() ? 0.0 : std::atof(dur_str.c_str());
+            // EndTime and Duration are tenths of a second from the recording
+            // start, not seconds. Measured on real cards from both families
+            // (prisma SMART and prisma Line): the last event's EndTime equals
+            // the paired signal's length in tenths on every night, and a
+            // typical apnea's Duration reads ~100, i.e. 10 s. Read as seconds,
+            // every duration came out 10x and every event drifted to ten
+            // times its offset into the night (hms-cpap issue #54).
+            double end_time_sec = std::atof(end_str.c_str()) / kPrismaEventTicksPerSecond;
+            double duration_sec = dur_str.empty()
+                ? 0.0 : std::atof(dur_str.c_str()) / kPrismaEventTicksPerSecond;
             double start_time_sec = end_time_sec - duration_sec;
             if (start_time_sec < 0) start_time_sec = 0;
 

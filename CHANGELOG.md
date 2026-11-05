@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Fixed: Löwenstein event times and durations were ten times too long
+
+`PrismaParser::parseEventXml` read a `RespEvent`'s `EndTime` and `Duration` as
+seconds. They are tenths of a second from the recording start: on real cards
+from both a prisma SMART and a prisma Line, the last event's `EndTime` equals
+the paired signal's length in tenths on every night. Every event's duration
+came out 10x and its start drifted to ten times its offset into the night
+(hms-cpap issue #54). Event counts and the AHI were never affected.
+
+The synthetic fixtures now write their event times in tenths, inside the
+recording, so `FullSessionParse` checks every event lies within its session;
+the old values read as plausibly in seconds and could not catch this.
+
 ## [8.11.0] - 2026-11-04
 
 ### Philips Respironics PRS1 parser, off-by-default beta
