@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [2026.9.0] - 2026-11-05
+
 ### Philips: a session still being recorded reads from its waveform
 
 A DreamStation appends the open session's `.B05` waveform as it records and
