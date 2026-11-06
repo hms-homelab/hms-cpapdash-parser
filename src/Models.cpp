@@ -128,8 +128,9 @@ void ParsedSession::calculateMetrics() {
         std::vector<double> therapy_press_vals;
 
         for (const auto& breath : breathing_summary) {
-            // Pressure
-            pressure_vals.push_back(breath.avg_pressure);
+            // Pressure: only a minute that has one. A flow-only minute's 0 is a
+            // placeholder, and averaged in it would read as 0 cmH2O delivered.
+            if (breath.pressure_measured) pressure_vals.push_back(breath.avg_pressure);
 
             // Leak
             if (breath.leak_rate.has_value()) {

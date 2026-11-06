@@ -181,11 +181,20 @@ bool EDFParser::parseBRPFile(EDFFile& edf, ParsedSession& session) {
             summary.avg_pressure = psum / samples_per_minute;
             summary.max_pressure = *std::max_element(p_begin, p_end);
             summary.min_pressure = *std::min_element(p_begin, p_end);
+        } else if (!have_pressure) {
+            summary.pressure_measured = false;
         }
 
         // Calculate calculated respiratory metrics (RR, TV, MV, Ti/Te, I:E, FL, percentiles)
         calculateRespiratoryMetrics(flow_data, press_data, breaths_by_minute[min],
                                     sample_rate, min, summary);
+
+        // A BRP with no pressure signal is a flow-only layout (a Philips
+        // waveform written as a BRP). Its leak is not the flow's to estimate:
+        // a machine's BRP always has pressure, and its leak comes from the
+        // PLD. With no PLD the minute has no leak, rather than an estimate
+        // that would be read as the machine's.
+        if (!have_pressure) summary.leak_rate = std::nullopt;
 
         session.breathing_summary.push_back(summary);
     }

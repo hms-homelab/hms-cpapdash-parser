@@ -429,6 +429,78 @@ TEST(EDFWriter, FlowIsWrittenInLitresPerSecondAndParsesBackAsTheLitresPerMinuteG
     EXPECT_NEAR(session->breathing_summary.front().max_flow_rate, 90.0, 0.5);
 }
 
+// ── A flow-only BRP: no pressure signal ──────────────────────────────────────
+
+namespace {
+
+// A BRP holding Flow ONLY, at 5 Hz, as a Philips waveform is laid out: ten
+// minutes of a 15/min sine, peak 40 L/min.
+std::vector<uint8_t> flowOnlyBrp() {
+    EDFWriteSignal flow;
+    flow.label = "Flow.200ms";
+    flow.phys_dim = "L/s";
+    flow.phys_min = -2.0;
+    flow.phys_max = 3.0;
+    flow.dig_min = -1000;
+    flow.dig_max = 1500;
+    flow.samples_per_record = 5;
+    for (int i = 0; i < 5 * 600; ++i)
+        flow.samples.push_back(40.0 * std::sin(2.0 * M_PI * (i / 5.0) / 4.0 + 0.3) / 60.0);
+    EDFWriteSpec spec;
+    spec.start = sampleStart();
+    spec.recording = resmedRecordingField(spec.start, kSerial);
+    spec.signals = {flow};
+    return writeEDF(spec);
+}
+
+}  // namespace
+
+TEST(EDFWriter, AFlowOnlyBrpHasBreathingButNoPressureAndNoLeak) {
+    const auto file = flowOnlyBrp();
+    ASSERT_FALSE(file.empty());
+    auto session = EDFParser::parseSessionFromBuffers(
+        file.data(), file.size(), nullptr, 0, nullptr, 0, std::vector<EDFParser::ByteView>{},
+        "device-1", "sample", "20261017_064452");
+    ASSERT_TRUE(session);
+    ASSERT_GE(session->breathing_summary.size(), 9u);
+    for (const auto& m : session->breathing_summary) {
+        EXPECT_FALSE(m.pressure_measured);
+        EXPECT_FALSE(m.leak_rate.has_value()) << "no leak estimated from flow alone";
+    }
+    session->calculateMetrics();
+    ASSERT_TRUE(session->metrics);
+    EXPECT_FALSE(session->metrics->avg_pressure.has_value()) << "not 0 cmH2O: none";
+    EXPECT_FALSE(session->metrics->pressure_p95.has_value());
+    EXPECT_FALSE(session->metrics->avg_leak_rate.has_value());
+    ASSERT_TRUE(session->metrics->avg_respiratory_rate.has_value());
+    EXPECT_NEAR(*session->metrics->avg_respiratory_rate, 15.0, 1.0);
+}
+
+TEST(EDFWriter, AFlowOnlyMinuteDoesNotPullAMachinesPressureDown) {
+    // A night of two files: a machine's BRP at 9 cmH2O and a flow-only one.
+    StreamedBRP brp;
+    brp.start = sampleStart();
+    brp.serial = kSerial;
+    for (int i = 0; i < 25 * 300; i++) {
+        brp.flow_lpm.push_back((i / 50) % 2 == 0 ? 30.0 : -30.0);
+        brp.press_cmh2o.push_back(9.0);
+    }
+    const auto machine = writeResMedBRP(brp);
+    auto a = EDFParser::parseSessionFromBuffers(
+        machine.data(), machine.size(), nullptr, 0, nullptr, 0,
+        std::vector<EDFParser::ByteView>{}, "device-1", "sample", "20261017_064452");
+    const auto flow_only = flowOnlyBrp();
+    auto b = EDFParser::parseSessionFromBuffers(
+        flow_only.data(), flow_only.size(), nullptr, 0, nullptr, 0,
+        std::vector<EDFParser::ByteView>{}, "device-1", "sample", "20261017_064452");
+    ASSERT_TRUE(a && b);
+    a->breathing_summary.insert(a->breathing_summary.end(), b->breathing_summary.begin(),
+                                b->breathing_summary.end());
+    a->calculateMetrics();
+    ASSERT_TRUE(a->metrics && a->metrics->avg_pressure);
+    EXPECT_NEAR(*a->metrics->avg_pressure, 9.0, 0.05) << "the machine's 9, not averaged with 0";
+}
+
 // ── EVE / CSL: the machine's event files ─────────────────────────────────────
 
 TEST(EDFWriter, AnEveIsTheMachinesLayoutRecordForRecord) {

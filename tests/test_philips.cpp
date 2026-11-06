@@ -822,6 +822,11 @@ TEST(PhilipsParser, OpenSessionParsesWithWaveformTimeAsTherapy) {
     EXPECT_EQ(*s->duration_seconds, 480);          // therapy so far = waveform time
     EXPECT_FALSE(s->breathing_summary.empty());
     EXPECT_TRUE(s->events.empty());                // no machine events before mask-off
+    // The waveform is flow only: no pressure is claimed, not even 0.
+    for (const auto& m : s->breathing_summary) EXPECT_FALSE(m.pressure_measured);
+    ASSERT_TRUE(s->metrics);
+    EXPECT_FALSE(s->metrics->avg_pressure.has_value());
+    EXPECT_TRUE(s->metrics->avg_respiratory_rate.has_value());
     fs::remove_all(root);
 }
 

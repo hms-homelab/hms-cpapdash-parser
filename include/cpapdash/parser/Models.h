@@ -104,6 +104,12 @@ struct BreathingSummary {
     double avg_pressure = 0;
     double max_pressure = 0;
     double min_pressure = 0;
+    // False when the minute's file carried no pressure signal at all (a flow-only
+    // waveform: a Philips .005/.B05, or a BRP laid out from one). The three
+    // pressure fields above are then 0 placeholders, not readings, and are left
+    // out of every pressure figure (calculateMetrics). True for every file that
+    // has a pressure signal, which is every ResMed BRP a machine writes.
+    bool pressure_measured = true;
 
     // Calculated respiratory metrics
     std::optional<double> respiratory_rate;      // Breaths per minute

@@ -20,6 +20,17 @@ session had nothing the parser would read.
   `duration_seconds` from the waveform's recorded time. With a summary it stays
   the summed mask-on periods.
 
+### A flow-only minute claims no pressure and no leak
+
+New `BreathingSummary::pressure_measured` (default true). It is false for a
+minute whose file has no pressure signal: a Philips waveform, and a BRP that
+holds Flow only (a flow-only waveform laid out as a BRP). Such a minute's
+`avg_pressure` is a 0 placeholder and `calculateMetrics` leaves it out, so a
+flow-only stretch no longer reads as 0 cmH2O or pulls a night's pressure down;
+with no measured minute at all, `avg_pressure` and `pressure_p95` stay unset. A
+BRP with no pressure signal also gets no flow-estimated `leak_rate`. Every BRP
+a ResMed machine writes has a pressure signal, so its numbers are unchanged.
+
 ## [2026.8.6] - 2026-11-05
 
 The first tagged release since 2026.8.5. It carries every entry from 8.5.1 to

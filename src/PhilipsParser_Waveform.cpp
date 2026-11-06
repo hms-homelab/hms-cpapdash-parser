@@ -153,6 +153,7 @@ bool PhilipsParser::parseWaveform(const std::vector<PhilipsChunk>& chunks,
         if (valid < samples_per_minute / 2) continue;
 
         BreathingSummary summary(base + std::chrono::minutes(min));
+        summary.pressure_measured = false;   // the waveform is flow only (doc 6, 9.9)
         summary.avg_flow_rate = sum / valid;
         summary.max_flow_rate = maxv;
         summary.min_flow_rate = minv;
