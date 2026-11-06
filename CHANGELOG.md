@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Philips: a session still being recorded reads from its waveform
+
+A DreamStation appends the open session's `.B05` waveform as it records and
+writes the `.B01` summary and `.B02` events only at mask-off, so until then a
+session had nothing the parser would read.
+
+- `PhilipsParser::sessionFlow(dir, session_number, warnings)` returns one
+  session's flow as a `FlowSeries` (start, sample rate, L/min samples with gaps
+  left NaN, and `recorded_seconds`, the time its chunks cover), by the session
+  number in the chunk headers and from every patient folder holding it. It
+  needs no summary. A last chunk caught mid-write is counted as truncated and
+  left out.
+- `PhilipsParser::flowSeries(chunks, warnings, base)` is the same assembly from
+  chunks already read; `parseWaveform` now uses it, unchanged in what it builds.
+- A session parsed with no summary (`has_summary` false) takes its
+  `duration_seconds` from the waveform's recorded time. With a summary it stays
+  the summed mask-on periods.
+
 ## [2026.8.6] - 2026-11-05
 
 The first tagged release since 2026.8.5. It carries every entry from 8.5.1 to

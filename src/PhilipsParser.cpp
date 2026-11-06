@@ -431,6 +431,21 @@ bool PhilipsParser::isEncryptedCard(const std::string& dir) {
     return examined > 0 && all_crc_failed == examined;
 }
 
+std::optional<PhilipsParser::FlowSeries> PhilipsParser::sessionFlow(
+    const std::string& session_dir, uint32_t session_number,
+    PhilipsParseWarnings& warnings) {
+    std::error_code ec;
+    if (!fs::is_directory(session_dir, ec)) return std::nullopt;
+    for (const auto& g : discoverSessions(session_dir)) {
+        if (g.session_number != session_number) continue;
+        const PhilipsSessionFiles files = withSiblingFolders(session_dir, g);
+        if (files.waveform_files.empty()) return std::nullopt;
+        return flowSeries(sessionChunks(files.waveform_files, session_number, warnings),
+                          warnings);
+    }
+    return std::nullopt;
+}
+
 std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
     const std::string& session_dir,
     const std::string& device_id,

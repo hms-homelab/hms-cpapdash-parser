@@ -242,6 +242,45 @@ public:
     static bool parseWaveform(const std::vector<PhilipsChunk>& chunks,
                               ParsedSession& session,
                               PhilipsParseWarnings& warnings);
+
+    /**
+     * A session's flow as one series (doc 6, 9.9): every usable single-signal
+     * waveform chunk laid at its header time from `start`, gaps NaN (no zero
+     * fill). `recorded_seconds` is the time the chunks cover, i.e. mask-on
+     * time: a gap between chunks is the mask off (doc 9.9).
+     */
+    struct FlowSeries {
+        std::chrono::system_clock::time_point start;
+        double sample_rate = 0;            // Hz, from the first chunk (about 5)
+        std::vector<double> flow;          // L/min, NaN where no chunk covers
+        int recorded_seconds = 0;
+        std::chrono::system_clock::time_point end() const {
+            return start + std::chrono::milliseconds(static_cast<long long>(
+                       sample_rate > 0 ? flow.size() * 1000.0 / sample_rate : 0));
+        }
+    };
+
+    /**
+     * The chunks' flow as one series anchored at `base` (the first chunk's time
+     * when unset; a chunk before `base` is counted unsupported and left out).
+     * nullopt when no chunk is usable flow.
+     */
+    static std::optional<FlowSeries> flowSeries(
+        const std::vector<PhilipsChunk>& chunks, PhilipsParseWarnings& warnings,
+        std::optional<std::chrono::system_clock::time_point> base = std::nullopt);
+
+    /**
+     * The flow of ONE session of the card in `session_dir`, by the session
+     * number in its chunk headers, from every patient folder that holds a
+     * waveform of it (doc 9.3). It needs no summary, so it reads a session the
+     * machine is still recording: a DreamStation appends the open session's
+     * waveform as it goes and writes the summary and events at mask-off. A
+     * truncated last chunk (the file caught mid-write) is left out cleanly.
+     * nullopt when the session has no usable flow.
+     */
+    static std::optional<FlowSeries> sessionFlow(const std::string& session_dir,
+                                                 uint32_t session_number,
+                                                 PhilipsParseWarnings& warnings);
 };
 
 std::unique_ptr<ISessionParser> createPhilipsParser();

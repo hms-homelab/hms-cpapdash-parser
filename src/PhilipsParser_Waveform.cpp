@@ -16,10 +16,10 @@
 
 namespace cpapdash::parser {
 
-bool PhilipsParser::parseWaveform(const std::vector<PhilipsChunk>& chunks,
-                                  ParsedSession& session,
-                                  PhilipsParseWarnings& warnings) {
-    // Collect usable flow chunks (v2 Family 0, single signal)
+std::optional<PhilipsParser::FlowSeries> PhilipsParser::flowSeries(
+    const std::vector<PhilipsChunk>& chunks, PhilipsParseWarnings& warnings,
+    std::optional<std::chrono::system_clock::time_point> base_hint) {
+    // Collect usable flow chunks (single signal)
     struct FlowChunk {
         std::chrono::system_clock::time_point start;
         const std::vector<uint8_t>* samples;
@@ -52,35 +52,33 @@ bool PhilipsParser::parseWaveform(const std::vector<PhilipsChunk>& chunks,
         flow_chunks.push_back({chunk.timestamp, &chunk.data, rate});
     }
 
-    if (flow_chunks.empty()) return false;
+    if (flow_chunks.empty()) return std::nullopt;
 
     std::sort(flow_chunks.begin(), flow_chunks.end(),
               [](const FlowChunk& a, const FlowChunk& b) { return a.start < b.start; });
 
-    // Anchor the series at the summary-provided session start when available,
-    // else at the first chunk.
-    auto base = session.session_start.value_or(flow_chunks.front().start);
-    if (!session.session_start.has_value()) session.session_start = base;
-
-    double rate = flow_chunks.front().sample_rate;
+    const auto base = base_hint.value_or(flow_chunks.front().start);
+    const double rate = flow_chunks.front().sample_rate;
 
     auto last_end = flow_chunks.back().start +
                     std::chrono::seconds(static_cast<int>(
                         flow_chunks.back().samples->size() / rate));
-    if (!session.session_end.has_value() || last_end > session.session_end.value()) {
-        session.session_end = last_end;
-    }
 
     // Assemble one series from base to the last chunk end. Gaps between
     // chunks stay NaN: no zero-fill, gap minutes produce no metrics
     // (deliberate deviation from [B], doc discrepancy 6).
     auto total_secs = std::chrono::duration_cast<std::chrono::seconds>(
         last_end - base).count();
-    if (total_secs <= 0) return false;
+    if (total_secs <= 0) return std::nullopt;
 
-    std::vector<double> flow(static_cast<size_t>(total_secs * rate),
-                             std::numeric_limits<double>::quiet_NaN());
+    FlowSeries out;
+    out.start = base;
+    out.sample_rate = rate;
+    out.flow.assign(static_cast<size_t>(total_secs * rate),
+                    std::numeric_limits<double>::quiet_NaN());
+    auto& flow = out.flow;
 
+    double covered = 0;
     for (const auto& fc : flow_chunks) {
         auto offset_secs = std::chrono::duration_cast<std::chrono::seconds>(
             fc.start - base).count();
@@ -91,6 +89,31 @@ bool PhilipsParser::parseWaveform(const std::vector<PhilipsChunk>& chunks,
             flow[offset + i] = static_cast<double>(
                 static_cast<int8_t>((*fc.samples)[i]));
         }
+        covered += static_cast<double>(fc.samples->size()) / fc.sample_rate;
+    }
+    out.recorded_seconds = static_cast<int>(covered + 0.5);
+    return out;
+}
+
+bool PhilipsParser::parseWaveform(const std::vector<PhilipsChunk>& chunks,
+                                  ParsedSession& session,
+                                  PhilipsParseWarnings& warnings) {
+    // Anchor the series at the summary-provided session start when available,
+    // else at the first chunk.
+    auto series = flowSeries(chunks, warnings, session.session_start);
+    if (!series) return false;
+    const auto base = series->start;
+    const double rate = series->sample_rate;
+    const std::vector<double>& flow = series->flow;
+    if (!session.session_start.has_value()) session.session_start = base;
+    const auto last_end = series->end();
+    if (!session.session_end.has_value() || last_end > session.session_end.value()) {
+        session.session_end = last_end;
+    }
+    // A session with no summary yet (the machine still recording it, doc 9.9)
+    // has no mask-on periods to sum: its therapy so far is the waveform's time.
+    if (!session.duration_seconds.has_value() && series->recorded_seconds > 0) {
+        session.duration_seconds = series->recorded_seconds;
     }
 
     // Per-minute summaries; a minute needs >= 50% valid samples to count.

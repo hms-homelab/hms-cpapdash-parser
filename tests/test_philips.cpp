@@ -5,6 +5,7 @@
 #include "cpapdash/parser/ISessionParser.h"
 #include "cpapdash/parser/Models.h"
 
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <vector>
@@ -731,6 +732,110 @@ TEST(PhilipsParser, V3BufferPathParity) {
     EXPECT_EQ(from_buffers->duration_seconds, from_disk->duration_seconds);
     EXPECT_EQ(from_buffers->events.size(), from_disk->events.size());
     EXPECT_EQ(from_buffers->serial_number, from_disk->serial_number);
+}
+
+// ── An open session: the waveform only, no summary yet (doc 9.9) ───────────
+
+namespace {
+
+// A card whose session 0x1E is still being recorded: its .B05 is there, its
+// .B01 and .B02 are not (the machine writes them at mask-off). `tail` is
+// appended to the waveform, to model a file caught mid-write.
+fs::path stageOpenSession(const std::string& tag, const std::vector<uint8_t>& tail = {}) {
+    auto root = fs::temp_directory_path() / ("philips_open_" + tag);
+    fs::remove_all(root);
+    fs::create_directories(root / "P0");
+    fs::copy_file(fixturePath("ds2v3/PROP.BIN"), root / "PROP.BIN");
+    auto wave = readBytes(fixturePath("ds2v3/P0/0000001E.B05"));
+    wave.insert(wave.end(), tail.begin(), tail.end());
+    std::ofstream(root / "P0" / "0000001E.B05", std::ios::binary)
+        .write(reinterpret_cast<const char*>(wave.data()),
+               static_cast<std::streamsize>(wave.size()));
+    return root;
+}
+
+}  // namespace
+
+TEST(PhilipsParser, OpenSessionFlowFromWaveformOnly) {
+    const auto root = stageOpenSession("flow");
+    PhilipsParseWarnings w;
+    auto flow = PhilipsParser::sessionFlow((root / "P0").string(), 0x1E, w);
+    ASSERT_TRUE(flow.has_value());
+    EXPECT_EQ(flow->start, tp(kBaseTs + 60));      // the first chunk's header time
+    EXPECT_DOUBLE_EQ(flow->sample_rate, 5.0);
+    EXPECT_EQ(flow->recorded_seconds, 480);        // two 240 s chunks
+    EXPECT_EQ(flow->flow.size(), 2400u);           // they abut: no gap
+    EXPECT_EQ(flow->end(), tp(kBaseTs + 60 + 480));
+    EXPECT_EQ(w.total(), 0);
+    fs::remove_all(root);
+}
+
+TEST(PhilipsParser, OpenSessionGapIsNaNAndNotRecordedTime) {
+    // The second chunk of a second file, 10 minutes after the first ends: the
+    // mask was off in between, so that time is NaN and not therapy.
+    const auto root = stageOpenSession("gap");
+    auto wave = readBytes(fixturePath("ds2v3/P0/0000001E.B05"));
+    PhilipsParseWarnings w;
+    auto chunks = PhilipsParser::readChunks(wave.data(), wave.size(), w);
+    ASSERT_EQ(chunks.size(), 2u);
+    chunks[1].timestamp = tp(kBaseTs + 60 + 240 + 600);
+    auto flow = PhilipsParser::flowSeries(chunks, w);
+    ASSERT_TRUE(flow.has_value());
+    EXPECT_EQ(flow->recorded_seconds, 480);
+    EXPECT_EQ(flow->flow.size(), static_cast<size_t>((240 + 600 + 240) * 5));
+    EXPECT_TRUE(std::isnan(flow->flow[240 * 5 + 10]));
+    EXPECT_FALSE(std::isnan(flow->flow[10]));
+    fs::remove_all(root);
+}
+
+TEST(PhilipsParser, OpenSessionTruncatedTailIsLeftOut) {
+    // The tapper copies the file while the machine appends to it.
+    auto wave = readBytes(fixturePath("ds2v3/P0/0000001E.B05"));
+    const std::vector<uint8_t> half(wave.begin(), wave.begin() + wave.size() / 4);
+    const auto root = stageOpenSession("tail", half);
+    PhilipsParseWarnings w;
+    auto flow = PhilipsParser::sessionFlow((root / "P0").string(), 0x1E, w);
+    ASSERT_TRUE(flow.has_value());
+    EXPECT_EQ(flow->recorded_seconds, 480);
+    EXPECT_EQ(w.truncated_chunks, 1);
+    fs::remove_all(root);
+}
+
+TEST(PhilipsParser, OpenSessionUnknownNumberHasNoFlow) {
+    const auto root = stageOpenSession("none");
+    PhilipsParseWarnings w;
+    EXPECT_FALSE(PhilipsParser::sessionFlow((root / "P0").string(), 0x99, w).has_value());
+    EXPECT_FALSE(PhilipsParser::sessionFlow((root / "nope").string(), 0x1E, w).has_value());
+    fs::remove_all(root);
+}
+
+TEST(PhilipsParser, OpenSessionParsesWithWaveformTimeAsTherapy) {
+    const auto root = stageOpenSession("parse");
+    PhilipsParser parser;
+    auto s = parser.parseSession((root / "P0").string(), "dev1", "", tp(kBaseTs + 60));
+    ASSERT_NE(s, nullptr);
+    EXPECT_FALSE(s->has_summary);
+    EXPECT_FALSE(s->has_events);
+    EXPECT_EQ(s->session_start, tp(kBaseTs + 60));
+    EXPECT_EQ(s->session_end, tp(kBaseTs + 60 + 480));
+    ASSERT_TRUE(s->duration_seconds.has_value());
+    EXPECT_EQ(*s->duration_seconds, 480);          // therapy so far = waveform time
+    EXPECT_FALSE(s->breathing_summary.empty());
+    EXPECT_TRUE(s->events.empty());                // no machine events before mask-off
+    fs::remove_all(root);
+}
+
+TEST(PhilipsParser, ClosedSessionKeepsSummaryDuration) {
+    // With a summary, the duration stays the summed mask-on periods (D12).
+    PhilipsParser parser;
+    auto s = parser.parseSession(fixturePath("ds2v3/P0"), "dev1", "", tp(kBaseTs));
+    ASSERT_NE(s, nullptr);
+    ASSERT_TRUE(s->has_summary);
+    ASSERT_TRUE(s->duration_seconds.has_value());
+    PhilipsParseWarnings w;
+    auto flow = PhilipsParser::sessionFlow(fixturePath("ds2v3/P0"), 0x1E, w);
+    ASSERT_TRUE(flow.has_value());
+    EXPECT_NE(*s->duration_seconds, flow->recorded_seconds);
 }
 
 #endif // CPAPDASH_WITH_PHILIPS
