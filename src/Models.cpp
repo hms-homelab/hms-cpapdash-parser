@@ -319,6 +319,10 @@ void ParsedSession::calculateMetrics() {
             metrics->avg_mask_pressure = mean_of(native_samples.mask);
     }
 
+    // A Philips night's breathing comes from its flow alone: take it over the
+    // breaths, as OSCAR does, not over minute means.
+    if (manufacturer == DeviceManufacturer::PHILIPS) applyBreathMetrics();
+
     // ===== SPO2 METRICS =====
     if (!vitals.empty()) {
         std::vector<double> spo2_values;
@@ -369,6 +373,45 @@ void ParsedSession::calculateMetrics() {
             metrics->hr_p50 = static_cast<int>(calculatePercentileHelper(hr_double, 50.0));
         }
     }
+}
+
+void ParsedSession::applyBreathMetrics() {
+    if (!metrics) return;
+    std::vector<double> tv, ti, te, ie, fl;
+    double breath_s = 0, volume_ml = 0;
+    for (const auto& b : breaths) {
+        const double dur = b.inspiratory_time + b.expiratory_time;
+        // 3 to 60 breaths a minute; anything else is a gap or noise, not a breath.
+        if (!(dur >= 1.0 && dur <= 20.0) || !(b.tidal_volume > 0)) continue;
+        breath_s += dur;
+        volume_ml += b.tidal_volume;
+        tv.push_back(b.tidal_volume);
+        ti.push_back(b.inspiratory_time);
+        te.push_back(b.expiratory_time);
+        if (b.expiratory_time > 0) ie.push_back(b.inspiratory_time / b.expiratory_time);
+        fl.push_back(b.flow_limitation);
+    }
+    if (tv.empty() || breath_s <= 0) return;
+    // The rates are per minute of THERAPY: the breaths a minute and the litres a
+    // minute the patient actually moved. A breath's own 60/(Ti+Te) runs high,
+    // because the detector does not account every second to a breath (on a
+    // 78-minute DreamStation session, 4,353 of 4,675 s): counted against the
+    // time, the rate is the one OSCAR's weighted average reports.
+    const double minutes =
+        (duration_seconds && *duration_seconds > 0 ? *duration_seconds : breath_s) / 60.0;
+    const auto median = [](std::vector<double> v) {
+        std::sort(v.begin(), v.end());
+        const size_t h = v.size() / 2;
+        return v.size() % 2 ? v[h] : (v[h - 1] + v[h]) / 2.0;
+    };
+    metrics->avg_respiratory_rate   = static_cast<double>(tv.size()) / minutes;
+    metrics->avg_minute_ventilation = volume_ml / 1000.0 / minutes;
+    // The per-breath figures: the median breath, as OSCAR summarises them.
+    metrics->avg_tidal_volume       = median(tv);
+    metrics->avg_inspiratory_time   = median(ti);
+    metrics->avg_expiratory_time    = median(te);
+    if (!ie.empty()) metrics->avg_ie_ratio = median(ie);
+    metrics->avg_flow_limitation    = median(fl);
 }
 
 std::string ParsedSession::toString() const {

@@ -593,6 +593,10 @@ std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
 
     session->status = ParsedSession::Status::COMPLETED;
     session->file_complete = true;
+    // A Philips session's breathing figures come from its breaths, not its
+    // minute means (calculateMetrics, applyBreathMetrics). Events and the AHI
+    // stay the .002/.B02 file's alone: machine_reported (the summary's own
+    // tally) is a cross-check and never becomes an event.
     session->calculateMetrics();
 
     return session;

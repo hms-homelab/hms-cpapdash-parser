@@ -830,6 +830,169 @@ TEST(PhilipsParser, OpenSessionParsesWithWaveformTimeAsTherapy) {
     fs::remove_all(root);
 }
 
+// ── A closed session: leak only from the machine, events only from .B02, ──────
+// ── breathing figures over breaths ─────────────────────────────────────────
+
+namespace {
+
+// Session 0x1E closed (its .B01 and .B05), with or without its .B02.
+fs::path stageClosed(const std::string& tag, bool with_events) {
+    auto root = fs::temp_directory_path() / ("philips_closed_" + tag);
+    fs::remove_all(root);
+    fs::create_directories(root / "P0");
+    fs::copy_file(fixturePath("ds2v3/PROP.BIN"), root / "PROP.BIN");
+    for (const char* ext : {".B01", ".B05"})
+        fs::copy_file(fixturePath(std::string("ds2v3/P0/0000001E") + ext),
+                      root / "P0" / (std::string("0000001E") + ext));
+    if (with_events)
+        fs::copy_file(fixturePath("ds2v3/P0/0000001E.B02"), root / "P0" / "0000001E.B02");
+    return root;
+}
+
+}  // namespace
+
+TEST(PhilipsParser, AClosedSessionWithNoEventsFileHasNoLeakAndNoPressure) {
+    const auto root = stageClosed("noevents", false);
+    PhilipsParser parser;
+    auto s = parser.parseSession((root / "P0").string(), "dev1", "");
+    ASSERT_NE(s, nullptr);
+    ASSERT_TRUE(s->has_summary);
+    EXPECT_FALSE(s->has_events);
+    ASSERT_FALSE(s->breathing_summary.empty());
+    for (const auto& m : s->breathing_summary) {
+        EXPECT_FALSE(m.leak_rate.has_value()) << "flow alone gives no leak";
+        EXPECT_FALSE(m.pressure_measured);
+    }
+    ASSERT_TRUE(s->metrics);
+    EXPECT_FALSE(s->metrics->avg_leak_rate.has_value());
+    EXPECT_FALSE(s->metrics->leak_p95.has_value());
+    EXPECT_FALSE(s->metrics->avg_pressure.has_value());
+    fs::remove_all(root);
+}
+
+TEST(PhilipsParser, AClosedSessionsLeakIsTheMachinesFromItsEventsFile) {
+    const auto root = stageClosed("events", true);
+    PhilipsParser parser;
+    auto s = parser.parseSession((root / "P0").string(), "dev1", "");
+    ASSERT_NE(s, nullptr);
+    ASSERT_TRUE(s->has_events);
+    int with_leak = 0;
+    for (const auto& m : s->breathing_summary)
+        if (m.leak_rate) {
+            ++with_leak;
+            EXPECT_DOUBLE_EQ(*m.leak_rate, 24.0) << "code 0x11's total leak, as the machine wrote it";
+        }
+    EXPECT_EQ(with_leak, 1) << "the one minute the stats record covers, no estimate elsewhere";
+    fs::remove_all(root);
+}
+
+TEST(PhilipsParser, TheSummarysOwnTallyNeverBecomesEventsOrTheAhi) {
+    // The .B01 statistics say OA 3, CA 1, H 2, RERA 1; with no .B02 there are
+    // no events, and the AHI is 0. The tally stays as a cross-check.
+    const auto root = stageClosed("tally", false);
+    PhilipsParser parser;
+    auto s = parser.parseSession((root / "P0").string(), "dev1", "");
+    ASSERT_NE(s, nullptr);
+    ASSERT_TRUE(s->machine_reported);
+    EXPECT_EQ(s->machine_reported->reras, 1);
+    EXPECT_EQ(s->machine_reported->obstructive_apneas, 3);
+    EXPECT_TRUE(s->events.empty());
+    ASSERT_TRUE(s->metrics);
+    EXPECT_EQ(s->metrics->total_events, 0);
+    EXPECT_EQ(s->metrics->reras, 0);
+    EXPECT_DOUBLE_EQ(s->metrics->ahi, 0.0);
+
+    // With its .B02 the counts are the events file's records.
+    const auto with = stageClosed("tally2", true);
+    auto e = parser.parseSession((with / "P0").string(), "dev1", "");
+    ASSERT_NE(e, nullptr);
+    ASSERT_TRUE(e->metrics);
+    EXPECT_EQ(static_cast<int>(e->events.size()) > 0, true);
+    EXPECT_EQ(e->metrics->obstructive_apneas, 3) << "the .B02's OA records";
+    fs::remove_all(root);
+    fs::remove_all(with);
+}
+
+namespace {
+
+ParsedSession breathSession(DeviceManufacturer maker) {
+    ParsedSession s;
+    s.manufacturer = maker;
+    const auto t0 = tp(kBaseTs);
+    s.session_start = t0;
+    s.duration_seconds = 600;   // ten minutes of therapy
+    // 140 breaths of 4 s (Ti 1.5, Te 2.5) at 500 mL, then 10 at 300 mL, and
+    // two that are not breaths: a 30 s "breath" across a pause, a 0.5 s blip.
+    for (int i = 0; i < 150; ++i) {
+        Breath b;
+        b.onset = t0 + std::chrono::seconds(4 * i);
+        b.inspiratory_time = 1.5;
+        b.expiratory_time = 2.5;
+        b.tidal_volume = i < 140 ? 500.0 : 300.0;
+        b.flow_limitation = 0.1;
+        s.breaths.push_back(b);
+    }
+    Breath pause;
+    pause.inspiratory_time = 10;
+    pause.expiratory_time = 20;
+    pause.tidal_volume = 50;
+    s.breaths.push_back(pause);
+    Breath blip;
+    blip.inspiratory_time = 0.2;
+    blip.expiratory_time = 0.3;
+    blip.tidal_volume = 5;
+    s.breaths.push_back(blip);
+    // Minute rows that say something else, so a figure taken from them shows.
+    for (int m = 0; m < 10; ++m) {
+        BreathingSummary row(t0 + std::chrono::minutes(m));
+        row.respiratory_rate = 30.0;
+        row.tidal_volume = 900.0;
+        row.minute_ventilation = 27.0;
+        s.breathing_summary.push_back(row);
+    }
+    return s;
+}
+
+}  // namespace
+
+TEST(PhilipsParser, ANightsBreathingFiguresAreTakenOverItsBreaths) {
+    auto s = breathSession(DeviceManufacturer::PHILIPS);
+    s.calculateMetrics();
+    ASSERT_TRUE(s.metrics);
+    const auto& m = *s.metrics;
+    ASSERT_TRUE(m.avg_respiratory_rate && m.avg_tidal_volume && m.avg_minute_ventilation);
+    EXPECT_DOUBLE_EQ(*m.avg_respiratory_rate, 15.0) << "150 breaths in 10 minutes of therapy";
+    EXPECT_DOUBLE_EQ(*m.avg_tidal_volume, 500.0) << "the median breath";
+    EXPECT_DOUBLE_EQ(*m.avg_minute_ventilation, (140 * 500.0 + 10 * 300.0) / 1000.0 / 10.0)
+        << "the litres moved per minute of therapy";
+    EXPECT_DOUBLE_EQ(*m.avg_inspiratory_time, 1.5);
+    EXPECT_DOUBLE_EQ(*m.avg_expiratory_time, 2.5);
+    EXPECT_DOUBLE_EQ(*m.avg_ie_ratio, 0.6);
+    EXPECT_DOUBLE_EQ(*m.avg_flow_limitation, 0.1);
+}
+
+TEST(PhilipsParser, BreathFiguresAreForPhilipsOnlyAndNeedBreaths) {
+    // A ResMed's breathing is its PLD's: the minute rows stand.
+    auto r = breathSession(DeviceManufacturer::RESMED);
+    r.calculateMetrics();
+    ASSERT_TRUE(r.metrics && r.metrics->avg_respiratory_rate);
+    EXPECT_DOUBLE_EQ(*r.metrics->avg_respiratory_rate, 30.0);
+
+    // No breath that qualifies: the minute figures are left as they are.
+    auto p = breathSession(DeviceManufacturer::PHILIPS);
+    p.breaths.resize(150);
+    for (auto& b : p.breaths) b.tidal_volume = 0;
+    p.calculateMetrics();
+    ASSERT_TRUE(p.metrics && p.metrics->avg_respiratory_rate);
+    EXPECT_DOUBLE_EQ(*p.metrics->avg_respiratory_rate, 30.0);
+
+    // With no therapy time the breaths' own time is the base: 150 x 4 s.
+    auto t = breathSession(DeviceManufacturer::PHILIPS);
+    t.duration_seconds.reset();
+    t.calculateMetrics();
+    EXPECT_DOUBLE_EQ(*t.metrics->avg_respiratory_rate, 15.0);
+}
+
 TEST(PhilipsParser, ClosedSessionKeepsSummaryDuration) {
     // With a summary, the duration stays the summed mask-on periods (D12).
     PhilipsParser parser;

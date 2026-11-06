@@ -444,9 +444,24 @@ struct ParsedSession {
     std::optional<SessionMetrics> metrics;
 
     /**
-     * Calculate aggregated metrics from session data
+     * Calculate aggregated metrics from session data. For a PHILIPS session the
+     * breathing figures are then taken over its breaths (applyBreathMetrics).
      */
     void calculateMetrics();
+
+    /**
+     * The breathing figures taken over the session's BREATHS rather than its
+     * minute means, the way OSCAR reports a Philips PRS1 night: respiratory
+     * rate and minute ventilation as breaths and litres per minute of therapy
+     * (duration_seconds, else the breaths' own time); tidal volume, Ti, Te, I:E
+     * and flow limitation as the median breath. A breath under 1 s or over
+     * 20 s (more than 60 or fewer than 3 a minute) is not a breath and is left
+     * out. Overwrites those fields of `metrics`; nothing changes when `metrics`
+     * is unset or no breath qualifies. calculateMetrics() applies it to
+     * PHILIPS sessions, whose breathing comes from flow alone; a ResMed's comes
+     * from its PLD channels and is left as it is.
+     */
+    void applyBreathMetrics();
 
     /**
      * Get human-readable session summary

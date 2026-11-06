@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [2026.10.0] - 2026-11-06
+
+### Philips: a closed session's figures as OSCAR reports them
+
+- **No leak from flow alone.** A Philips waveform minute no longer gets a
+  flow-estimated `leak_rate`, closed session or open. Its leak is the machine's
+  own (`.002`/`.B02` code 0x11) where the events file has it, and none where it
+  does not. Pressure stays unmeasured on a flow-only minute (2026.9.0).
+- **Events and AHI from the events file only.** A session with a summary and
+  no events file has no events and an AHI of 0. The summary's statistics stay
+  in `machine_reported` as a cross-check and never become events (they never
+  did; this is now tested).
+- **Breathing figures over breaths.** New `ParsedSession::applyBreathMetrics()`,
+  which `calculateMetrics()` applies to every PHILIPS session: respiratory rate
+  and minute ventilation are breaths and litres per minute of therapy, and
+  tidal volume, Ti, Te, I:E and flow limitation are the median breath. Before,
+  they were means of the per-minute rows. A breath under 1 s or over 20 s is
+  left out. The per-minute rows are unchanged, for charts. ResMed and every
+  other maker keep their figures as they were.
+
 ## [2026.9.0] - 2026-11-05
 
 ### Philips: a session still being recorded reads from its waveform
