@@ -870,19 +870,99 @@ TEST(PhilipsParser, AClosedSessionWithNoEventsFileHasNoLeakAndNoPressure) {
     fs::remove_all(root);
 }
 
-TEST(PhilipsParser, AClosedSessionsLeakIsTheMachinesFromItsEventsFile) {
+TEST(PhilipsParser, CodeOx11IsTotalLeakAndNeverTheUnintentionalLeak) {
     const auto root = stageClosed("events", true);
     PhilipsParser parser;
     auto s = parser.parseSession((root / "P0").string(), "dev1", "");
     ASSERT_NE(s, nullptr);
     ASSERT_TRUE(s->has_events);
-    int with_leak = 0;
-    for (const auto& m : s->breathing_summary)
-        if (m.leak_rate) {
-            ++with_leak;
-            EXPECT_DOUBLE_EQ(*m.leak_rate, 24.0) << "code 0x11's total leak, as the machine wrote it";
+    int with_total = 0;
+    for (const auto& m : s->breathing_summary) {
+        EXPECT_FALSE(m.leak_rate.has_value()) << "0x11 is total leak, vent flow included";
+        if (m.total_leak) {
+            ++with_total;
+            EXPECT_DOUBLE_EQ(*m.total_leak, 24.0) << "code 0x11's total leak, as the machine wrote it";
         }
-    EXPECT_EQ(with_leak, 1) << "the one minute the stats record covers, no estimate elsewhere";
+    }
+    EXPECT_EQ(with_total, 1) << "the one minute the stats record covers";
+    ASSERT_TRUE(s->metrics);
+    EXPECT_FALSE(s->metrics->avg_leak_rate.has_value());
+    EXPECT_FALSE(s->metrics->leak_p95.has_value());
+    fs::remove_all(root);
+}
+
+namespace {
+
+// A v3 events chunk (doc 9.2, 9.8) of `n` two-minute statistics records (code
+// 0x11: total leak, snore, pressure in 0.1 cmH2O), the first 120 s after `ts`.
+std::vector<uint8_t> statsChunk(uint32_t session, uint32_t ts, int n, uint8_t leak,
+                                uint8_t pressure_tenths) {
+    std::vector<uint8_t> payload;
+    for (int i = 0; i < n; ++i) {
+        payload.push_back(0x11);
+        payload.push_back(120);   // u16 seconds since the previous record
+        payload.push_back(0);
+        payload.push_back(leak);
+        payload.push_back(0);     // snore count
+        payload.push_back(pressure_tenths);
+    }
+    std::vector<uint8_t> h{3, 0, 0, /*file type*/ 0, /*family*/ 0, /*version*/ 6, /*ext*/ 2};
+    for (int k = 0; k < 4; ++k) h.push_back(static_cast<uint8_t>((session >> (8 * k)) & 0xFF));
+    for (int k = 0; k < 4; ++k) h.push_back(static_cast<uint8_t>((ts >> (8 * k)) & 0xFF));
+    h.push_back(1);      // one record size in the header block:
+    h.push_back(0x11);   // code 0x11 ...
+    h.push_back(5);      // ... 5 bytes after its code
+    const size_t block = h.size() + 1 + payload.size() + 4;
+    h[1] = static_cast<uint8_t>(block & 0xFF);
+    h[2] = static_cast<uint8_t>(block >> 8);
+    unsigned sum = 0;
+    for (auto b : h) sum += b;
+    h.push_back(static_cast<uint8_t>(sum & 0xFF));
+    // Data CRC: MSB-first CRC-32, poly 0x04C11DB7, init all ones, no final
+    // inversion, each byte fed as the word 00 00 00 bb (doc 9.2).
+    uint32_t crc = 0xFFFFFFFFu;
+    for (uint8_t b : payload)
+        for (uint8_t byte : {uint8_t{0}, uint8_t{0}, uint8_t{0}, b}) {
+            crc ^= static_cast<uint32_t>(byte) << 24;
+            for (int k = 0; k < 8; ++k) crc = (crc & 0x80000000u) ? (crc << 1) ^ 0x04C11DB7u : crc << 1;
+        }
+    std::vector<uint8_t> out = h;
+    out.insert(out.end(), payload.begin(), payload.end());
+    for (int k = 0; k < 4; ++k) out.push_back(static_cast<uint8_t>((crc >> (8 * k)) & 0xFF));
+    return out;
+}
+
+}  // namespace
+
+TEST(PhilipsParser, ASteadyTotalLeakOfTwelveIsNoUnintentionalLeak) {
+    // A night at 3.7 cmH2O whose vent flow reads a steady 12 L/min of total
+    // leak, every two minutes: no leak, none of it unintentional, is claimed.
+    const auto root = stageClosed("steady12", false);
+    const auto ev = statsChunk(0x1E, static_cast<uint32_t>(kBaseTs), 44, 12, 37);
+    std::ofstream(root / "P0" / "0000001E.B02", std::ios::binary)
+        .write(reinterpret_cast<const char*>(ev.data()), static_cast<std::streamsize>(ev.size()));
+    PhilipsParser parser;
+    auto s = parser.parseSession((root / "P0").string(), "dev1", "");
+    ASSERT_NE(s, nullptr);
+    // has_events stays false: statistics are not events. That the chunk framed
+    // and checked is shown by its readings arriving below.
+    int with_total = 0;
+    for (const auto& m : s->breathing_summary) {
+        EXPECT_FALSE(m.leak_rate.has_value());
+        if (m.total_leak) {
+            ++with_total;
+            EXPECT_DOUBLE_EQ(*m.total_leak, 12.0);
+            ASSERT_TRUE(m.epr_pressure.has_value());
+            EXPECT_NEAR(*m.epr_pressure, 3.7, 1e-9);
+        }
+    }
+    EXPECT_GT(with_total, 0) << "the total leak is kept, in its own slot";
+    ASSERT_TRUE(s->metrics);
+    EXPECT_FALSE(s->metrics->avg_leak_rate.has_value());
+    EXPECT_FALSE(s->metrics->max_leak_rate.has_value());
+    EXPECT_FALSE(s->metrics->leak_p95.has_value());
+    // Large leak stays what the machine's 0x10 events say: none here.
+    for (const auto& e : s->events) EXPECT_NE(e.event_type, EventType::LARGE_LEAK);
     fs::remove_all(root);
 }
 

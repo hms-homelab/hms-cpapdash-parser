@@ -179,7 +179,7 @@ System One card confirms; see section 8 Q2).**
 | 0x0d | Vibratory snore | none | |
 | 0x0e | Unknown | 3 bytes | |
 | 0x0f | CSR / periodic breathing | duration 2 bytes, offset 1 byte | |
-| 0x11 | Graph data | leak 1 byte, snore 1 byte | |
+| 0x11 | Graph data | leak 1 byte (total leak, see 4.2), snore 1 byte | |
 | 0x12 | Summary? | 4 bytes | partially understood |
 
 Offset semantics [A #Family-0-Codes]: delta advances the running clock BEFORE the event is
@@ -206,8 +206,18 @@ Running clock: `timestamp += u16 delta` read immediately after each code [B L916
 | 0x0E | Variable breathing | duration u16 * 2 sec, elapsed 1 byte | start = clock - elapsed - duration |
 | 0x0F | Periodic breathing | duration u16 * 2 sec, elapsed 1 byte | start = clock - elapsed - duration |
 | 0x10 | Large leak | duration u16 * 2 sec, elapsed 1 byte | start = clock - elapsed - duration |
-| 0x11 | Statistics | leak 1 byte, snore 1 byte, EPAP 1 byte / 10.0 | stats at clock |
+| 0x11 | Statistics | total leak 1 byte (L/min), snore 1 byte, EPAP 1 byte / 10.0 | stats at clock |
 | 0x12 | Snore-related stats | u16, skipped | |
+
+**0x11's leak is TOTAL leak (both tables).** The byte is everything leaving the circuit,
+the mask's intentional vent flow included: on a DreamStation 2 night at 3.6 to 3.9 cmH2O
+it read a steady 11 to 13 L/min in every one of 44 records, while other readers of the
+same night showed no leak at all. The parser keeps it as `BreathingSummary::total_leak` and
+never as `leak_rate`, which is UNINTENTIONAL leak in the unified model (a ResMed's PLD
+leak, the 24 L/min large-leak line). Unintentional leak is NOT derived from it: the vent's
+share depends on the mask and the pressure, and neither the card nor [A], [B] or [C] gives
+that curve. The v2 table above and [A] call the byte "leak"; it is the same record and is
+treated the same way. Large leak comes from the machine's own 0x10 events, unchanged.
 
 **Onset conversion (both tables):** PRS1 records apnea-family events at their END (the
 elapsed/offset byte is the seconds back to the start). Our unified model timestamps the
@@ -551,7 +561,7 @@ gives the record's time from the header timestamp [C] ([S] totals: section 9.5).
 | 0x0e | variable breathing: u16 duration in 2-second units, then seconds since it ended | clock - since - duration | 4,577 |
 | 0x0f | periodic breathing: same layout | clock - since - duration | 92 |
 | 0x10 | large leak: same layout | clock - since - duration | 1,500 |
-| 0x11 | two-minute statistics: total leak L/min, snore count, average pressure 0.1 cmH2O | stat at clock | 312,696 |
+| 0x11 | two-minute statistics: TOTAL leak L/min (vent flow included; never unintentional leak, see 4.2), snore count, average pressure 0.1 cmH2O | stat at clock | 312,696 |
 | 0x12 | NO time field: pressure kind (0 CPAP, 1 EPAP, 2 IPAP), pressure, u16 snore count | ignored | 12,598 |
 | 0x14 | hypopnea; byte = its duration in seconds | clock - byte | 22,665 |
 | 0x0a, 0x15 | hypopnea variants on other models [C] | clock - byte | 0 |

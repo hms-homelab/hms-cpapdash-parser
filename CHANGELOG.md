@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [2026.10.1] - 2026-11-06
+
+### Fixed: a Philips night's leak was its total leak
+
+The `.002`/`.B02` code 0x11 statistics byte is TOTAL leak, the mask's intentional
+vent flow included, and it was stored as `leak_rate`, which is unintentional leak
+everywhere else. A night whose mask did not leak read a steady 11 to 13 L/min.
+
+- New `BreathingSummary::total_leak` (L/min) carries the byte. `leak_rate` is no
+  longer set from it, so a Philips session has no unintentional leak and no
+  `avg_leak_rate` / `leak_p95`.
+- Unintentional leak is not derived from total leak: the vent's share depends on
+  the mask and the pressure, which the card does not record.
+- Large leak still comes from the machine's own 0x10 events, unchanged.
+- `docs/PHILIPS_FORMAT.md` 4.2 and 9.8 now say "total leak" and why.
+
 ## [2026.10.0] - 2026-11-06
 
 ### Philips: a closed session's figures as OSCAR reports them

@@ -200,7 +200,7 @@ public:
     /** Machine-graphed stat sample from .002 code 0x11 (doc 4.2). */
     struct EventStat {
         std::chrono::system_clock::time_point timestamp;
-        double total_leak = 0;   // L/min
+        double total_leak = 0;   // L/min, TOTAL (vent flow included): BreathingSummary::total_leak
         double snore = 0;        // count/index
         double epap = 0;         // cmH2O
     };

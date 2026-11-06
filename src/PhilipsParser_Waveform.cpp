@@ -163,9 +163,9 @@ bool PhilipsParser::parseWaveform(const std::vector<PhilipsChunk>& chunks,
                                                breaths_by_minute[min],
                                                rate, min, summary);
         // The waveform is flow only: no leak is estimated from it. The
-        // machine's own leak (.002/.B02 code 0x11) is folded in by
-        // parseSession where the events file has it; with no events file
-        // the minute has none, open session or closed.
+        // machine's code 0x11 is TOTAL leak and goes to total_leak
+        // (parseSession), never here: a Philips minute has no unintentional
+        // leak, open session or closed.
         summary.leak_rate = std::nullopt;
 
         session.breathing_summary.push_back(summary);

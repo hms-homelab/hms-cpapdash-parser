@@ -120,6 +120,11 @@ struct BreathingSummary {
     std::optional<double> ie_ratio;              // I:E ratio
     std::optional<double> flow_limitation;       // Flow limitation score 0-1
     std::optional<double> leak_rate;             // Unintentional leak L/min
+    // TOTAL leak, L/min: everything leaving the circuit, the mask's intentional
+    // vent flow included. A Philips machine writes this (.002/.B02 code 0x11),
+    // not the unintentional leak, and the vent's share depends on the mask and
+    // the pressure, so it is never turned into leak_rate.
+    std::optional<double> total_leak;
 
     // PLD-derived metrics (machine's own calculations)
     std::optional<double> therapy_pressure;    // cmH2O (PLD Press.2s) -- the DELIVERED

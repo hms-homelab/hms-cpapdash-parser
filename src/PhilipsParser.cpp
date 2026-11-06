@@ -564,9 +564,8 @@ std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
         return nullptr;
     }
 
-    // Fold machine-graphed stats (leak / snore / EPAP, .002 code 0x11) into the
-    // per-minute summaries. Machine data wins over flow-derived estimates,
-    // same precedent as the ResMed PLD overwrite.
+    // Fold machine-graphed stats (total leak / snore / EPAP, .002 code 0x11)
+    // into the per-minute summaries, same precedent as the ResMed PLD overwrite.
     if (!stats.empty() && !session->breathing_summary.empty()) {
         auto base = session->breathing_summary.front().timestamp;
         for (const auto& s : stats) {
@@ -575,7 +574,12 @@ std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
             if (idx < 0 || idx >= static_cast<long>(session->breathing_summary.size()))
                 continue;
             auto& summary = session->breathing_summary[static_cast<size_t>(idx)];
-            summary.leak_rate = s.total_leak;
+            // TOTAL leak, the mask's vent flow included: its own slot, never
+            // leak_rate, which is the UNINTENTIONAL leak everywhere else (a
+            // ResMed's PLD, the reports, the 24 L/min large-leak line). The
+            // vent's share is the mask's and the pressure's, which the card
+            // does not say, so no unintentional leak is derived from it.
+            summary.total_leak = s.total_leak;
             summary.snore_index = s.snore;
             summary.epr_pressure = s.epap;
         }
