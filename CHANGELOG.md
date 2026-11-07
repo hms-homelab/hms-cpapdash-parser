@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [2026.11.0] - 2026-11-07
+
 ### DreamStation 2: a card, or sessions, from its Bluetooth records
 
 New `PhilipsBleCard.h` (Philips option). A DreamStation 2 serves each closed
