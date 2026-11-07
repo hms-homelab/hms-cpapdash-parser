@@ -72,6 +72,10 @@ constexpr size_t STD_HEADER_LEN = 15;
 
 } // namespace
 
+uint32_t PhilipsParser::crc32v3(const uint8_t* data, size_t len) {
+    return crc32WordFed(data, len);
+}
+
 std::vector<PhilipsChunk> PhilipsParser::readChunks(const uint8_t* data, size_t len,
                                                     PhilipsParseWarnings& warnings) {
     std::vector<PhilipsChunk> chunks;

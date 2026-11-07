@@ -159,6 +159,30 @@ public:
                                                 PhilipsParseWarnings& warnings);
 
     /**
+     * The v3 data checksum (doc 9.2): CRC-32, MSB first, polynomial 0x04C11DB7,
+     * initial value 0xFFFFFFFF, no final inversion, each byte fed as the 32-bit
+     * word 00 00 00 bb. The machine uses the same CRC for LOG.SEQ and the VC key
+     * of PROP.BIN (doc 9.10).
+     */
+    static uint32_t crc32v3(const uint8_t* data, size_t len);
+
+    /**
+     * Assemble one session from its chunks, already filtered to that session:
+     * identity (when info is given), summary, events, waveform, metrics. The
+     * core of parseSession, shared with the Bluetooth record path
+     * (PhilipsBleCard.h) so both build a night the same way. nullptr when the
+     * chunks yield no session start.
+     */
+    static std::unique_ptr<ParsedSession> sessionFromChunks(
+        const std::vector<PhilipsChunk>& summary_chunks,
+        const std::vector<PhilipsChunk>& events_chunks,
+        const std::vector<PhilipsChunk>& waveform_chunks,
+        const PhilipsDeviceInfo* info,
+        const std::string& device_id,
+        const std::string& device_name,
+        PhilipsParseWarnings& warnings);
+
+    /**
      * Discover the sessions in dir: .001/.002/.005 with 10-decimal-digit stems
      * (v2), and .B01/.B02/.B05 or .001/.002/.005 with 8-hex-digit stems (v3).
      * Grouped by the session number in the chunk headers, sorted ascending.

@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+### DreamStation 2: a card, or sessions, from its Bluetooth records
+
+New `PhilipsBleCard.h` (Philips option). A DreamStation 2 serves each closed
+session over Bluetooth as records whose bodies are the plaintext card files
+(`.B01` summary, `.B02` events, the `D/` and `E/` logs; no `.B05` waveform).
+
+- `Ds2CardWriter::build` / `write` turn `Ds2BleRecord {stream, session, body}`
+  plus the machine's serial, model and firmware into the card tree a fresh card
+  would hold: `P-SERIES/LAST.TXT`, `P-SERIES/<folder>/P0/<session hex>.B01/.B02`,
+  `D/000.B03`, `E/000.B04`, `LOG.SEQ` and `PROP.BIN` with their checksums
+  (`docs/PHILIPS_FORMAT.md` 9.10). Every block is checked first; a bad CRC, a
+  session or stream mismatch, or a duplicate refuses the whole tree.
+- `parseDs2BleRecords` parses the records straight into `ParsedSession`s,
+  without files. It shares the assembly with `parseSession` through the new
+  `PhilipsParser::sessionFromChunks`, so both give the same night.
+- `PhilipsParser::crc32v3` exposes the v3 data CRC.
+- Tested on synthetic records built from the documented layouts (a long
+  session with every event kind, a three-period session whose events span two
+  blocks, a 4-second session, a summary with no mask-on, both logs): the
+  written tree parses back through `PhilipsParser` with the hand-worked start,
+  duration, events and AHI, and the direct path gives the same sessions.
+
 ## [2026.10.1] - 2026-11-06
 
 ### Fixed: a Philips night's leak was its total leak

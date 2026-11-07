@@ -60,6 +60,7 @@ if(CPAPDASH_PARSER_WITH_PHILIPS)
         src/PhilipsParser_Summary.cpp
         src/PhilipsParser_Events.cpp
         src/PhilipsParser_Waveform.cpp
+        src/PhilipsBleCard.cpp
     )
     target_compile_definitions(cpapdash_parser PUBLIC CPAPDASH_WITH_PHILIPS=1)
 endif()
@@ -149,6 +150,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
     endif()
     if(CPAPDASH_PARSER_WITH_PHILIPS)
         list(APPEND TEST_SOURCES tests/test_philips.cpp)
+        list(APPEND TEST_SOURCES tests/test_philips_ble_card.cpp)
     endif()
 
     add_executable(run_tests ${TEST_SOURCES})

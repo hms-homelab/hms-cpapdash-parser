@@ -494,66 +494,22 @@ std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
     }
     if (selected == nullptr) selected = &groups.back();
 
-    auto session = std::make_unique<ParsedSession>();
-    session->device_id = device_id;
-    session->device_name = device_name;
-    session->manufacturer = DeviceManufacturer::PHILIPS;
-
-    // Identity (a missing manifest is non-fatal). Only the serial, model and
-    // firmware cross into the session; the key-like fields stay on
-    // PhilipsDeviceInfo (SDD-009 D2).
-    std::string props = findPropertiesFile(session_dir);
-    if (!props.empty()) {
-        if (auto info = parseProperties(props)) {
-            session->serial_number = info->serial_number;
-            session->firmware = info->software_version;
-            if (auto name = modelName(info->model_number)) session->product_name = *name;
-            // model_id is numeric in the unified model; keep the numeric
-            // prefix of the alphanumeric ModelNumber ("560P" -> 560).
-            std::string digits;
-            for (char c : info->model_number) {
-                if (std::isdigit(static_cast<unsigned char>(c))) digits.push_back(c);
-                else break;
-            }
-            if (!digits.empty()) {
-                try { session->model_id = std::stoi(digits); } catch (...) {}
-            }
-            if (session->device_name.empty()) {
-                auto name = modelName(info->model_number);
-                session->device_name = name.value_or("Philips Respironics " + info->model_number);
-            }
-        }
-    }
+    // Identity (a missing manifest is non-fatal).
+    std::optional<PhilipsDeviceInfo> info;
+    const std::string props = findPropertiesFile(session_dir);
+    if (!props.empty()) info = parseProperties(props);
 
     PhilipsParseWarnings warnings;
-    std::vector<EventStat> stats;
-
     const PhilipsSessionFiles files = withSiblingFolders(session_dir, *selected);
     const uint32_t number = files.session_number;
 
-    if (!files.summary_files.empty()) {
-        auto chunks = sessionChunks(files.summary_files, number, warnings);
-        if (parseSummary(chunks, *session, warnings)) {
-            session->has_summary = true;
-        }
-        session->data_records += static_cast<int>(chunks.size());
-    }
+    auto session = sessionFromChunks(sessionChunks(files.summary_files, number, warnings),
+                                     sessionChunks(files.events_files, number, warnings),
+                                     sessionChunks(files.waveform_files, number, warnings),
+                                     info ? &*info : nullptr, device_id, device_name,
+                                     warnings);
 
-    if (!files.events_files.empty()) {
-        auto chunks = sessionChunks(files.events_files, number, warnings);
-        if (parseEvents(chunks, *session, stats, warnings)) {
-            session->has_events = true;
-        }
-        session->data_records += static_cast<int>(chunks.size());
-    }
-
-    if (!files.waveform_files.empty()) {
-        auto chunks = sessionChunks(files.waveform_files, number, warnings);
-        parseWaveform(chunks, *session, warnings);
-        session->data_records += static_cast<int>(chunks.size());
-    }
-
-    if (!session->session_start.has_value()) {
+    if (!session) {
         if (isEncryptedCard(session_dir)) {
             std::cerr << "PhilipsParser: encrypted DreamStation 2 card in " << session_dir
                       << " (decrypt it first; this parser never decrypts)" << std::endl;
@@ -563,6 +519,78 @@ std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
         }
         return nullptr;
     }
+
+    if (warnings.total() > 0) {
+        std::cerr << "PhilipsParser: session " << selected->session_id
+                  << " parse warnings: crc=" << warnings.crc_failures
+                  << " truncated=" << warnings.truncated_chunks
+                  << " unknown_events=" << warnings.unknown_event_codes
+                  << " unknown_records=" << warnings.unknown_record_codes
+                  << " unsupported=" << warnings.unsupported_chunks << std::endl;
+    }
+    return session;
+}
+
+// ── sessionFromChunks ───────────────────────────────────────────────────────
+
+std::unique_ptr<ParsedSession> PhilipsParser::sessionFromChunks(
+    const std::vector<PhilipsChunk>& summary_chunks,
+    const std::vector<PhilipsChunk>& events_chunks,
+    const std::vector<PhilipsChunk>& waveform_chunks,
+    const PhilipsDeviceInfo* info,
+    const std::string& device_id,
+    const std::string& device_name,
+    PhilipsParseWarnings& warnings)
+{
+    auto session = std::make_unique<ParsedSession>();
+    session->device_id = device_id;
+    session->device_name = device_name;
+    session->manufacturer = DeviceManufacturer::PHILIPS;
+
+    // Only the serial, model and firmware cross into the session; the key-like
+    // fields stay on PhilipsDeviceInfo (SDD-009 D2).
+    if (info != nullptr) {
+        session->serial_number = info->serial_number;
+        session->firmware = info->software_version;
+        if (auto name = modelName(info->model_number)) session->product_name = *name;
+        // model_id is numeric in the unified model; keep the numeric
+        // prefix of the alphanumeric ModelNumber ("560P" -> 560).
+        std::string digits;
+        for (char c : info->model_number) {
+            if (std::isdigit(static_cast<unsigned char>(c))) digits.push_back(c);
+            else break;
+        }
+        if (!digits.empty()) {
+            try { session->model_id = std::stoi(digits); } catch (...) {}
+        }
+        if (session->device_name.empty()) {
+            auto name = modelName(info->model_number);
+            session->device_name = name.value_or("Philips Respironics " + info->model_number);
+        }
+    }
+
+    std::vector<EventStat> stats;
+
+    if (!summary_chunks.empty()) {
+        if (parseSummary(summary_chunks, *session, warnings)) {
+            session->has_summary = true;
+        }
+        session->data_records += static_cast<int>(summary_chunks.size());
+    }
+
+    if (!events_chunks.empty()) {
+        if (parseEvents(events_chunks, *session, stats, warnings)) {
+            session->has_events = true;
+        }
+        session->data_records += static_cast<int>(events_chunks.size());
+    }
+
+    if (!waveform_chunks.empty()) {
+        parseWaveform(waveform_chunks, *session, warnings);
+        session->data_records += static_cast<int>(waveform_chunks.size());
+    }
+
+    if (!session->session_start.has_value()) return nullptr;
 
     // Fold machine-graphed stats (total leak / snore / EPAP, .002 code 0x11)
     // into the per-minute summaries, same precedent as the ResMed PLD overwrite.
@@ -585,14 +613,6 @@ std::unique_ptr<ParsedSession> PhilipsParser::parseSession(
         }
     }
 
-    if (warnings.total() > 0) {
-        std::cerr << "PhilipsParser: session " << selected->session_id
-                  << " parse warnings: crc=" << warnings.crc_failures
-                  << " truncated=" << warnings.truncated_chunks
-                  << " unknown_events=" << warnings.unknown_event_codes
-                  << " unknown_records=" << warnings.unknown_record_codes
-                  << " unsupported=" << warnings.unsupported_chunks << std::endl;
-    }
     session->parse_warnings = warnings.total();
 
     session->status = ParsedSession::Status::COMPLETED;

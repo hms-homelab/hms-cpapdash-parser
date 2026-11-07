@@ -379,7 +379,7 @@ the whole [S] card.
 | Path | Content | Source |
 |---|---|---|
 | `PROP.BIN` | device properties, `key=value` lines ending CR LF; decrypted it is plain text | [S]; key names as [C] `PROP.TXT` |
-| `LOG.SEQ` | small binary file, not read | [S]; [C] "unknown" |
+| `LOG.SEQ` | the card's summary of itself, 74 bytes (section 9.10); not read by the parser | [S]; [C] "unknown" |
 | `P0` .. `Pn` | session files `<8 hex digits>.B01` (summary), `.B02` (events), `.B05` (waveform) | [S] |
 | `D/` | `.B03` files, not read | [S] |
 | `E/` | `.B04` files, not read | [S] |
@@ -578,3 +578,62 @@ interval x interleave bytes (5 samples per second); samples span -128..127 and t
 cycles. Consecutive blocks in a file abut exactly (152,664 times on [S]); the other gaps are
 whole minutes plus one second (61, 121, 181 s ...), consistent with mask-off periods. [C]
 does not read waveforms.
+
+### 9.10 The card from the machine's Bluetooth records
+
+After a session closes, a DreamStation 2 serves it over Bluetooth Low Energy as one record per
+stream. The reassembled body of each record is byte for byte the plaintext card file of the
+same session [S: 247 of 247 summaries and 26 of 26 events files compared]:
+
+| Stream | Card file |
+|---|---|
+| 1 | `<session hex>.B01`, summary |
+| 2 | `<session hex>.B02`, events |
+| 3 | a `D/NNN.B03` log |
+| 4 | an `E/NNN.B04` log |
+
+There is no `.B05` waveform over Bluetooth. Every block of every record passes the section 9.2
+checks; streams 3 and 4 come as one block each, its header carrying the newest session and the
+machine's clock at the read.
+
+**Card tree.** When a fresh card goes in, the machine writes every record it holds as [S]:
+
+| Path | Content |
+|---|---|
+| `P-SERIES/LAST.TXT` | the machine folder name, ASCII, no line end |
+| `P-SERIES/<folder>/P0/<session hex>.B01`, `.B02` | streams 1 and 2, one file per record, 8 upper-case hex digits |
+| `P-SERIES/<folder>/D/000.B03`, `E/000.B04` | streams 3 and 4 |
+| `P-SERIES/<folder>/LOG.SEQ` | below |
+| `P-SERIES/<folder>/PROP.BIN` | below |
+
+The folder name (8 characters on [S]) is in no record; it is not the section 9.2 CRC of the
+serial.
+
+**Bookmark.** The machine keeps a 10-byte read cursor per stream: offset (u32 LE), stream
+(u8), counter (u8), check (u32 LE). The final cursors of a read equal the card's own, byte for
+byte [S].
+
+**`LOG.SEQ`**, 74 bytes [S, two cards]:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 4 x 5 | four counts, each u32 LE followed by the byte `5a`: files in `D/`, files in `E/`, files in the current P folder, the current P folder number |
+| 20 | 5 x 10 | the bookmarks of streams 0 to 4 (stream 0 is all zero on both cards) |
+| 70 | 4 | u32 LE, the section 9.2 data CRC of bytes 0 to 69 |
+
+**`PROP.BIN`** [S, three copies]: `KEY=VALUE` lines ending CR LF, in the fixed order `CF SN MN
+PT DF DFV F FV SV FD LD FN PFN EFN DFN SID BK SK EK DK TS DC`, then `VC=0x%08X` (upper-case hex)
+with no line end. `VC` is the section 9.2 data CRC of every byte before it, `VC=` included.
+
+- `SN`, `MN`, `SV` are what the machine reports over Bluetooth; `F`, `FV`, `DFV` equal the
+  block headers' Family, FamilyVersion and DataFormatVersion.
+- `FN`, `PFN`, `EFN`, `DFN` repeat `LOG.SEQ`'s counts (folder number, P, E, D files).
+- `SK`, `DK`, `EK` are the bookmarks of streams 2, 3 and 4, printed `0x` + offset (8 hex) +
+  stream (2) + counter (2) + check (8), lower case. `BK` is all zero on every copy. Stream 1
+  has no key.
+- `LD` is the machine's clock (unix seconds) when it wrote the file: for a card written from a
+  Bluetooth read, the header time of the log blocks.
+- `CF`, `PT`, `DF`, `FD`, `SID`, `TS`, `DC` are the same on every copy of one machine and are
+  in no record.
+
+`Ds2CardWriter` (`PhilipsBleCard.h`) writes this tree.
