@@ -6,10 +6,15 @@
 // in github.com/nglessner/o2ring-s-protocol ("Format A"), a recording is:
 //
 //   header   10 bytes  01 03 00 00 00 00 00 00 04 00
-//   records   3 bytes  spo2, heart rate, flags; one per SECOND
+//   records   3 bytes  spo2, heart rate, movement; one per SECOND
 //                        spo2 0         = no reading
 //                        heart rate 0   = no reading, 255 = no finger contact
-//                        flags non-zero = the sample is suspect
+//                        movement       = a count, 0 when the wearer is still
+//                      (The protocol notes call this byte "flags" and read a
+//                      non-zero one as a suspect sample. A night's recording
+//                      shows otherwise: it is non-zero for about 2% of the
+//                      seconds, nearly always beside a normal SpO2 and heart
+//                      rate, and it lines up with OSCAR's Movement chart.)
 //   trailer  48 bytes  the ring's own session statistics, present once the
 //                      recording is finalised; its sub-magic 48 12 5a da sits
 //                      at (size - 44)

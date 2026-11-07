@@ -81,11 +81,55 @@ TEST(O2RingS, TheRingsNoReadingValuesAreTheOneInvalidSentinel) {
     EXPECT_FALSE(s->samples[0].valid()) << "spo2 0";
     EXPECT_FALSE(s->samples[1].valid()) << "hr 0";
     EXPECT_FALSE(s->samples[2].valid()) << "hr 255, no finger contact";
-    EXPECT_FALSE(s->samples[3].valid()) << "flags set: suspect";
+    EXPECT_TRUE(s->samples[3].valid()) << "movement does not make a reading suspect";
     EXPECT_TRUE(s->samples[4].valid());
-    EXPECT_EQ(s->metrics.valid_samples, 1);
+    EXPECT_EQ(s->metrics.valid_samples, 2);
     EXPECT_EQ(s->metrics.total_samples, 5);
-    EXPECT_DOUBLE_EQ(s->metrics.avg_spo2, 97.0);
+    EXPECT_DOUBLE_EQ(s->metrics.avg_spo2, 96.5);
+}
+
+TEST(O2RingS, TheThirdByteIsTheSecondsMovement) {
+    const auto b = make_o2s({{96, 58, 0}, {96, 58, 2}, {95, 60, 111}, {0, 0, 7}});
+    const auto s = O2RingSParser::parse(b.data(), b.size(), "20261004221500.o2s");
+    ASSERT_TRUE(s.has_value());
+    EXPECT_EQ(s->samples[0].motion, 0);
+    EXPECT_EQ(s->samples[1].motion, 2);
+    EXPECT_EQ(s->samples[2].motion, 111);
+    EXPECT_EQ(s->samples[3].motion, 7) << "kept even where the reading is missing";
+    EXPECT_EQ(s->samples[1].invalid_flag, 0);
+}
+
+TEST(O2RingS, MovementDoesNotChangeWhatTheReadingsSay) {
+    // The same readings with and without movement give the same metrics: the
+    // movement byte is its own channel, not part of whether SpO2 and HR are good.
+    const auto still  = make_o2s({{96, 60, 0}, {94, 62, 0}, {92, 64, 0}, {96, 60, 0}});
+    const auto moving = make_o2s({{96, 60, 9}, {94, 62, 40}, {92, 64, 1}, {96, 60, 111}});
+    const auto a = O2RingSParser::parse(still.data(),  still.size(),  "20261004221500.o2s");
+    const auto b = O2RingSParser::parse(moving.data(), moving.size(), "20261004221500.o2s");
+    ASSERT_TRUE(a.has_value() && b.has_value());
+    EXPECT_EQ(b->metrics.valid_samples, a->metrics.valid_samples);
+    EXPECT_EQ(b->metrics.valid_samples, 4);
+    EXPECT_DOUBLE_EQ(b->metrics.avg_spo2, a->metrics.avg_spo2);
+    EXPECT_DOUBLE_EQ(b->metrics.avg_hr, a->metrics.avg_hr);
+}
+
+TEST(O2RingS, AMovementCountOfTheWholeByteRangeIsKept) {
+    const auto b = make_o2s({{96, 60, 255}, {96, 60, 128}, {96, 60, 1}});
+    const auto s = O2RingSParser::parse(b.data(), b.size(), "20261004221500.o2s");
+    ASSERT_TRUE(s.has_value());
+    EXPECT_EQ(s->samples[0].motion, 255);
+    EXPECT_EQ(s->samples[1].motion, 128);
+    EXPECT_EQ(s->samples[2].motion, 1);
+    for (const auto& x : s->samples) EXPECT_EQ(x.invalid_flag, 0);
+}
+
+TEST(OximetryFile, AnO2RingSNightKeepsItsMovementThroughTheOneEntryPoint) {
+    const auto b = make_o2s({{96, 60, 0}, {96, 60, 3}});
+    const auto s = parseOximetryFile(b.data(), b.size(), "20261004221500.o2s");
+    ASSERT_TRUE(s.has_value());
+    EXPECT_EQ(s->samples[0].motion, 0);
+    EXPECT_EQ(s->samples[1].motion, 3);
+    EXPECT_TRUE(s->samples[1].valid());
 }
 
 TEST(O2RingS, AnUnfinishedRecordingParsesButIsNotComplete) {

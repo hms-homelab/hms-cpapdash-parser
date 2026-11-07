@@ -87,8 +87,13 @@ std::optional<OximetrySession> O2RingSParser::parse(const uint8_t* data, size_t 
         // so valid() and every metric treat them as VLDParser's are treated.
         s.spo2         = (r[0] == 0 || r[0] > 100) ? kNoReading : r[0];
         s.heart_rate   = (r[1] == 0 || r[1] == 255) ? kNoReading : r[1];
-        s.invalid_flag = r[2];
-        s.motion       = 0;
+        // The third byte is the ring's movement count for the second, not a
+        // validity flag: it is non-zero for about 2% of a night, nearly always
+        // beside a normal SpO2 and heart rate, and its bursts are the ones
+        // OSCAR draws as Movement. A reading is as good as its SpO2 and heart
+        // rate say it is.
+        s.invalid_flag = 0;
+        s.motion       = r[2];
         s.vibration    = 0;
         session.samples.push_back(s);
     }
