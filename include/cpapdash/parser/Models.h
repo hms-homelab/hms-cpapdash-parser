@@ -364,6 +364,13 @@ struct ParsedSession {
     // events / duration (support ticket 87, confirmed against OSCAR).
     std::optional<int> duration_seconds;
 
+    // The machine's own mask-on periods (on, off), in the order its summary
+    // lists them, where the format records them: a Philips PRS1 summary's
+    // mask-on / mask-off pairs (duration_seconds is their sum). Empty for every
+    // other format, whose periods come from the waveform instead.
+    std::vector<std::pair<std::chrono::system_clock::time_point,
+                          std::chrono::system_clock::time_point>> mask_on_periods;
+
     // file_start -> seconds of data in that checkpoint, which is what makes the
     // sum above safe to recompute. Keyed rather than accumulated because the same
     // BRP is legitimately parsed more than once: a merge can re-parse an earlier

@@ -377,6 +377,14 @@ TEST(PhilipsBleCard, MultiPeriodAndShortSessions) {
     EXPECT_EQ(secs(*b.session_start), T1 + 2);
     EXPECT_EQ(secs(*b.session_end), T1 + 2282);
     EXPECT_EQ(b.duration_seconds, 2100);
+    // The three periods themselves, in order, as the summary lists them.
+    ASSERT_EQ(b.mask_on_periods.size(), 3u);
+    const std::vector<std::pair<int64_t, int64_t>> periods = {
+        {T1 + 2, T1 + 602}, {T1 + 722, T1 + 1022}, {T1 + 1082, T1 + 2282}};
+    for (size_t k = 0; k < periods.size(); ++k) {
+        EXPECT_EQ(secs(b.mask_on_periods[k].first), periods[k].first) << k;
+        EXPECT_EQ(secs(b.mask_on_periods[k].second), periods[k].second) << k;
+    }
     const std::vector<Ev> expect = {
         {EventType::OBSTRUCTIVE, T1 + 302, 0},
         {EventType::HYPOPNEA, T1 + 885, 15},
@@ -421,6 +429,8 @@ TEST(PhilipsBleCard, DirectPathEqualsTheWrittenTree) {
         EXPECT_EQ(d->session_start, t.session_start);
         EXPECT_EQ(d->session_end, t.session_end);
         EXPECT_EQ(d->duration_seconds, t.duration_seconds);
+        EXPECT_EQ(d->mask_on_periods, t.mask_on_periods);
+        EXPECT_FALSE(d->mask_on_periods.empty());
         EXPECT_EQ(d->serial_number, t.serial_number);
         EXPECT_EQ(d->product_name, t.product_name);
         EXPECT_EQ(d->firmware, t.firmware);

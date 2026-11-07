@@ -18,6 +18,10 @@ session over Bluetooth as records whose bodies are the plaintext card files
   without files. It shares the assembly with `parseSession` through the new
   `PhilipsParser::sessionFromChunks`, so both give the same night.
 - `PhilipsParser::crc32v3` exposes the v3 data CRC.
+- New `ParsedSession::mask_on_periods`: a Philips session's mask-on periods (on,
+  off) as its summary lists them, whose sum is `duration_seconds`, so a reader
+  with no waveform (a session read over Bluetooth) can still draw each stretch
+  of therapy. Empty for every other format.
 - Tested on synthetic records built from the documented layouts (a long
   session with every event kind, a three-period session whose events span two
   blocks, a 4-second session, a summary with no mask-on, both logs): the

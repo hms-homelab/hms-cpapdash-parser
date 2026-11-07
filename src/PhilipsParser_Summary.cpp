@@ -391,6 +391,7 @@ bool PhilipsParser::parseSummary(const std::vector<PhilipsChunk>& chunks,
             therapy_seconds += std::chrono::duration_cast<std::chrono::seconds>(off - on).count();
     }
     session.duration_seconds = static_cast<int>(therapy_seconds);
+    session.mask_on_periods = spans;
     return true;
 }
 
