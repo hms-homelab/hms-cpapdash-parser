@@ -86,7 +86,8 @@ Two packets can carry the same second; the first is kept.
 
 Words 99, 101, 104 and 105 are written once per breath, 1 to 2 seconds after it ends.
 They are 0 before a session's first breath and while nothing is breathed; the parser
-reads 0 in words 99, 101 and 105 as "no reading", not as a value. The SpO2/pulse words
+reads 0 in words 99, 101, 104 and 105 as "no reading", not as a value (a short
+session of word 104 = 0 is no rate, not a rate of 0). The SpO2/pulse words
 BMC_RESmart names hold junk when no oximeter is attached and are not read.
 
 The 25 samples of a channel are in time order, and contiguous from one packet to the
@@ -172,7 +173,7 @@ not that integral.
 | `avg/max/min_pressure` | words 4-28 at the model's scale |
 | `tidal_volume`, `minute_ventilation` | words 99 and 101 |
 | `respiratory_rate` | word 104 |
-| `inspiratory_time`, `expiratory_time`, `ie_ratio` | the breaths found in patient flow; `ie_ratio` is Ti/Te as for every other machine, and a minute with no breath found takes it from word 105 turned round |
+| `inspiratory_time`, `expiratory_time`, `ie_ratio` | the breaths found in patient flow; `ie_ratio` is Ti/Te as for every other machine, and a minute with no breath found takes it from word 105 turned round. A breath touching a sample with no flow reading (a second missing from the card, or one at the leak cap) is dropped, not carried across the gap |
 | `leak_rate`, `leak_min`, `leak_max` | word 98 |
 | `flow_limitation` | not reported: the score depends on the leak level and has not been shown to hold on this machine |
 

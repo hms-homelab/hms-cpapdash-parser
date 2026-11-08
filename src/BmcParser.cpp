@@ -550,7 +550,9 @@ std::unique_ptr<ParsedSession> BmcParser::sessionFromCard(const BmcCard& card,
             m.epap_sum += w[bmc_word::kEpap] / 2.0;
             ++m.epap_n;
         }
-        if (w[bmc_word::kRespRate] != kBmcInvalid) {
+        // 0, like 0xFFFF, is the machine with no rate yet (it writes 0 while it
+        // warms up), not a rate of 0: a short session of nothing else read 0.0.
+        if (w[bmc_word::kRespRate] != kBmcInvalid && w[bmc_word::kRespRate] != 0) {
             m.rr_sum += w[bmc_word::kRespRate];
             ++m.rr_n;
         }
@@ -565,7 +567,20 @@ std::unique_ptr<ParsedSession> BmcParser::sessionFromCard(const BmcCard& card,
     // bucketed by the minute their onset falls in, as the ResMed BRP path does.
     const SessionWave wave = sessionWave(card, span);
     const int per_minute = 60 * kBmcWaveHz;
-    const auto breaths = EDFParser::detectBreaths(wave.patient, kBmcWaveHz);
+    auto breaths = EDFParser::detectBreaths(wave.patient, kBmcWaveHz);
+    // A breath lies wholly on flow the card measured. The detector reads a
+    // sample with no reading (a second missing from the card, or one at the
+    // leak cap) as zero flow and carries a breath across the gap: a 4 s session
+    // spread over 12 s got one "breath" of Ti 9.2 s and Te 0.36 s, an I:E of 25.
+    breaths.erase(std::remove_if(breaths.begin(), breaths.end(),
+                                 [&wave](const EDFParser::BreathCycle& b) {
+                                     for (int i = b.start_idx; i <= b.end_idx; ++i)
+                                         if (i < 0 || static_cast<size_t>(i) >= wave.patient.size() ||
+                                             std::isnan(wave.patient[i]))
+                                             return true;
+                                     return false;
+                                 }),
+                  breaths.end());
     std::map<int64_t, std::vector<EDFParser::BreathCycle>> breaths_by_minute;
     for (const auto& b : breaths) breaths_by_minute[b.start_idx / per_minute].push_back(b);
 

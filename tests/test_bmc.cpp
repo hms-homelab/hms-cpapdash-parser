@@ -633,6 +633,86 @@ TEST_F(BmcWaveDir, TheRateIsWord104AndTheBreathsAgreeWithWords104And105) {
     EXPECT_EQ(breathsInMinute(*r, kEvening, 1), 15);
 }
 
+TEST(BmcSession, ARateOfZeroIsTheMachineWarmingUpNotARate) {
+    // A real card writes word 104 = 0 for its first seconds, before it has a
+    // rate. A short session of nothing else read 0.0 breaths/min; a longer one
+    // had its mean pulled down by them.
+    auto minute = [](std::function<uint16_t(int)> rr) {
+        std::vector<uint8_t> bytes;
+        for (int i = 0; i < 60; ++i) {
+            Second sec;
+            sec.at = plus(kEvening, i);
+            sec.rr = rr(i);
+            const auto p = packet(sec);
+            bytes.insert(bytes.end(), p.begin(), p.end());
+        }
+        return bytes;
+    };
+    const auto zeros = buildBmcCard(kSerial, {minute([](int) { return uint16_t(0); })}, {});
+    auto s = BmcParser::sessionFromCard(zeros, zeros.sessions[0], "dev", "BMC");
+    EXPECT_FALSE(s->breathing_summary[0].respiratory_rate.has_value()) << "not measured, not 0";
+    EXPECT_FALSE(s->metrics->avg_respiratory_rate.has_value());
+
+    const auto mixed = buildBmcCard(
+        kSerial, {minute([](int i) { return uint16_t(i < 20 ? 0 : 15); })}, {});
+    auto m = BmcParser::sessionFromCard(mixed, mixed.sessions[0], "dev", "BMC");
+    EXPECT_DOUBLE_EQ(*m->breathing_summary[0].respiratory_rate, 15.0) << "not 10.0";
+}
+
+TEST_F(BmcWaveDir, NoBreathIsCarriedAcrossSecondsTheCardDoesNotHave) {
+    // Seconds 69-73 are missing, from mid-inspiration: the breath that starts
+    // at 68.04 s would otherwise run to 76.04 s with a 5.96 s "inspiration",
+    // the way a 4 s session spread over 12 s got one breath of I:E 25.
+    Train t;
+    const auto whole = breathing(kEvening, 180, t);
+    std::vector<uint8_t> raw;
+    for (int sec = 0; sec < 180; ++sec) {
+        if (sec >= 69 && sec <= 73) continue;
+        raw.insert(raw.end(), whole.begin() + sec * kBmcPacketBytes,
+                   whole.begin() + (sec + 1) * kBmcPacketBytes);
+    }
+    auto s = parse(raw, "G3 A20");
+    ASSERT_NE(s, nullptr);
+    ASSERT_EQ(s->breathing_summary.size(), 3u);
+    const auto& row = s->breathing_summary[1];
+    EXPECT_TRUE(row.flow_measured) << "55 of its 60 seconds are on the card";
+    // Within half a sample: beside the gap the leak level resettles and one
+    // crossing can move by a sample. The breath across it would add 0.3 s to Ti.
+    ASSERT_TRUE(row.inspiratory_time.has_value());
+    EXPECT_NEAR(*row.inspiratory_time, 1.6, 0.02);
+    EXPECT_NEAR(*row.expiratory_time, 2.4, 0.02);
+    EXPECT_NEAR(*row.ie_ratio, 1.6 / 2.4, 0.01);
+    const auto t0 = bmcToTimePoint(*bmcCivilSeconds(2031, 3, 14, 23, 0, 0));
+    for (const auto& b : s->breaths) {
+        const double on = std::chrono::duration<double>(b.onset - t0).count();
+        const double off = on + b.inspiratory_time + b.expiratory_time;
+        EXPECT_TRUE(off < 69.0 || on >= 74.0) << "a breath from " << on << " s to " << off << " s";
+    }
+}
+
+TEST_F(BmcWaveDir, ASessionWithNoWholeBreathHasNoRateAndNoIe) {
+    // The real 4 s session: four seconds over twelve, the rate word still 0xFFFF
+    // and word 105 still 0. Nothing is measured, so nothing is reported.
+    Train t;
+    t.rr = kBmcInvalid;
+    t.ie = 0;
+    const auto whole = breathing(kEvening, 12, t);
+    std::vector<uint8_t> raw;
+    for (int sec : {0, 1, 10, 11})
+        raw.insert(raw.end(), whole.begin() + sec * kBmcPacketBytes,
+                   whole.begin() + (sec + 1) * kBmcPacketBytes);
+    auto s = parse(raw, "G3 A20");
+    ASSERT_NE(s, nullptr);
+    ASSERT_EQ(s->breathing_summary.size(), 1u);
+    const auto& row = s->breathing_summary[0];
+    EXPECT_FALSE(row.respiratory_rate.has_value());
+    EXPECT_FALSE(row.ie_ratio.has_value()) << "never Ti/Te across the gap";
+    EXPECT_FALSE(row.inspiratory_time.has_value());
+    EXPECT_TRUE(s->breaths.empty());
+    EXPECT_FALSE(s->metrics->avg_ie_ratio.has_value());
+    EXPECT_FALSE(s->metrics->avg_respiratory_rate.has_value());
+}
+
 TEST_F(BmcWaveDir, EachBreathCarriesTheMachinesTidalVolume) {
     // Breath b ends at second 4b + 4; the machine writes its volume, 400 + b,
     // a second later and holds it until the next breath's.
