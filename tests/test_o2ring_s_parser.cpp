@@ -96,6 +96,7 @@ TEST(O2RingS, TheThirdByteIsTheSecondsMovement) {
     EXPECT_EQ(s->samples[1].motion, 2);
     EXPECT_EQ(s->samples[2].motion, 111);
     EXPECT_EQ(s->samples[3].motion, 7) << "kept even where the reading is missing";
+    EXPECT_FALSE(s->samples[3].valid()) << "a dropout with movement is still invalid";
     EXPECT_EQ(s->samples[1].invalid_flag, 0);
 }
 

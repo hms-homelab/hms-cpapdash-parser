@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### O2Ring-S: the third byte of a sample is movement
+
+`O2RingSParser` read each sample's third byte as an invalid flag, so a second
+in which the wearer moved was dropped as invalid and its movement stored as 0.
+The byte is the second's movement (mostly 0, with a spike when the wearer
+moves); OSCAR reads it the same way.
+
+- `OximetrySample::motion` now holds that byte, and `invalid_flag` is always 0
+  for an O2Ring-S sample. Only the ring's own "no reading" values (SpO2 0,
+  heart rate 0 or 255) make a sample invalid, so a dropout with movement is
+  still invalid and a moving second with good readings is valid.
+- Metrics that count valid samples (time below 90%, ODI, averages) now include
+  the seconds the wearer moved. Re-import stored O2Ring-S nights to pick this
+  up; the older entry below, "a sample with flags set is invalid", describes
+  the previous behaviour.
+
 ## [2026.11.0] - 2026-11-07
 
 ### DreamStation 2: a card, or sessions, from its Bluetooth records
