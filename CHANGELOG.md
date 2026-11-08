@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+### BMC / Luna: flow and pressure, with their scales measured
+
+A Luna's three 25 Hz channels were left out because their scale was unknown. The
+flow and pressure scales are now measured, on a G3 against the machine's own
+display and on a G2S over its nights (`docs/BMC_FORMAT.md`, "Pressure" and "Flow").
+
+- The model string is read from the `.USR` (offset 8854, nothing else in the file):
+  `BmcCard::model`, `bmcModelFromUsr`, and `bmcPressureScale`, the per-model table.
+  `G3 A20` reads code / 10 cmH2O, `G2S B20A` (code - 102) / 23.23. Any other model,
+  or a card without its `.USR`, gets no pressure waveform.
+- Per minute: `avg/max/min_pressure` from words 4-28; `avg/max/min_flow_rate` as
+  patient flow (words 54-78, signed, leak level removed, 0.1 L/min per code);
+  `total_leak` as the mean total flow, (code - 383) / 10; `tidal_volume` and
+  `minute_ventilation` from words 99 (mL) and 101 (0.1 L/min); Ti and Te from the
+  breaths, which the shared detector now finds on a Luna and which fill
+  `ParsedSession::breaths` (each with the machine's word-99 volume).
+- New `BreathingSummary::flow_measured`, beside `pressure_measured`: false for a
+  minute with too little flow on the card, including any minute with the leak at
+  the cap (mask off). An unmeasured minute's fields are 0 placeholders, not
+  readings; `calculateMetrics` leaves them out. True for every other parser.
+- A Luna minute with no pressure now has `pressure_measured = false`; before, it
+  carried 0 cmH2O as if measured.
+- **`ie_ratio` on a Luna is now Ti/Te**, as for every other machine. Word 105 is
+  Te/Ti x 10; it was passed through as Te/Ti (2.0 where the field means 0.5). The
+  ratio now comes from the breaths, or word 105 turned round when none is found.
+- `respiratory_rate` stays word 104; `flow_limitation` is not reported for a Luna.
+- `BmcParser::waveform(card, from, to)`: the calibrated 25 Hz patient flow and
+  pressure of any stretch of a card, NaN where there is no reading.
+- `tools/bmc_probe` reports the model and, per session, the plausibility checks
+  (pause pressure against the set pressure, breaths against word 104, Te/Ti against
+  word 105, word 99 against the integral).
+
 ## [2026.11.1] - 2026-11-08
 
 ### O2Ring-S: the third byte of a sample is movement

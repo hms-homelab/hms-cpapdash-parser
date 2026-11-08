@@ -16,7 +16,7 @@
 
 namespace cpapdash::parser {
 
-// BMC / React Health Luna (G2S family). The format is written up in
+// BMC / React Health Luna (G2S and G3 families). The format is written up in
 // docs/BMC_FORMAT.md, with where every fact comes from; this header names the
 // pieces and nothing more.
 
@@ -41,10 +41,52 @@ constexpr size_t kSync          = 0;
 constexpr size_t kSessionNumber = 1;
 constexpr size_t kEpap          = 2;    // 0.5 cmH2O per unit
 constexpr size_t kIpap          = 3;    // 0.5 cmH2O per unit
+constexpr size_t kPressure      = 4;    // 25 samples (4-28), signed, scale per model
+constexpr size_t kFlow          = 54;   // 25 samples (54-78), signed, total flow
 constexpr size_t kLeak          = 98;   // 0.1 L/min per unit
+constexpr size_t kTidalVolume   = 99;   // mL, the last breath's
+constexpr size_t kMinuteVent    = 101;  // 0.1 L/min per unit
 constexpr size_t kRespRate      = 104;  // breaths/min
-constexpr size_t kIeRatio       = 105;  // x10
+constexpr size_t kIeRatio       = 105;  // Te/Ti x10
 }  // namespace bmc_word
+
+/** Samples per second, and so per packet, of each 25 Hz channel. */
+constexpr int kBmcWaveHz = 25;
+
+/** Word 98 at or above this is the machine's leak cap (mask off). */
+constexpr uint16_t kBmcLeakCap = 1000;
+
+/**
+ * Total flow, L/min = (signed code - kBmcFlowZero) x kBmcFlowLpmPerCode,
+ * measured against the machine's own flow display (docs/BMC_FORMAT.md, "Flow").
+ * Patient flow subtracts the leak level instead and never uses the zero.
+ */
+constexpr double kBmcFlowZero = 383.0;
+constexpr double kBmcFlowLpmPerCode = 0.1;
+
+/** The model string in the .USR: offset and the most bytes it can take. */
+constexpr size_t kBmcUsrModelOffset = 8854;
+constexpr size_t kBmcUsrModelBytes = 12;
+
+/** cmH2O = (code - zero) / codes_per_cmh2o, for the pressure channel (words 4-28). */
+struct BmcPressureScale {
+    double zero = 0;
+    double codes_per_cmh2o = 10;
+};
+
+/**
+ * The pressure channel's scale for a model string, or nullopt when the model
+ * has not been measured: then no pressure waveform is reported at all, since
+ * the scale differs between models and a guessed one would be a wrong number.
+ */
+std::optional<BmcPressureScale> bmcPressureScale(const std::string& model);
+
+/**
+ * The model string of a .USR file ("G3 A20", "G2S B20A"), from its first
+ * kBmcUsrModelOffset + kBmcUsrModelBytes bytes; empty when absent or not
+ * printable. Nothing else in the file is read: it holds patient details.
+ */
+std::string bmcModelFromUsr(const uint8_t* data, size_t len);
 
 /** .evt record types whose meaning is confirmed. Everything else is a span of
  *  state, counted in the notes and never emitted as an event. */
@@ -115,6 +157,7 @@ struct BmcNotes {
 /** A whole card read into memory: packets sorted by time, and its events. */
 struct BmcCard {
     std::string serial;
+    std::string model;                  // from the .USR; empty when not read
     std::vector<BmcPacket> packets;     // sorted, one per second
     std::vector<BmcEventRecord> events;
     std::vector<BmcSessionSpan> sessions;
@@ -129,6 +172,18 @@ BmcCard buildBmcCard(const std::string& serial,
                      const std::vector<std::vector<uint8_t>>& raw_files,
                      const std::vector<uint8_t>& evt_file);
 
+/**
+ * The 25 Hz samples of a stretch of a card, calibrated, one entry per sample
+ * from `start` on. NaN marks a sample with no reading: a second with no packet,
+ * a second outside every session, a flow second with the leak at the cap, a
+ * pressure second the machine left at zero.
+ */
+struct BmcWaveform {
+    BmcCivilSeconds start = 0;
+    double sample_rate = kBmcWaveHz;
+    std::vector<double> flow;      // patient flow, L/min, leak removed (+ inspiration)
+    std::vector<double> pressure;  // cmH2O; empty when the model is not measured
+};
 class BmcParser : public ISessionParser {
 public:
     /**
@@ -170,6 +225,14 @@ public:
                                                           const std::string& device_id,
                                                           const std::string& device_name,
                                                           BmcNotes* notes = nullptr);
+
+    /**
+     * The calibrated 25 Hz flow and pressure of [from, to) (civil seconds), for
+     * a view zoomed into part of a night. The leak level is taken over each
+     * whole session the window touches, so a sample reads the same here as in
+     * the per-minute figures of sessionFromCard.
+     */
+    static BmcWaveform waveform(const BmcCard& card, BmcCivilSeconds from, BmcCivilSeconds to);
 
 private:
     std::unique_ptr<ParsedSession> pick(BmcCard card, std::optional<BmcCivilSeconds> hint,

@@ -13,11 +13,14 @@
 #include "cpapdash/parser/BmcParser.h"
 #include "cpapdash/parser/ISessionParser.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -54,6 +57,13 @@ Stamp plus(Stamp t, int seconds) {
     return out;
 }
 
+// Word positions as docs/BMC_FORMAT.md gives them, written out here rather than
+// taken from the header, so a test pins the document and not the code.
+constexpr size_t kWordPressure = 4;   // 25 samples
+constexpr size_t kWordFlow = 54;      // 25 samples, signed
+constexpr size_t kWordVt = 99;        // mL
+constexpr size_t kWordMv = 101;       // 0.1 L/min
+
 struct Second {
     Stamp at;
     uint16_t session = 1;
@@ -61,7 +71,11 @@ struct Second {
     uint16_t ipap = 24;   // 12.0 cmH2O
     uint16_t leak = 50;   // 5.0 L/min
     uint16_t rr = 15;
-    uint16_t ie = 20;     // 2.0
+    uint16_t ie = 20;     // Te/Ti 2.0
+    uint16_t vt = 0;
+    uint16_t mv = 0;
+    std::array<uint16_t, 25> pressure{};
+    std::array<uint16_t, 25> flow{};
 };
 
 void putLe16(std::vector<uint8_t>& b, size_t off, uint16_t v) {
@@ -82,6 +96,12 @@ std::vector<uint8_t> packet(const Second& s, uint16_t sync = kBmcSync) {
     putLe16(p, 2 * bmc_word::kLeak, s.leak);
     putLe16(p, 2 * bmc_word::kRespRate, s.rr);
     putLe16(p, 2 * bmc_word::kIeRatio, s.ie);
+    putLe16(p, 2 * kWordVt, s.vt);
+    putLe16(p, 2 * kWordMv, s.mv);
+    for (size_t i = 0; i < 25; ++i) {
+        putLe16(p, 2 * (kWordPressure + i), s.pressure[i]);
+        putLe16(p, 2 * (kWordFlow + i), s.flow[i]);
+    }
     const size_t ts = 2 * kBmcPacketWords;
     putLe16(p, ts, static_cast<uint16_t>(s.at.y));
     p[ts + 2] = static_cast<uint8_t>(s.at.mo);
@@ -130,6 +150,70 @@ std::vector<uint8_t> evtFile(const std::vector<Event>& events, int fill_slots = 
 std::vector<uint8_t> cat(std::vector<uint8_t> a, const std::vector<uint8_t>& b) {
     a.insert(a.end(), b.begin(), b.end());
     return a;
+}
+
+// A .USR carrying `model` at its documented offset; every other byte is filler.
+std::vector<uint8_t> usrFile(const std::string& model) {
+    std::vector<uint8_t> b(9000, 0x5A);
+    std::fill(b.begin() + 8854, b.begin() + 8854 + 12, 0);
+    std::copy(model.begin(), model.end(), b.begin() + 8854);
+    return b;
+}
+
+// A breathing night, in codes, the way the card writes it. Each breath is 4 s
+// (100 samples): inspiration 1.6 s, a half sine of `insp` codes above the
+// leak level; expiration 2.4 s, a half sine of insp x 40 / 60 below it, so the
+// two volumes are equal and the breath's mean IS the leak level.
+struct Train {
+    int level = 450;                                            // codes
+    int insp = 300;                                             // codes, 30 L/min
+    std::function<int(int)> pressure = [](int) { return 70; };  // code per second
+    std::function<uint16_t(int)> leak = [](int) { return uint16_t(50); };
+    std::function<uint16_t(int)> vt = [](int) { return uint16_t(0); };
+    uint16_t mv = 0, rr = 15, ie = 15;                          // ie: Te/Ti 1.5
+    bool breathe = true;
+};
+
+int trainSample(const Train& t, long n) {
+    if (!t.breathe) return t.level;
+    const long phase = n % 100;
+    const double pi = std::acos(-1.0);
+    if (phase < 40) return static_cast<int>(std::lround(t.level + t.insp * std::sin(pi * phase / 40.0)));
+    return static_cast<int>(
+        std::lround(t.level - t.insp * 40.0 / 60.0 * std::sin(pi * (phase - 40) / 60.0)));
+}
+
+std::vector<uint8_t> breathing(Stamp start, int seconds, const Train& t) {
+    std::vector<uint8_t> out;
+    for (int sec = 0; sec < seconds; ++sec) {
+        Second s;
+        s.at = plus(start, sec);
+        s.epap = s.ipap = 14;  // 7.0 cmH2O, a CPAP
+        s.leak = t.leak(sec);
+        s.rr = t.rr;
+        s.ie = t.ie;
+        s.vt = t.vt(sec);
+        s.mv = t.mv;
+        const int p = t.pressure(sec);
+        for (int i = 0; i < 25; ++i) {
+            s.flow[i] = static_cast<uint16_t>(static_cast<int16_t>(trainSample(t, sec * 25L + i)));
+            s.pressure[i] = static_cast<uint16_t>(static_cast<int16_t>(p));
+        }
+        const auto p8 = packet(s);
+        out.insert(out.end(), p8.begin(), p8.end());
+    }
+    return out;
+}
+
+// Breaths whose onset falls in minute `m` of a session starting at `start`.
+int breathsInMinute(const ParsedSession& s, Stamp start, int m) {
+    const auto t0 = bmcToTimePoint(*bmcCivilSeconds(start.y, start.mo, start.d, start.h,
+                                                    start.mi, start.s)) +
+                    std::chrono::minutes(m);
+    int n = 0;
+    for (const auto& b : s.breaths)
+        if (b.onset >= t0 && b.onset < t0 + std::chrono::minutes(1)) ++n;
+    return n;
 }
 
 class BmcCardDir : public ::testing::Test {
@@ -285,7 +369,9 @@ TEST(BmcSession, UnitsAreTheOnesTheFormatDocumentNames) {
     EXPECT_DOUBLE_EQ(*s->metrics->avg_therapy_pressure, 12.0);
     EXPECT_DOUBLE_EQ(*s->metrics->avg_epr_pressure, 8.0) << "the night's EPAP, from the minutes";
     EXPECT_DOUBLE_EQ(*s->breathing_summary[0].respiratory_rate, 15.0);
-    EXPECT_DOUBLE_EQ(*s->breathing_summary[0].ie_ratio, 2.0);
+    // Word 105 is Te/Ti x 10; the field carries Ti/Te, as for every other
+    // machine. With no breath in the flow, the machine's word is what is left.
+    EXPECT_DOUBLE_EQ(*s->breathing_summary[0].ie_ratio, 0.5);
     EXPECT_EQ(s->duration_seconds, 120);
     ASSERT_TRUE(s->settings.has_value());
     EXPECT_EQ(s->settings->therapy_mode, 2) << "IPAP above EPAP: bi-level";
@@ -378,6 +464,259 @@ TEST(BmcBuffers, BuffersReadTheSameAsAFolder) {
     auto first = parser.parseSessionFromBuffers(buffers, "dev", "BMC", "20310314_231000");
     ASSERT_NE(first, nullptr);
     EXPECT_EQ(first->duration_seconds, 1800);
+}
+
+// ── flow and pressure (the 25 Hz channels) ───────────────────────────────────
+
+namespace {
+
+// A card folder holding `raw` as its only raw file, an empty .evt and, unless
+// `model` is null, a .USR naming that model.
+class BmcWaveDir : public BmcCardDir {
+protected:
+    std::unique_ptr<ParsedSession> parse(const std::vector<uint8_t>& raw, const char* model) {
+        write(kSerial + ".000", raw);
+        write(kSerial + ".evt", evtFile({}));
+        if (model) write(kSerial + ".USR", usrFile(model));
+        BmcParser parser;
+        return parser.parseSession(dir_.string(), "dev", "BMC");
+    }
+};
+
+}  // namespace
+
+TEST_F(BmcWaveDir, G3PressureIsTheCodeOverTen) {
+    Train t;
+    t.pressure = [](int sec) { return sec < 60 ? 40 : sec < 120 ? 70 : 150; };
+    auto s = parse(breathing(kEvening, 180, t), "G3 A20");
+    ASSERT_NE(s, nullptr);
+    ASSERT_EQ(s->breathing_summary.size(), 3u);
+    const double want[] = {4.0, 7.0, 15.0};
+    for (int m = 0; m < 3; ++m) {
+        const auto& row = s->breathing_summary[m];
+        EXPECT_TRUE(row.pressure_measured);
+        EXPECT_NEAR(row.avg_pressure, want[m], 1e-9);
+        EXPECT_NEAR(row.min_pressure, want[m], 1e-9);
+        EXPECT_NEAR(row.max_pressure, want[m], 1e-9);
+    }
+    ASSERT_TRUE(s->metrics->avg_pressure.has_value());
+    EXPECT_NEAR(*s->metrics->avg_pressure, (4.0 + 7.0 + 15.0) / 3, 1e-9);
+}
+
+TEST_F(BmcWaveDir, G2sPressureHasAZeroOffsetAndItsOwnGain) {
+    // (code - 102) / 23.23: a code / 10 reading would say 19.5 and 33.4.
+    Train t;
+    t.pressure = [](int sec) { return sec < 60 ? 195 : 334; };
+    auto s = parse(breathing(kEvening, 120, t), "G2S B20A");
+    ASSERT_EQ(s->breathing_summary.size(), 2u);
+    EXPECT_TRUE(s->breathing_summary[0].pressure_measured);
+    EXPECT_NEAR(s->breathing_summary[0].avg_pressure, 4.0, 0.02);
+    EXPECT_NEAR(s->breathing_summary[1].avg_pressure, 10.0, 0.02);
+}
+
+TEST_F(BmcWaveDir, AnUnmeasuredModelHasNoPressureButStillHasFlow) {
+    for (const char* model : {"G3 B25", static_cast<const char*>(nullptr)}) {
+        SCOPED_TRACE(model ? model : "no .USR");
+        auto s = parse(breathing(kEvening, 120, Train{}), model);
+        ASSERT_EQ(s->breathing_summary.size(), 2u);
+        for (const auto& row : s->breathing_summary) {
+            EXPECT_FALSE(row.pressure_measured) << "a guessed scale is a wrong number";
+            EXPECT_EQ(row.avg_pressure, 0.0);
+            EXPECT_TRUE(row.flow_measured);
+            EXPECT_NEAR(row.max_flow_rate, 30.0, 0.05) << "edge minutes: the level settles";
+        }
+        EXPECT_FALSE(s->metrics->avg_pressure.has_value());
+        EXPECT_DOUBLE_EQ(*s->metrics->avg_therapy_pressure, 7.0) << "the set pressure stays";
+        fs::remove(dir_ / (kSerial + ".USR"));
+    }
+}
+
+TEST_F(BmcWaveDir, ASecondTheMachineLeftAtZeroIsNoPressureReading) {
+    Train t;
+    t.pressure = [](int sec) { return sec >= 60 && sec < 120 ? 0 : 70; };
+    auto s = parse(breathing(kEvening, 180, t), "G3 A20");
+    ASSERT_EQ(s->breathing_summary.size(), 3u);
+    EXPECT_TRUE(s->breathing_summary[0].pressure_measured);
+    EXPECT_FALSE(s->breathing_summary[1].pressure_measured) << "not 0 cmH2O";
+    EXPECT_TRUE(s->breathing_summary[2].pressure_measured);
+    EXPECT_NEAR(*s->metrics->min_pressure, 7.0, 1e-9) << "the empty minute is left out";
+}
+
+TEST_F(BmcWaveDir, FlowIsPatientFlowAtATenthOfALitrePerCode) {
+    auto s = parse(breathing(kEvening, 180, Train{}), "G3 A20");
+    ASSERT_EQ(s->breathing_summary.size(), 3u);
+    const auto& row = s->breathing_summary[1];  // a whole minute away from the edges
+    EXPECT_TRUE(row.flow_measured);
+    EXPECT_NEAR(row.avg_flow_rate, 0.0, 0.02) << "the leak level is removed";
+    EXPECT_NEAR(row.max_flow_rate, 30.0, 0.02) << "300 codes above the level";
+    EXPECT_NEAR(row.min_flow_rate, -20.0, 0.02) << "200 codes below it";
+    ASSERT_TRUE(row.total_leak.has_value());
+    EXPECT_NEAR(*row.total_leak, (450 - 383) / 10.0, 0.01) << "mean total flow above the 383 zero";
+    ASSERT_TRUE(row.inspiratory_time.has_value());
+    EXPECT_DOUBLE_EQ(*row.inspiratory_time, 1.6) << "40 samples, exact to a sample";
+    EXPECT_DOUBLE_EQ(*row.expiratory_time, 2.4) << "60 samples";
+    EXPECT_NEAR(*row.ie_ratio, 1.6 / 2.4, 1e-9) << "Ti/Te from the breaths";
+    EXPECT_FALSE(row.flow_limitation.has_value()) << "not reported for this machine";
+    EXPECT_EQ(breathsInMinute(*s, kEvening, 1), 15);
+    EXPECT_EQ(breathsInMinute(*s, kEvening, 2), 14)
+        << "the session's last breath has no next inspiration and is dropped";
+}
+
+TEST_F(BmcWaveDir, ANegativeFlowCodeIsSigned) {
+    // A leak level of 100 codes puts the expiration trough at -100 codes,
+    // written 65436. Read unsigned it would be 6,500 L/min.
+    Train t;
+    t.level = 100;
+    const auto raw = breathing(kEvening, 180, t);
+    auto s = parse(raw, "G3 A20");
+    const auto& row = s->breathing_summary[1];
+    EXPECT_NEAR(row.min_flow_rate, -20.0, 0.02);
+    EXPECT_NEAR(row.max_flow_rate, 30.0, 0.02);
+    EXPECT_NEAR(row.avg_flow_rate, 0.0, 0.02);
+    EXPECT_NEAR(*row.total_leak, (100 - 383) / 10.0, 0.01);
+    EXPECT_EQ(breathsInMinute(*s, kEvening, 1), 15);
+}
+
+TEST_F(BmcWaveDir, AMinuteAtTheLeakCapHasNoFlow) {
+    Train t;
+    t.leak = [](int sec) { return uint16_t(sec >= 60 && sec < 120 ? 1000 : 50); };
+    auto s = parse(breathing(kEvening, 180, t), "G3 A20");
+    ASSERT_EQ(s->breathing_summary.size(), 3u);
+    const auto& capped = s->breathing_summary[1];
+    EXPECT_FALSE(capped.flow_measured) << "mask off: what flows is not breathing";
+    EXPECT_EQ(capped.avg_flow_rate, 0.0);
+    EXPECT_FALSE(capped.total_leak.has_value());
+    EXPECT_FALSE(capped.inspiratory_time.has_value());
+    EXPECT_TRUE(capped.pressure_measured) << "the pressure is still read";
+    EXPECT_DOUBLE_EQ(*capped.leak_rate, 100.0);
+    EXPECT_TRUE(s->breathing_summary[0].flow_measured);
+    EXPECT_TRUE(s->breathing_summary[2].flow_measured);
+    EXPECT_EQ(breathsInMinute(*s, kEvening, 1), 0);
+}
+
+TEST_F(BmcWaveDir, TidalVolumeAndMinuteVentilationAreTheMachinesWords) {
+    Train t;
+    t.vt = [](int sec) { return uint16_t(sec < 60 ? 480 : sec < 120 ? kBmcInvalid : 0); };
+    t.mv = 72;
+    auto s = parse(breathing(kEvening, 180, t), "G3 A20");
+    ASSERT_EQ(s->breathing_summary.size(), 3u);
+    ASSERT_TRUE(s->breathing_summary[0].tidal_volume.has_value());
+    EXPECT_DOUBLE_EQ(*s->breathing_summary[0].tidal_volume, 480.0) << "word 99, mL";
+    EXPECT_NEAR(*s->breathing_summary[0].minute_ventilation, 7.2, 1e-9) << "word 101, 0.1 L/min";
+    EXPECT_FALSE(s->breathing_summary[1].tidal_volume.has_value())
+        << "0xFFFF is no reading, and our integral does not stand in for it";
+    EXPECT_FALSE(s->breathing_summary[2].tidal_volume.has_value()) << "0 is no breath yet";
+
+    t.vt = [](int) { return uint16_t(480); };
+    t.mv = kBmcInvalid;
+    fs::remove_all(dir_);
+    fs::create_directories(dir_);
+    auto u = parse(breathing(kEvening, 60, t), "G3 A20");
+    EXPECT_FALSE(u->breathing_summary[0].minute_ventilation.has_value());
+}
+
+TEST_F(BmcWaveDir, TheRateIsWord104AndTheBreathsAgreeWithWords104And105) {
+    // In the generator's world the machine's words and the breaths agree:
+    // 15 breaths a minute, Te/Ti = 2.4 / 1.6 = 1.5 = word 105 / 10.
+    auto s = parse(breathing(kEvening, 180, Train{}), "G3 A20");
+    const auto& row = s->breathing_summary[1];
+    EXPECT_EQ(breathsInMinute(*s, kEvening, 1), static_cast<int>(*row.respiratory_rate));
+    EXPECT_NEAR(1.0 / *row.ie_ratio, 15 / 10.0, 1e-9);
+
+    // The reported rate is the machine's, not our count.
+    Train t;
+    t.rr = 12;
+    fs::remove_all(dir_);
+    fs::create_directories(dir_);
+    auto r = parse(breathing(kEvening, 180, t), "G3 A20");
+    EXPECT_DOUBLE_EQ(*r->breathing_summary[1].respiratory_rate, 12.0);
+    EXPECT_EQ(breathsInMinute(*r, kEvening, 1), 15);
+}
+
+TEST_F(BmcWaveDir, EachBreathCarriesTheMachinesTidalVolume) {
+    // Breath b ends at second 4b + 4; the machine writes its volume, 400 + b,
+    // a second later and holds it until the next breath's.
+    Train t;
+    t.vt = [](int sec) { return uint16_t(sec < 5 ? 0 : 400 + (sec - 5) / 4); };
+    auto s = parse(breathing(kEvening, 120, t), "G3 A20");
+    ASSERT_GT(s->breaths.size(), 20u);
+    const auto t0 = bmcToTimePoint(*bmcCivilSeconds(2031, 3, 14, 23, 0, 0));
+    for (const auto& b : s->breaths) {
+        const auto ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(b.onset - t0).count();
+        const int index = static_cast<int>(ms / 4000);  // breath b starts at 4b s + 40 ms
+        if (index * 4 + 6 >= 120) continue;              // its word lands after the end
+        EXPECT_DOUBLE_EQ(b.tidal_volume, 400 + index) << "breath " << index;
+    }
+}
+
+TEST(BmcModel, TheModelStringIsReadFromTheUsrAndNothingElse) {
+    const auto g3 = usrFile("G3 A20");
+    EXPECT_EQ(bmcModelFromUsr(g3.data(), g3.size()), "G3 A20");
+    const auto g2s = usrFile("G2S B20A");
+    EXPECT_EQ(bmcModelFromUsr(g2s.data(), g2s.size()), "G2S B20A");
+    EXPECT_EQ(bmcModelFromUsr(g3.data(), 8000), "") << "a short file names no model";
+    auto junk = usrFile("G3 A20");
+    junk[8856] = 0x07;
+    EXPECT_EQ(bmcModelFromUsr(junk.data(), junk.size()), "") << "not text, not a model";
+    EXPECT_TRUE(bmcPressureScale("G3 A20").has_value());
+    EXPECT_TRUE(bmcPressureScale("G2S B20A").has_value());
+    EXPECT_FALSE(bmcPressureScale("G3 B25").has_value());
+    EXPECT_FALSE(bmcPressureScale("").has_value());
+}
+
+TEST(BmcBuffers, TheUsrAmongTheBuffersNamesTheModel) {
+    Train t;
+    t.pressure = [](int) { return 334; };
+    const auto raw = breathing(kEvening, 120, t);
+    const auto evt = evtFile({});
+    const auto usr = usrFile("G2S B20A");
+    std::map<std::string, std::pair<const uint8_t*, size_t>> buffers{
+        {kSerial + ".000", {raw.data(), raw.size()}},
+        {kSerial + ".evt", {evt.data(), evt.size()}},
+        {kSerial + ".USR", {usr.data(), usr.size()}}};
+    BmcParser parser;
+    auto s = parser.parseSessionFromBuffers(buffers, "dev", "BMC");
+    ASSERT_NE(s, nullptr);
+    EXPECT_TRUE(s->breathing_summary[0].pressure_measured);
+    EXPECT_NEAR(s->breathing_summary[0].avg_pressure, 10.0, 0.02);
+}
+
+TEST(BmcWaveform, TheReaderReturnsThe25HzSamplesCalibrated) {
+    // Two sessions 100 s apart; the window covers the end of one, the gap and
+    // the start of the other. Second 30 of the first is missing.
+    Train t;
+    t.pressure = [](int sec) { return 60 + sec % 3; };
+    auto first = breathing(kEvening, 180, t);
+    first.erase(first.begin() + 30 * kBmcPacketBytes, first.begin() + 31 * kBmcPacketBytes);
+    auto card = buildBmcCard(kSerial, {cat(first, breathing(plus(kEvening, 280), 120, t))}, {});
+    card.model = "G3 A20";
+    ASSERT_EQ(card.sessions.size(), 2u);
+
+    const BmcCivilSeconds s0 = *bmcCivilSeconds(2031, 3, 14, 23, 0, 0);
+    const auto w = BmcParser::waveform(card, s0 + 20, s0 + 300);
+    EXPECT_EQ(w.start, s0 + 20);
+    EXPECT_EQ(w.sample_rate, 25.0);
+    ASSERT_EQ(w.flow.size(), 280u * 25);
+    ASSERT_EQ(w.pressure.size(), 280u * 25);
+
+    // Second 100 of the first session, a whole breath from its start: sample
+    // 20 of a breath is the inspiratory peak, 300 codes over the level.
+    const size_t at = (100 - 20) * 25;
+    EXPECT_NEAR(w.flow[at + 20], 30.0, 0.02);
+    EXPECT_NEAR(w.flow[at + 70], -20.0, 0.02);
+    EXPECT_NEAR(w.pressure[at], (60 + 100 % 3) / 10.0, 1e-9);
+    EXPECT_TRUE(std::isnan(w.flow[(30 - 20) * 25])) << "the missing second";
+    EXPECT_TRUE(std::isnan(w.pressure[(30 - 20) * 25 + 24]));
+    EXPECT_TRUE(std::isnan(w.flow[(200 - 20) * 25])) << "between the sessions";
+    EXPECT_FALSE(std::isnan(w.flow[(290 - 20) * 25])) << "the second session";
+    EXPECT_NEAR(w.pressure[(290 - 20) * 25], (60 + 10 % 3) / 10.0, 1e-9);
+
+    card.model = "G3 B25";
+    const auto u = BmcParser::waveform(card, s0, s0 + 60);
+    EXPECT_TRUE(u.pressure.empty()) << "no pressure for a model not measured";
+    EXPECT_EQ(u.flow.size(), 60u * 25);
+    EXPECT_TRUE(BmcParser::waveform(card, s0 + 10, s0 + 10).flow.empty());
 }
 
 #endif  // CPAPDASH_WITH_BMC

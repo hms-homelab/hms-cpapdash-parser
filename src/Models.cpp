@@ -137,8 +137,8 @@ void ParsedSession::calculateMetrics() {
                 leak_vals.push_back(breath.leak_rate.value());
             }
 
-            // Flow
-            flow_vals.push_back(breath.avg_flow_rate);
+            // Flow: likewise only a minute that has one.
+            if (breath.flow_measured) flow_vals.push_back(breath.avg_flow_rate);
 
             // Respiratory metrics
             if (breath.respiratory_rate.has_value()) {

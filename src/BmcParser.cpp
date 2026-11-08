@@ -4,14 +4,17 @@
 // the source of every fact; this file is the reading of it.
 
 #include "cpapdash/parser/BmcParser.h"
+#include "cpapdash/parser/EDFParser.h"
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 
 namespace cpapdash::parser {
 
@@ -128,7 +131,174 @@ bool isAllFill(const uint8_t* p, size_t n) {
     return true;
 }
 
+constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+
+// The leak level under the total flow, in codes: the mean flow over each whole
+// breath, which is what leaves the circuit other than the patient's breathing
+// (vent and leak). First a centred 12 s mean; breaths found against it with a
+// 25-code (2.5 L/min) hysteresis; then each breath's own mean, placed at its
+// centre and joined linearly. NaN samples are skipped throughout.
+std::vector<double> leakLevel(const std::vector<double>& total) {
+    const size_t n = total.size();
+    std::vector<double> base(n, kNaN);
+    if (n == 0) return base;
+
+    // Pass 1: centred moving mean over [i - 150, i + 149], valid samples only.
+    constexpr int kWindow = 12 * kBmcWaveHz;
+    std::vector<double> sum(n + 1, 0.0);
+    std::vector<int> cnt(n + 1, 0);
+    for (size_t i = 0; i < n; ++i) {
+        const bool ok = !std::isnan(total[i]);
+        sum[i + 1] = sum[i] + (ok ? total[i] : 0.0);
+        cnt[i + 1] = cnt[i] + (ok ? 1 : 0);
+    }
+    for (size_t i = 0; i < n; ++i) {
+        const size_t lo = i >= kWindow / 2 ? i - kWindow / 2 : 0;
+        const size_t hi = std::min(n, i + kWindow - kWindow / 2);
+        const int c = cnt[hi] - cnt[lo];
+        if (c > 0) base[i] = (sum[hi] - sum[lo]) / c;
+    }
+
+    // Inspiration starts: the last upward zero crossing before the flow clears
+    // +h, once the previous breath has gone below -h.
+    constexpr double kHysteresis = 25.0;
+    std::vector<size_t> starts;
+    bool inspiring = false;
+    long last_up = -1;
+    for (size_t i = 1; i < n; ++i) {
+        const double a = total[i - 1] - base[i - 1], b = total[i] - base[i];
+        if (std::isnan(a) || std::isnan(b)) continue;
+        if (a <= 0 && b > 0) last_up = static_cast<long>(i);
+        if (!inspiring && b > kHysteresis && last_up >= 0) {
+            if (starts.empty() || static_cast<size_t>(last_up) > starts.back())
+                starts.push_back(static_cast<size_t>(last_up));
+            inspiring = true;
+        } else if (inspiring && b < -kHysteresis) {
+            inspiring = false;
+        }
+    }
+
+    // Pass 2: each whole breath's mean at its centre, joined linearly.
+    std::vector<double> centre, level;
+    for (size_t k = 0; k + 1 < starts.size(); ++k) {
+        double s = 0;
+        int c = 0;
+        for (size_t i = starts[k]; i < starts[k + 1]; ++i)
+            if (!std::isnan(total[i])) s += total[i], ++c;
+        if (c == 0) continue;
+        centre.push_back((starts[k] + starts[k + 1]) / 2.0);
+        level.push_back(s / c);
+    }
+    if (centre.size() < 2) return base;
+    size_t seg = 0;
+    for (size_t i = 0; i < n; ++i) {
+        const double x = static_cast<double>(i);
+        if (x <= centre.front()) {
+            base[i] = level.front();
+        } else if (x >= centre.back()) {
+            base[i] = level.back();
+        } else {
+            while (centre[seg + 1] < x) ++seg;
+            const double f = (x - centre[seg]) / (centre[seg + 1] - centre[seg]);
+            base[i] = level[seg] + f * (level[seg + 1] - level[seg]);
+        }
+    }
+    return base;
+}
+
+// One session as 25 Hz series from its first second, one slot per second of
+// its span whether or not a packet landed there.
+struct SessionWave {
+    BmcCivilSeconds start = 0;
+    std::vector<double> total;     // flow, signed codes; NaN = no reading
+    std::vector<double> patient;   // L/min, leak level removed
+    std::vector<double> pressure;  // cmH2O; empty when the model is not measured
+    std::vector<int> tidal;        // word 99 per second; -1 = no reading
+};
+
+SessionWave sessionWave(const BmcCard& card, const BmcSessionSpan& span) {
+    SessionWave w;
+    w.start = span.start;
+    const size_t seconds = static_cast<size_t>(span.end - span.start + 1);
+    const size_t n = seconds * kBmcWaveHz;
+    w.total.assign(n, kNaN);
+    w.tidal.assign(seconds, -1);
+    const auto scale = bmcPressureScale(card.model);
+    if (scale) w.pressure.assign(n, kNaN);
+
+    auto it = std::lower_bound(card.packets.begin(), card.packets.end(), span.start,
+                               [](const BmcPacket& p, BmcCivilSeconds s) { return p.stamp < s; });
+    for (; it != card.packets.end() && it->stamp <= span.end; ++it) {
+        const auto& words = it->words;
+        const size_t sec = static_cast<size_t>(it->stamp - span.start);
+        const size_t at = sec * kBmcWaveHz;
+        if (words[bmc_word::kTidalVolume] != kBmcInvalid && words[bmc_word::kTidalVolume] != 0)
+            w.tidal[sec] = words[bmc_word::kTidalVolume];
+
+        // At the leak cap the mask is off: what flows is not breathing.
+        const uint16_t leak = words[bmc_word::kLeak];
+        if (leak == kBmcInvalid || leak < kBmcLeakCap) {
+            for (int i = 0; i < kBmcWaveHz; ++i)
+                w.total[at + i] = static_cast<int16_t>(words[bmc_word::kFlow + i]);
+        }
+
+        if (scale) {
+            // A second whose 25 samples are all exactly 0 is the machine not
+            // writing the channel (seen with the blower running at a set
+            // pressure), not a reading of 0 cmH2O.
+            bool all_zero = true;
+            for (int i = 0; i < kBmcWaveHz; ++i)
+                if (words[bmc_word::kPressure + i] != 0) all_zero = false;
+            if (all_zero) continue;
+            for (int i = 0; i < kBmcWaveHz; ++i) {
+                const int16_t code = static_cast<int16_t>(words[bmc_word::kPressure + i]);
+                w.pressure[at + i] = (code - scale->zero) / scale->codes_per_cmh2o;
+            }
+        }
+    }
+
+    const auto base = leakLevel(w.total);
+    w.patient.assign(n, kNaN);
+    for (size_t i = 0; i < n; ++i)
+        if (!std::isnan(w.total[i]) && !std::isnan(base[i]))
+            w.patient[i] = (w.total[i] - base[i]) * kBmcFlowLpmPerCode;
+    return w;
+}
+
+// The machine's own tidal volume for a breath ending at second `end_s`: word 99
+// is written once per breath, 1 to 2 s after it ends, so the first change in
+// the three seconds after the end; with no change (two equal breaths), the
+// value 2 s after. -1 when there is none.
+int machineTidalVolume(const std::vector<int>& tidal, size_t end_s) {
+    if (end_s >= tidal.size()) return -1;
+    const int before = tidal[end_s];
+    for (size_t s = end_s + 1; s <= end_s + 3 && s < tidal.size(); ++s)
+        if (tidal[s] >= 0 && tidal[s] != before) return tidal[s];
+    return end_s + 2 < tidal.size() ? tidal[end_s + 2] : -1;
+}
+
 }  // namespace
+
+std::optional<BmcPressureScale> bmcPressureScale(const std::string& model) {
+    // Each fitted on end-expiratory pauses against the set pressure, and the
+    // G3 also against its own pressure display (docs/BMC_FORMAT.md, "Pressure").
+    if (model == "G3 A20") return BmcPressureScale{0.0, 10.0};
+    if (model == "G2S B20A") return BmcPressureScale{102.0, 23.23};
+    return std::nullopt;
+}
+
+std::string bmcModelFromUsr(const uint8_t* data, size_t len) {
+    if (!data || len <= kBmcUsrModelOffset) return {};
+    std::string out;
+    for (size_t i = 0; i < kBmcUsrModelBytes && kBmcUsrModelOffset + i < len; ++i) {
+        const uint8_t c = data[kBmcUsrModelOffset + i];
+        if (c == 0) break;
+        if (c < 0x20 || c > 0x7E) return {};
+        out.push_back(static_cast<char>(c));
+    }
+    while (!out.empty() && out.back() == ' ') out.pop_back();
+    return out;
+}
 
 std::optional<BmcCivilSeconds> bmcCivilSeconds(int year, int month, int day, int hour, int minute,
                                                int second) {
@@ -273,12 +443,14 @@ std::optional<BmcCard> BmcParser::readCard(const std::string& dir) {
     // stem -> (raw files by extension, evt path)
     std::map<std::string, std::map<std::string, fs::path>> raw;
     std::map<std::string, fs::path> evt;
+    std::map<std::string, fs::path> usr;
     for (const auto& entry : fs::directory_iterator(dir, ec)) {
         if (!entry.is_regular_file(ec)) continue;
         const std::string ext = toLower(entry.path().extension().string());
         const std::string stem = entry.path().stem().string();
         if (isRawExtension(ext)) raw[stem][ext] = entry.path();
         else if (ext == ".evt") evt[stem] = entry.path();
+        else if (ext == ".usr") usr[stem] = entry.path();
     }
 
     for (const auto& [stem, files] : raw) {
@@ -286,7 +458,17 @@ std::optional<BmcCard> BmcParser::readCard(const std::string& dir) {
         if (e == evt.end()) continue;  // a numbered file with no events beside it is not a card
         std::vector<std::vector<uint8_t>> raws;
         for (const auto& [ext, path] : files) raws.push_back(readFile(path));  // .000, .001, ...
-        return buildBmcCard(stem, raws, readFile(e->second));
+        auto card = buildBmcCard(stem, raws, readFile(e->second));
+        const auto u = usr.find(stem);
+        if (u != usr.end()) {
+            // Only the bytes up to the end of the model string: the rest of the
+            // file is patient details and is never read.
+            std::vector<uint8_t> head(kBmcUsrModelOffset + kBmcUsrModelBytes, 0);
+            std::ifstream in(u->second, std::ios::binary);
+            in.read(reinterpret_cast<char*>(head.data()), static_cast<std::streamsize>(head.size()));
+            card.model = bmcModelFromUsr(head.data(), static_cast<size_t>(in.gcount()));
+        }
+        return card;
     }
     return std::nullopt;
 }
@@ -317,19 +499,33 @@ std::unique_ptr<ParsedSession> BmcParser::sessionFromCard(const BmcCard& card,
         card.packets.begin(), card.packets.end(), span.start,
         [](const BmcPacket& p, BmcCivilSeconds s) { return p.stamp < s; });
 
-    // Per minute, from the per-second words this parser reads. Flow and the two
-    // 25 Hz pressure channels are not reported: their physical scale is not known
-    // (docs/BMC_FORMAT.md), and a number in the wrong unit is worse than none.
+    // Per minute, from the per-second words and the 25 Hz flow and pressure
+    // (docs/BMC_FORMAT.md). Channel 29-53 is not read: its meaning is unknown.
     struct Minute {
         double leak_sum = 0, ipap_sum = 0, epap_sum = 0, rr_sum = 0, ie_sum = 0;
         int leak_n = 0, ipap_n = 0, epap_n = 0, rr_n = 0, ie_n = 0;
         double leak_min = 0, leak_max = 0;
+        double vt_sum = 0, mv_sum = 0;
+        int vt_n = 0, mv_n = 0;
+        int seconds = 0;  // packets in the minute
     };
     std::map<int64_t, Minute> minutes;
     bool bilevel = false;
     for (auto it = first; it != card.packets.end() && it->stamp <= span.end; ++it) {
         const auto& w = it->words;
         auto& m = minutes[(it->stamp - span.start) / 60];
+        ++m.seconds;
+        // The machine's own volumes, held from one breath to the next. 0 is
+        // written before the first breath and while nothing is breathed: no
+        // reading, never a volume of 0.
+        if (w[bmc_word::kTidalVolume] != kBmcInvalid && w[bmc_word::kTidalVolume] != 0) {
+            m.vt_sum += w[bmc_word::kTidalVolume];
+            ++m.vt_n;
+        }
+        if (w[bmc_word::kMinuteVent] != kBmcInvalid && w[bmc_word::kMinuteVent] != 0) {
+            m.mv_sum += w[bmc_word::kMinuteVent] / 10.0;
+            ++m.mv_n;
+        }
         if (w[bmc_word::kLeak] != kBmcInvalid) {
             const double leak = w[bmc_word::kLeak] / 10.0;
             m.leak_min = m.leak_n ? std::min(m.leak_min, leak) : leak;
@@ -358,25 +554,115 @@ std::unique_ptr<ParsedSession> BmcParser::sessionFromCard(const BmcCard& card,
             m.rr_sum += w[bmc_word::kRespRate];
             ++m.rr_n;
         }
-        if (w[bmc_word::kIeRatio] != kBmcInvalid) {
-            m.ie_sum += w[bmc_word::kIeRatio] / 10.0;
+        if (w[bmc_word::kIeRatio] != kBmcInvalid && w[bmc_word::kIeRatio] != 0) {
+            m.ie_sum += w[bmc_word::kIeRatio] / 10.0;  // Te/Ti
             ++m.ie_n;
         }
     }
+
+    // The 25 Hz series, and the breaths found ONCE over the whole session on the
+    // patient flow (zero-centred L/min, what the shared detector expects), then
+    // bucketed by the minute their onset falls in, as the ResMed BRP path does.
+    const SessionWave wave = sessionWave(card, span);
+    const int per_minute = 60 * kBmcWaveHz;
+    const auto breaths = EDFParser::detectBreaths(wave.patient, kBmcWaveHz);
+    std::map<int64_t, std::vector<EDFParser::BreathCycle>> breaths_by_minute;
+    for (const auto& b : breaths) breaths_by_minute[b.start_idx / per_minute].push_back(b);
+
     for (const auto& [index, m] : minutes) {
         BreathingSummary row(bmcToTimePoint(span.start + index * 60));
+        const size_t lo = static_cast<size_t>(index) * per_minute;
+        const size_t hi = std::min(wave.patient.size(), lo + per_minute);
+
+        // Flow: the minute counts when at least half of its seconds on the card
+        // carry a flow reading; otherwise it is marked unmeasured, never 0.
+        double fsum = 0, tsum = 0, fmax = 0, fmin = 0;
+        int fn = 0;
+        for (size_t i = lo; i < hi; ++i) {
+            if (std::isnan(wave.patient[i])) continue;
+            const double f = wave.patient[i];
+            fmax = fn ? std::max(fmax, f) : f;
+            fmin = fn ? std::min(fmin, f) : f;
+            fsum += f;
+            tsum += wave.total[i];
+            ++fn;
+        }
+        row.flow_measured = fn > 0 && 2 * fn >= m.seconds * kBmcWaveHz;
+        if (row.flow_measured) {
+            row.avg_flow_rate = fsum / fn;
+            row.max_flow_rate = fmax;
+            row.min_flow_rate = fmin;
+            // Everything leaving the circuit (vent and leak): the mean TOTAL
+            // flow, which needs the zero that patient flow does not.
+            row.total_leak = (tsum / fn - kBmcFlowZero) * kBmcFlowLpmPerCode;
+        }
+
+        // Pressure: only for a model whose scale has been measured.
+        double psum = 0, pmax = 0, pmin = 0;
+        int pn = 0;
+        for (size_t i = lo; i < hi && !wave.pressure.empty(); ++i) {
+            if (std::isnan(wave.pressure[i])) continue;
+            const double p = wave.pressure[i];
+            pmax = pn ? std::max(pmax, p) : p;
+            pmin = pn ? std::min(pmin, p) : p;
+            psum += p;
+            ++pn;
+        }
+        row.pressure_measured = pn > 0 && 2 * pn >= m.seconds * kBmcWaveHz;
+        if (row.pressure_measured) {
+            row.avg_pressure = psum / pn;
+            row.max_pressure = pmax;
+            row.min_pressure = pmin;
+        }
+
+        // Ti, Te, I:E (Ti/Te, as for every other machine) and the flow
+        // percentile from the breaths, through the shared pipeline.
+        if (row.flow_measured) {
+            const auto b = breaths_by_minute.find(index);
+            EDFParser::calculateRespiratoryMetrics(
+                wave.patient, row.pressure_measured ? wave.pressure : std::vector<double>{},
+                b == breaths_by_minute.end() ? std::vector<EDFParser::BreathCycle>{} : b->second,
+                kBmcWaveHz, static_cast<int>(index), row);
+        }
+        // ...and the machine's own words for what it reports itself. The
+        // shared pipeline's estimates of these are replaced, not kept.
+        row.respiratory_rate = m.rr_n ? std::optional<double>(m.rr_sum / m.rr_n) : std::nullopt;
+        row.tidal_volume = m.vt_n ? std::optional<double>(m.vt_sum / m.vt_n) : std::nullopt;
+        row.minute_ventilation =
+            m.mv_n ? std::optional<double>(m.mv_sum / m.mv_n) : std::nullopt;
+        row.leak_rate = std::nullopt;
         if (m.leak_n) {
             row.leak_rate = m.leak_sum / m.leak_n;
             row.leak_min = m.leak_min;
             row.leak_max = m.leak_max;
         }
+        // Flow limitation is not reported: the score depends on the leak
+        // baseline, and it has not been shown to hold on this machine.
+        row.flow_limitation = std::nullopt;
+        // A minute with no breaths found still has the machine's I:E: word 105
+        // is Te/Ti x 10, turned round to the Ti/Te the field carries.
+        if (!row.ie_ratio && m.ie_n) row.ie_ratio = m.ie_n / m.ie_sum;
         if (m.ipap_n) row.therapy_pressure = m.ipap_sum / m.ipap_n;
         if (m.epap_n) row.epr_pressure = m.epap_sum / m.epap_n;
-        if (m.rr_n) row.respiratory_rate = m.rr_sum / m.rr_n;
-        if (m.ie_n) row.ie_ratio = m.ie_sum / m.ie_n;
         session->breathing_summary.push_back(row);
     }
     session->has_summary = !session->breathing_summary.empty();
+
+    // Breath by breath, from the same detection pass. The tidal volume is the
+    // machine's word 99 for that breath where there is one, else the integral.
+    const auto onset0 = bmcToTimePoint(span.start);
+    session->breaths.reserve(breaths.size());
+    for (const auto& b : breaths) {
+        Breath out;
+        out.onset = onset0 + std::chrono::microseconds(
+                                 static_cast<long long>(b.start_idx * (1e6 / kBmcWaveHz)));
+        const int vt = machineTidalVolume(wave.tidal, static_cast<size_t>(b.end_idx / kBmcWaveHz));
+        out.tidal_volume = vt > 0 ? vt : b.tidal_volume;
+        out.inspiratory_time = b.inspiratory_time;
+        out.expiratory_time = b.expiratory_time;
+        out.flow_limitation = 0;  // not reported for this machine (above)
+        session->breaths.push_back(out);
+    }
 
     if (bilevel) {
         DeviceSettings settings;
@@ -412,6 +698,28 @@ std::unique_ptr<ParsedSession> BmcParser::sessionFromCard(const BmcCard& card,
     // up under a type not handled here, it lands in span_types and is visible.
     session->calculateMetrics();
     return session;
+}
+
+BmcWaveform BmcParser::waveform(const BmcCard& card, BmcCivilSeconds from, BmcCivilSeconds to) {
+    BmcWaveform out;
+    out.start = from;
+    if (to <= from) return out;
+    const size_t n = static_cast<size_t>(to - from) * kBmcWaveHz;
+    const bool with_pressure = bmcPressureScale(card.model).has_value();
+    out.flow.assign(n, kNaN);
+    if (with_pressure) out.pressure.assign(n, kNaN);
+    for (const auto& span : card.sessions) {
+        if (span.end < from || span.start >= to) continue;
+        const SessionWave w = sessionWave(card, span);
+        const BmcCivilSeconds a = std::max(from, span.start);
+        const BmcCivilSeconds b = std::min(to, span.end + 1);
+        const size_t src = static_cast<size_t>(a - span.start) * kBmcWaveHz;
+        const size_t dst = static_cast<size_t>(a - from) * kBmcWaveHz;
+        const size_t len = static_cast<size_t>(b - a) * kBmcWaveHz;
+        std::copy_n(w.patient.begin() + src, len, out.flow.begin() + dst);
+        if (with_pressure) std::copy_n(w.pressure.begin() + src, len, out.pressure.begin() + dst);
+    }
+    return out;
 }
 
 std::unique_ptr<ParsedSession> BmcParser::pick(BmcCard card, std::optional<BmcCivilSeconds> hint,
@@ -460,6 +768,7 @@ std::unique_ptr<ParsedSession> BmcParser::parseSessionFromBuffers(
     std::vector<std::vector<uint8_t>> raws;
     std::vector<uint8_t> evt;
     std::string serial;
+    std::string model;
     for (const auto& [key, buf] : buffers) {  // std::map: keys in order, so .000 before .001
         const auto dot = key.find_last_of('.');
         if (dot == std::string::npos) continue;
@@ -473,14 +782,17 @@ std::unique_ptr<ParsedSession> BmcParser::parseSessionFromBuffers(
             if (serial.empty()) serial = stem;
         } else if (ext == ".evt") {
             evt.assign(buf.first, buf.first + buf.second);
+        } else if (ext == ".usr") {
+            model = bmcModelFromUsr(buf.first, buf.second);
         }
     }
     if (raws.empty()) {
         notes_ = BmcNotes{};
         return nullptr;
     }
-    return pick(buildBmcCard(serial, raws, evt), civilFromHint(session_start_str), device_id,
-                device_name);
+    auto card = buildBmcCard(serial, raws, evt);
+    card.model = model;
+    return pick(std::move(card), civilFromHint(session_start_str), device_id, device_name);
 }
 
 std::unique_ptr<ISessionParser> createBmcParser() { return std::make_unique<BmcParser>(); }

@@ -110,6 +110,11 @@ struct BreathingSummary {
     // out of every pressure figure (calculateMetrics). True for every file that
     // has a pressure signal, which is every ResMed BRP a machine writes.
     bool pressure_measured = true;
+    // The same for the three flow fields: false when the minute has no flow the
+    // parser can stand behind (a BMC minute with the leak at the machine's cap,
+    // or with too few seconds on the card). They are then 0 placeholders, and
+    // calculateMetrics leaves them out. True for every other parser's minutes.
+    bool flow_measured = true;
 
     // Calculated respiratory metrics
     std::optional<double> respiratory_rate;      // Breaths per minute
