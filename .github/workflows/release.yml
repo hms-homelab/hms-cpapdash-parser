@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v2026.1.0)'
+        description: 'Release tag (e.g. v12.0.0)'
         required: true
-        default: 'v2026.1.0'
+        default: 'v12.0.0'
 
 permissions:
   contents: write
@@ -79,6 +79,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout (for the previous tag)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -99,10 +104,22 @@ jobs:
             echo "name=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           fi
 
+      # The notes compare against the tag before this one in history, not the
+      # highest by number: v2026.11.1 (year.month.patch) sorts above v12.0.0.
+      - name: Previous tag
+        id: prev
+        run: |
+          tag="${{ steps.tag.outputs.name }}"
+          prev=$(git describe --tags --abbrev=0 "${tag}^" 2>/dev/null || true)
+          echo "previous tag: ${prev:-none}"
+          echo "name=${prev}" >> "$GITHUB_OUTPUT"
+
       - name: Create or update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.name }}
           name: ${{ steps.tag.outputs.name }}
           generate_release_notes: true
+          previous_tag: ${{ steps.prev.outputs.name }}
+          make_latest: true
           files: release/*

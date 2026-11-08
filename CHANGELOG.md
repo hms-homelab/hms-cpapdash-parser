@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [12.0.0] - 2026-11-08
+
+From this release the version is MAJOR.MINOR.PATCH. Releases up to 2026.11.1
+were numbered year.month.patch; a tag such as `v2026.11.1` sorts above `v12.0.0`
+by number, so pin a release by its tag or SHA rather than taking the highest tag.
 
 ### BMC / Luna: flow and pressure, with their scales measured
 
@@ -28,6 +32,12 @@ display and on a G2S over its nights (`docs/BMC_FORMAT.md`, "Pressure" and "Flow
   Te/Ti x 10; it was passed through as Te/Ti (2.0 where the field means 0.5). The
   ratio now comes from the breaths, or word 105 turned round when none is found.
 - `respiratory_rate` stays word 104; `flow_limitation` is not reported for a Luna.
+- A short session no longer reports a rate of 0 or an absurd I:E. Word 104 = 0 is
+  the machine with no rate yet, now "no reading" like 0 in words 99, 101 and 105
+  (a session of nothing else read 0.0 breaths/min, and a longer one had its mean
+  pulled down). A breath touching a second with no flow reading is dropped: the
+  detector read the gap as zero flow and carried the breath across it, so a 4 s
+  session spread over 12 s got one breath of Ti 9.2 s, Te 0.36 s, I:E 25.
 - `BmcParser::waveform(card, from, to)`: the calibrated 25 Hz patient flow and
   pressure of any stretch of a card, NaN where there is no reading.
 - `tools/bmc_probe` reports the model and, per session, the plausibility checks

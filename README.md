@@ -82,7 +82,7 @@ doesn't keep a local checkout.
 include(FetchContent)
 FetchContent_Declare(cpapdash_parser
     GIT_REPOSITORY https://github.com/hms-homelab/hms-cpapdash-parser.git
-    GIT_TAG v2026.1.2
+    GIT_TAG v12.0.0
 )
 FetchContent_MakeAvailable(cpapdash_parser)
 
@@ -105,7 +105,7 @@ else()
     include(FetchContent)
     FetchContent_Declare(cpapdash_parser
         GIT_REPOSITORY https://github.com/hms-homelab/hms-cpapdash-parser.git
-        GIT_TAG v2026.1.2
+        GIT_TAG v12.0.0
     )
     FetchContent_MakeAvailable(cpapdash_parser)
 endif()
