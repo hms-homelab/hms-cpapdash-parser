@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [2026.11.1] - 2026-11-08
+
 ### O2Ring-S: the third byte of a sample is movement
 
 `O2RingSParser` read each sample's third byte as an invalid flag, so a second
