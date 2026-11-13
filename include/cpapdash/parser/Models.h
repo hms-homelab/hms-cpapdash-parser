@@ -581,6 +581,17 @@ struct STRDailyRecord {
     std::optional<double> tgt_vent_95;
     std::optional<double> tgt_vent_max;
 
+    // ===== EVERY SETTING THE MACHINE WROTE FOR THE DAY (platform SDD-055 D14) =====
+    // Each "S.*" signal of the STR, and "Mode", under the STR's own label, in its
+    // EDF physical units (cmH2O, minutes, codes as numbers): S.EPR.EPRType,
+    // S.RampEnable, S.RampTime, S.A.StartPress, S.AS.Comfort, S.SmartStart,
+    // S.Mask, S.Tube, S.ClimateControl, S.HumLevel, S.Temp, every profile's
+    // pressures, and whatever a later model adds. A value below 0 (the STR's -1,
+    // "not set") is left out, so a missing label means the machine did not say.
+    // Codes are kept as numbers here: naming them belongs to whoever has proven
+    // what each code means on a real machine.
+    std::map<std::string, double> settings;
+
     bool hasTherapy() const { return duration_minutes > 0; }
 };
 

@@ -150,6 +150,49 @@ TEST(STRFamily, AnAirSense10KeepsItsSASLimits) {
     EXPECT_NEAR(recs[0].max_pressure, 14.0, 0.01);
 }
 
+// Platform SDD-055 D14: every setting the STR carries is kept under its own
+// label, so comfort settings (EPR type, ramp, humidity, climate) reach ingest.
+TEST(STRFamily, EverySettingIsKeptUnderItsOwnLabel) {
+    auto data = buildSTR(
+        {"Duration", "MaskEvents", "Mode", "S.AS.Comfort", "S.A.MinPress",
+         "S.A.MaxPress", "S.EPR.EPRType", "S.EPR.Level", "S.RampEnable",
+         "S.RampTime", "S.HumLevel", "S.ClimateControl", "S.Mask"},
+        {480, 1, 1, 1, 6, 12, 1, 2, 2, 20, 4, 1, 3});
+
+    auto recs = EDFParser::parseSTRFromBuffer(data.data(), data.size(), "dev");
+    ASSERT_FALSE(recs.empty());
+    const auto& s = recs[0].settings;
+    auto at = [&](const char* k) {
+        auto it = s.find(k);
+        return it == s.end() ? -99.0 : it->second;
+    };
+    EXPECT_NEAR(at("Mode"), 1, 0.01);
+    EXPECT_NEAR(at("S.AS.Comfort"), 1, 0.01);
+    EXPECT_NEAR(at("S.A.MinPress"), 6, 0.01);
+    EXPECT_NEAR(at("S.A.MaxPress"), 12, 0.01);
+    EXPECT_NEAR(at("S.EPR.EPRType"), 1, 0.01);
+    EXPECT_NEAR(at("S.EPR.Level"), 2, 0.01);
+    EXPECT_NEAR(at("S.RampEnable"), 2, 0.01);
+    EXPECT_NEAR(at("S.RampTime"), 20, 0.01);
+    EXPECT_NEAR(at("S.HumLevel"), 4, 0.01);
+    EXPECT_NEAR(at("S.ClimateControl"), 1, 0.01);
+    EXPECT_NEAR(at("S.Mask"), 3, 0.01);
+    EXPECT_EQ(s.count("Duration"), 0u) << "only settings, not the day's figures";
+}
+
+// The STR writes -1 for a setting the machine did not set (and the Bluetooth
+// rebuilt days do the same); that is "not reported", never a value.
+TEST(STRFamily, ASettingWrittenAsMinusOneIsLeftOut) {
+    auto data = buildSTR(
+        {"Duration", "MaskEvents", "Mode", "S.AS.Comfort", "S.RampTime"},
+        {480, 1, 1, -1, 0});
+    auto recs = EDFParser::parseSTRFromBuffer(data.data(), data.size(), "dev");
+    ASSERT_FALSE(recs.empty());
+    EXPECT_EQ(recs[0].settings.count("S.AS.Comfort"), 0u);
+    ASSERT_EQ(recs[0].settings.count("S.RampTime"), 1u) << "0 is a real setting (ramp off)";
+    EXPECT_NEAR(recs[0].settings.at("S.RampTime"), 0, 0.01);
+}
+
 // ASV must keep working. It is the family whose enum we had been applying to
 // everyone, so it is the one most at risk of being broken by the fix.
 TEST(STRFamily, AsvStillClassifiesAsAsv) {

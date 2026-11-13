@@ -1,5 +1,21 @@
 # Changelog
 
+## [12.2.0] - 2026-11-13
+
+### ResMed: every setting the STR carries, under its own label
+
+`STRDailyRecord::settings` holds each `S.*` signal of the STR, and `Mode`, for
+the day, under the STR's own label and in its EDF units: EPR type and enable,
+ramp enable and time, every profile's start pressure and limits, AutoSet
+response (`S.AS.Comfort`), SmartStart, mask, tube, filter, humidity, Climate
+Control, tube temperature, and whatever a later model adds. Until now only
+mode, EPR level, CPAP pressure and the limits were kept, and every comfort
+setting was dropped. A value below 0 (the STR's -1, "not set") is left out.
+Codes stay numbers: the same code means different things on different models
+(EPR enable is 0 on an AirSense 10 card and 2 on an AirSense 11 card read on
+2026-11-13), so naming them belongs to whoever proves them. Platform SDD-055
+D14.
+
 ## [12.1.1] - 2026-11-13
 
 ### AirSense 11: the AutoSet limits were never read

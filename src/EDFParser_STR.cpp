@@ -173,6 +173,19 @@ std::vector<STRDailyRecord> EDFParser::parseSTRInternal(
         return (i >= 0 && static_cast<size_t>(i) < v.size()) ? v[i] : 0.0;
     };
 
+    // Platform SDD-055 D14: every setting signal ("S.*", and "Mode"), kept under
+    // its own label so no setting is dropped for want of a field. One sample per
+    // day, like the rest of the STR.
+    std::vector<std::pair<std::string, std::vector<double>>> setting_signals;
+    for (size_t i = 0; i < edf.signals.size(); ++i) {
+        const std::string& label = edf.signals[i].label;
+        if (label.rfind("S.", 0) != 0 && label != "Mode") continue;
+        if (edf.signals[i].samples_per_record != 1) continue;
+        std::vector<double> data;
+        edf.readSignal(static_cast<int>(i), data);
+        if (!data.empty()) setting_signals.emplace_back(label, std::move(data));
+    }
+
     // Use calendar arithmetic to compute each day's noon (handles DST correctly)
     auto computeNoonForDay = [&edf](int day_offset) -> std::chrono::system_clock::time_point {
         std::tm t = {};
@@ -245,6 +258,14 @@ std::vector<STRDailyRecord> EDFParser::parseSTRInternal(
         r.pressure_setting = val(press_setting_data, rec);
         r.max_pressure     = val(max_press_data, rec);
         r.min_pressure     = val(min_press_data, rec);
+
+        // Every setting the machine wrote for this day, by its own label (D14).
+        // Below 0 is the STR's "not set" and stays out.
+        for (const auto& [label, data] : setting_signals) {
+            if (static_cast<size_t>(rec) >= data.size()) continue;
+            const double v = data[static_cast<size_t>(rec)];
+            if (v >= 0) r.settings[label] = v;
+        }
 
         // SDD-064. The family comes from the signal set, so it is the same for every
         // day in the file -- a machine does not change what it is overnight.
