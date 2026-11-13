@@ -118,8 +118,15 @@ std::vector<STRDailyRecord> EDFParser::parseSTRInternal(
     auto mode_data          = readSig("Mode");
     auto epr_level_data     = readSig("S.EPR.Level");
     auto press_setting_data = readSig("S.C.Press");
+    // AutoSet limits. An AirSense 10 writes them as S.AS.*; an AirSense 11 keeps
+    // only S.AS.Comfort under that prefix and writes its limits as S.A.* (every
+    // AirSense 11 layout seen, card and Bluetooth-rebuilt, platform SDD-055 D13).
+    // S.AFH.* (AutoSet for Her) is NOT read: no card has shown the STR Mode code
+    // for AutoSet for Her, so which profile is in force would be a guess.
     auto max_press_data     = readSig("S.AS.MaxPress");
     auto min_press_data     = readSig("S.AS.MinPress");
+    if (max_press_data.empty()) max_press_data = readSig("S.A.MaxPress");
+    if (min_press_data.empty()) min_press_data = readSig("S.A.MinPress");
 
     auto fault_device_data = readSig("Fault.Device");
     auto fault_alarm_data  = readSig("Fault.Alarm");

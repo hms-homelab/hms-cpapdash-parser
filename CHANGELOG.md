@@ -1,5 +1,17 @@
 # Changelog
 
+## [12.1.1] - 2026-11-13
+
+### AirSense 11: the AutoSet limits were never read
+
+The STR reader asked only for the AirSense 10 labels `S.AS.MinPress` and
+`S.AS.MaxPress`. An AirSense 11 keeps only `S.AS.Comfort` under that prefix and
+writes its limits as `S.A.MinPress` / `S.A.MaxPress` (every AirSense 11 layout
+seen, on the card and in the STR rebuilt from Bluetooth), so its minimum and
+maximum pressure came out empty. The reader now falls back to `S.A.*` when
+`S.AS.*` is absent; an AirSense 10 is unchanged. `S.AFH.*` (AutoSet for Her)
+is still not read: no card has shown its STR mode code. Platform SDD-055 D13.
+
 ## [12.1.0] - 2026-11-13
 
 ### AirSense 11: the settings history over Bluetooth

@@ -120,6 +120,36 @@ TEST(STRFamily, AnAutoSetIsUnaffectedAndCarriesNoBiLevelFields) {
     EXPECT_FALSE(r.bl_epap.has_value());
 }
 
+// Platform SDD-055 D13. An AirSense 11 writes S.AS.Comfort but its limits as
+// S.A.MinPress/S.A.MaxPress; reading only S.AS.* left min/max empty on every
+// AirSense 11, card and Bluetooth.
+TEST(STRFamily, AnAirSense11ReadsItsLimitsFromSA) {
+    auto data = buildSTR(
+        {"Duration", "MaskEvents", "Mode", "S.AS.Comfort", "S.A.MinPress",
+         "S.A.MaxPress", "S.C.Press"},
+        {480, 1, 1, 0, 6, 12, 10});
+
+    auto recs = EDFParser::parseSTRFromBuffer(data.data(), data.size(), "dev");
+    ASSERT_FALSE(recs.empty());
+    const auto& r = recs[0];
+    EXPECT_EQ(r.family, STRDailyRecord::Family::AutoSet);
+    EXPECT_NEAR(r.min_pressure, 6.0, 0.01);
+    EXPECT_NEAR(r.max_pressure, 12.0, 0.01);
+}
+
+// An AirSense 10's S.AS.* wins when both are present.
+TEST(STRFamily, AnAirSense10KeepsItsSASLimits) {
+    auto data = buildSTR(
+        {"Duration", "MaskEvents", "Mode", "S.AS.MaxPress", "S.AS.MinPress",
+         "S.A.MinPress", "S.A.MaxPress"},
+        {480, 1, 1, 14, 6, 4, 20});
+
+    auto recs = EDFParser::parseSTRFromBuffer(data.data(), data.size(), "dev");
+    ASSERT_FALSE(recs.empty());
+    EXPECT_NEAR(recs[0].min_pressure, 6.0, 0.01);
+    EXPECT_NEAR(recs[0].max_pressure, 14.0, 0.01);
+}
+
 // ASV must keep working. It is the family whose enum we had been applying to
 // everyone, so it is the one most at risk of being broken by the fix.
 TEST(STRFamily, AsvStillClassifiesAsAsv) {
