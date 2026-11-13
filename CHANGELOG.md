@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [12.1.0] - 2026-11-13
 
 ### AirSense 11: the settings history over Bluetooth
 
