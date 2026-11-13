@@ -1,5 +1,30 @@
 # Changelog
 
+## [Unreleased]
+
+### AirSense 11: the settings history over Bluetooth
+
+A night read over the AirSense 11's Bluetooth had no settings in its STR day
+(Mode and every `S.*` column -1), because the Summary never carries them. The
+machine keeps them in another spool, `SettingProfilesCollection`: one record per
+settings change, the whole settings set as it stood after it, with the time it
+was applied.
+
+- New `AirSense11SettingsParser` (`AirSense11Settings.h`): `looksLike`, `parse`
+  (every record, oldest first, whole records only from a cut stream) and
+  `inForce` (the record a day takes). Each record's `values` are the STR's
+  settings columns under their STR.edf labels, in the STR's units: the CPAP,
+  AutoSet, AutoSet for Her, Spont, S/T, Timed, VAuto, ASV and ASVAuto profiles,
+  EPR, ramp, SmartStart, mask, tube, filter and climate.
+- Mode is written only for a mode whose STR code was seen on a card (AutoSet 1,
+  VAuto 8); the spool's own mode codes are not the STR's.
+- A day takes the last change applied before the day ends: a card's STR day
+  already carries a change made that evening.
+- Matched on a real machine against its card's STR: every settings value of 15
+  days with usage, 1050 values, no difference. `S.PtAccess` is not mapped.
+- The protobuf wire reader moved to `src/ProtoWire.h`, shared with the Summary
+  reader. No change in what the Summary reader returns.
+
 ## [12.0.0] - 2026-11-08
 
 From this release the version is MAJOR.MINOR.PATCH. Releases up to 2026.11.1
