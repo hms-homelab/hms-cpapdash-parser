@@ -21,6 +21,7 @@ add_library(cpapdash_parser STATIC
     src/O2RingSParser.cpp
     src/AirSense11Summary.cpp
     src/AirSense11Settings.cpp
+    src/AirSense11Pages.cpp
     src/SleepIndex.cpp
     src/FlowEvents.cpp
     src/EdfRecordCount.cpp
@@ -127,6 +128,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         tests/test_o2ring_s_parser.cpp
         tests/test_airsense11_summary.cpp
         tests/test_airsense11_settings.cpp
+        tests/test_airsense11_pages.cpp
         tests/test_o2ring_csv.cpp
         tests/test_str_family.cpp
         tests/test_desat_detector.cpp
