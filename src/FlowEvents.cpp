@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <deque>
+#include <utility>
 
 namespace cpapdash::parser {
 
@@ -31,6 +33,37 @@ double leakOver(const std::vector<double>& leak, double leak_rate,
 struct Run {
     double from_s, to_s;
 };
+
+// The longest stretch [lo, hi) of flow[a, b) whose peak-to-peak stays under
+// `limit`: a sliding window over its running max and min. A sample with no
+// reading (NaN) belongs to no stretch.
+std::pair<size_t, size_t> longestQuiet(const std::vector<double>& flow, size_t a, size_t b,
+                                       double limit) {
+    std::deque<size_t> mx, mn;
+    size_t lo = a, best_lo = a, best_hi = a;
+    for (size_t hi = a; hi < b; ++hi) {
+        if (std::isnan(flow[hi])) {
+            mx.clear();
+            mn.clear();
+            lo = hi + 1;
+            continue;
+        }
+        while (!mx.empty() && flow[mx.back()] <= flow[hi]) mx.pop_back();
+        mx.push_back(hi);
+        while (!mn.empty() && flow[mn.back()] >= flow[hi]) mn.pop_back();
+        mn.push_back(hi);
+        while (flow[mx.front()] - flow[mn.front()] >= limit) {
+            ++lo;
+            if (mx.front() < lo) mx.pop_front();
+            if (mn.front() < lo) mn.pop_front();
+        }
+        if (hi + 1 - lo > best_hi - best_lo) {
+            best_lo = lo;
+            best_hi = hi + 1;
+        }
+    }
+    return {best_lo, best_hi};
+}
 
 // Runs of flow whose amplitude stays below `fraction` of the trailing baseline
 // for at least params.min_duration_s, with the mask-off and large-leak runs
@@ -77,17 +110,6 @@ std::vector<Run> suppressedRuns(const std::vector<EDFParser::BreathCycle>& breat
         return hi - lo;
     };
 
-    for (size_t i = 0; i < breaths.size(); ++i) {
-        intervals.push_back({breaths[i].start_idx / sample_rate,
-                             breaths[i].end_idx / sample_rate, amp[i], i});
-
-        if (i + 1 < breaths.size()) {
-            const double g0 = breaths[i].end_idx / sample_rate;
-            const double g1 = breaths[i + 1].start_idx / sample_rate;
-            if (g1 > g0) intervals.push_back({g0, g1, peakToPeak(g0, g1), i + 1});
-        }
-    }
-
     // Baseline for an interval: the median amplitude of the breaths in the
     // trailing window that ENDED BEFORE it, so nothing from inside a suppression
     // can lower the bar it is judged against.
@@ -100,6 +122,42 @@ std::vector<Run> suppressedRuns(const std::vector<EDFParser::BreathCycle>& breat
         if (window.size() < params.min_baseline_breaths) return -1;
         return medianOf(window);
     };
+
+    // A stretch inside a gap shorter than this is not split out of it.
+    const size_t min_quiet = static_cast<size_t>(sample_rate);  // 1 s, a breath's minimum
+
+    for (size_t i = 0; i < breaths.size(); ++i) {
+        intervals.push_back({breaths[i].start_idx / sample_rate,
+                             breaths[i].end_idx / sample_rate, amp[i], i});
+
+        if (i + 1 < breaths.size()) {
+            const double g0 = breaths[i].end_idx / sample_rate;
+            const double g1 = breaths[i + 1].start_idx / sample_rate;
+            if (g1 <= g0) continue;
+            const Interval gap{g0, g1, peakToPeak(g0, g1), i + 1};
+
+            // SDD-014: when the flow goes flat, the breath before the pause has
+            // no zero crossing to end on, so the detector drops it and this gap
+            // starts where that breath did. Judged whole, the gap holds a full
+            // breath and is never suppressed: a flat 20 s pause was missed. So
+            // the gap's longest stretch already under the bar is an interval of
+            // its own, and what is left on either side keeps its own amplitude.
+            const double base = baselineAt(gap);
+            const size_t a = static_cast<size_t>(std::max(0.0, g0 * sample_rate));
+            const size_t b = std::min(flow.size(), static_cast<size_t>(g1 * sample_rate));
+            if (base > 0 && gap.amp >= fraction * base && b > a) {
+                const auto [q0, q1] = longestQuiet(flow, a, b, fraction * base);
+                if (q1 - q0 >= min_quiet && (q0 > a || q1 < b)) {
+                    const double s0 = q0 / sample_rate, s1 = q1 / sample_rate;
+                    if (s0 > g0) intervals.push_back({g0, s0, peakToPeak(g0, s0), i + 1});
+                    intervals.push_back({s0, s1, peakToPeak(s0, s1), i + 1});
+                    if (g1 > s1) intervals.push_back({s1, g1, peakToPeak(s1, g1), i + 1});
+                    continue;
+                }
+            }
+            intervals.push_back(gap);
+        }
+    }
 
     std::vector<bool> suppressed(intervals.size(), false);
     for (size_t i = 0; i < intervals.size(); ++i) {

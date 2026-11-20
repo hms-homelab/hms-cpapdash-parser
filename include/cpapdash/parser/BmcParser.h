@@ -233,7 +233,7 @@ public:
 
     /**
      * SDD-014: the apneas this library finds in one session's patient flow
-     * (detectFlowApneas, the AASM >=90% drop for >=10 s), EventType::APNEA with
+     * (detectFlowApneas: a drop of about 70% for >=10 s, the machines' rule), EventType::APNEA with
      * EventSource::Computed, on the same clock as the session's other times.
      * Word 98's leak is the large-leak exclusion, and an apnea that touches a
      * second with no flow reading (no packet, or the leak cap) is not returned.

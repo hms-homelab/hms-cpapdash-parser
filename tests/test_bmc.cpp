@@ -810,10 +810,10 @@ namespace {
 // 180 s of breathing, a 20 s pause at the leak level (no patient flow), 120 s of
 // breathing: a night with one apnea in its flow at 23:03:00. `pause_leak` is word
 // 98 during the pause.
-std::vector<uint8_t> nightWithAPause(uint16_t pause_leak = 50) {
+std::vector<uint8_t> nightWithAPause(uint16_t pause_leak = 50, int ripple = 10) {
     Train pause;
     pause.breathe = false;
-    pause.ripple = 10;  // 1 L/min, as real flow keeps during an apnea
+    pause.ripple = ripple;  // 10: 1 L/min, as real flow keeps during an apnea; 0: flat
     pause.leak = [pause_leak](int) { return pause_leak; };
     return cat(cat(breathing(kEvening, 180, Train{}), breathing(plus(kEvening, 180), 20, pause)),
                breathing(plus(kEvening, 200), 120, Train{}));
@@ -872,6 +872,20 @@ TEST(BmcFlowApneas, TheSameApneasFromTheCardAsFromTheParse) {
     EXPECT_EQ(s->computed_events[0].timestamp, found[0].timestamp);
     EXPECT_TRUE(BmcParser::sessionFromCard(card, card.sessions[0], "dev", "BMC")
                     ->computed_events.empty());
+}
+
+TEST(BmcFlowApneas, APauseIsAnApneaWithOrWithoutACardiacRipple) {
+    for (int ripple : {10, 0}) {
+        SCOPED_TRACE(ripple ? "1 L/min ripple" : "flat");
+        const auto card = buildBmcCard(kSerial, {nightWithAPause(50, ripple)}, {});
+        const auto found = BmcParser::flowApneas(card, card.sessions[0]);
+        ASSERT_EQ(found.size(), 1u);
+        const auto pause_at = bmcToTimePoint(*bmcCivilSeconds(2031, 3, 14, 23, 3, 0));
+        EXPECT_LE(std::abs(std::chrono::duration<double>(found[0].timestamp - pause_at).count()),
+                  4.0);
+        EXPECT_GE(found[0].duration_seconds, 16.0);
+        EXPECT_LE(found[0].duration_seconds, 24.0);
+    }
 }
 
 TEST(BmcFlowApneas, AStretchTheCardHasNoReadingForIsNotAnApnea) {

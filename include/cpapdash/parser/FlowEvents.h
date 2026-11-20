@@ -15,16 +15,19 @@
 // Nothing here is device-specific. It takes a breath series and a flow series
 // and returns events, so any machine whose flow we can read can use it.
 //
-// The thresholds are the AASM scoring manual's, which is a published clinical
-// standard: an apnea is a drop of at least 90% in peak airflow excursion from
-// the pre-event baseline, lasting at least ten seconds.
+// The shape of the rule is the AASM scoring manual's: a drop in peak airflow
+// excursion from the pre-event baseline, lasting at least ten seconds. The size
+// of the drop is the machines' (about 70%, SDD-014), not the manual's 90%.
 
 namespace cpapdash::parser {
 
 /** Knobs, all of them, so nothing is buried as a literal in the algorithm. */
 struct FlowEventParams {
-    // The AASM apnea criteria.
-    double drop_fraction = 0.10;      // amplitude below 10% of baseline is a >=90% drop
+    // The apnea criteria. SDD-014 (Albin, 2026-11-19, amending SDD-006 for this
+    // detector): the drop the machines score, about 70%, not the AASM 90%. On a
+    // ResMed night the machine's apneas were drops to 25-39% of the baseline
+    // excursion, which a 90% rule never calls.
+    double drop_fraction = 0.30;      // amplitude below 30% of baseline is a >=70% drop
     double min_duration_s = 10.0;
 
     // Trailing window the baseline is taken over, with the candidate event

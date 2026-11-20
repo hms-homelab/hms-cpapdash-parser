@@ -25,13 +25,17 @@ void breathe(std::vector<double>& flow, int seconds, double amplitude) {
 }
 
 // No breathing: only a 1 L/min cardiac ripple at 48 a minute, as real flow
-// keeps during an apnea. A perfectly flat line is not used: the breath detector
-// then drops the breath before it, and the detector misses the pause (SDD-014
-// section 5 records it).
+// usually keeps during an apnea.
 void still(std::vector<double>& flow, int seconds) {
     const double pi = std::acos(-1.0);
     const size_t n = static_cast<size_t>(seconds * kHz);
     for (size_t i = 0; i < n; ++i) flow.push_back(1.0 * std::sin(2 * pi * i / (1.25 * kHz)));
+}
+
+// No breathing and no ripple: a perfectly flat line. The breath detector then
+// never ends the breath before it (SDD-014 section 5).
+void flat(std::vector<double>& flow, int seconds) {
+    flow.insert(flow.end(), static_cast<size_t>(seconds * kHz), 0.0);
 }
 
 // 180 s of breathing, then `event` (filled by the caller), then 120 s more.
@@ -77,6 +81,34 @@ TEST(FlowApneas, TwentySecondsOfNoFlowIsOneComputedApnea) {
     EXPECT_NEAR(secondsFromStart(found[0]), 180.0, 4.0);
     EXPECT_GE(found[0].duration_seconds, 16.0);
     EXPECT_LE(found[0].duration_seconds, 24.0);
+}
+
+TEST(FlowApneas, AFlatPauseIsOneApneaToo) {
+    // The breath before a flat pause is not detected, so the gap between
+    // detected breaths starts 4 s before the pause; its flat stretch is judged
+    // on its own (SDD-014 section 5).
+    const auto flow = night([](std::vector<double>& f) { flat(f, 20); });
+    const auto breaths = EDFParser::detectBreaths(flow, kHz);
+    const auto found = detectFlowApneas(breaths, flow, kHz, kStart);
+    ASSERT_EQ(found.size(), 1u);
+    EXPECT_EQ(found[0].source, EventSource::Computed);
+    EXPECT_NEAR(secondsFromStart(found[0]), 180.0, 1.0);
+    EXPECT_NEAR(found[0].duration_seconds, 20.0, 1.0);
+}
+
+TEST(FlowApneas, TheDropIsTheMachinesSeventyPercent) {
+    // SDD-014: a breath at a quarter of the baseline (a 75% drop) is an apnea;
+    // at 40% (a 60% drop) it is not. The AASM 90% would call neither.
+    const auto quarter = night([](std::vector<double>& f) { breathe(f, 20, 7.5); });
+    EXPECT_EQ(detectFlowApneas(EDFParser::detectBreaths(quarter, kHz), quarter, kHz, kStart).size(),
+              1u);
+    const auto forty = night([](std::vector<double>& f) { breathe(f, 20, 12); });
+    EXPECT_TRUE(detectFlowApneas(EDFParser::detectBreaths(forty, kHz), forty, kHz, kStart).empty());
+    FlowEventParams aasm;
+    aasm.drop_fraction = 0.10;
+    EXPECT_TRUE(detectFlowApneas(EDFParser::detectBreaths(quarter, kHz), quarter, kHz, kStart, {}, 0,
+                                 aasm)
+                    .empty());
 }
 
 TEST(FlowApneas, SteadyBreathingHasNone) {
