@@ -1,5 +1,31 @@
 # Changelog
 
+## [12.3.0] - 2026-11-20
+
+Default parses are unchanged: a full dump of every local night and session is
+identical to 12.2.0 under UTC, New York, Sydney and Kiritimati.
+
+### AirSense 11 stored pages (RC03)
+
+`AirSense11PagesParser` reads the pages an AirSense 11 answers over its own
+Bluetooth for a night: flow, mask pressure, leak and inspiratory pressure, and
+the respiratory events. A record that does not decode is skipped and counted, a
+page cut mid-record yields its whole records, nothing throws. Fixtures are a
+bench AirSense 11's pages, checked against the same machine's card (r = 0.999,
+7 of 7 events). SDD-012.
+
+### Wall-clock labels, opt-in
+
+Times can carry an optional wall-clock label next to the UTC instant, for a
+reader that shows the machine's own clock. SDD-013.
+
+### Flow apneas for a Luna, opt-in
+
+The computed path finds apneas in a Luna's flow at the machines' own ~70% drop
+(`drop_fraction` 0.30) instead of the AASM 90%, which called none of a ResMed
+night's apneas. A flat pause, where the breath before it is never detected, now
+counts. Computed apneas stay off unless asked for. SDD-014.
+
 ## [12.2.0] - 2026-11-13
 
 ### ResMed: every setting the STR carries, under its own label
