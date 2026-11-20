@@ -28,42 +28,20 @@ double leakOver(const std::vector<double>& leak, double leak_rate,
     return sum / static_cast<double>(b - a);
 }
 
-} // anonymous namespace
+struct Run {
+    double from_s, to_s;
+};
 
-double breathAmplitude(const std::vector<double>& flow,
-                       const EDFParser::BreathCycle& breath) {
-    const size_t a = static_cast<size_t>(std::max(0, breath.start_idx));
-    const size_t b = std::min(flow.size(), static_cast<size_t>(std::max(0, breath.end_idx)));
-    if (a >= b) return 0;
-
-    double lo = flow[a], hi = flow[a];
-    for (size_t i = a; i < b; ++i) {
-        lo = std::min(lo, flow[i]);
-        hi = std::max(hi, flow[i]);
-    }
-    return hi - lo;
-}
-
-std::vector<SleepEvent> detectFlowApneas(
-    const std::vector<EDFParser::BreathCycle>& breaths,
-    const std::vector<double>& flow,
-    double sample_rate,
-    std::chrono::system_clock::time_point start,
-    const std::vector<double>& leak,
-    double leak_rate,
-    const FlowEventParams& params,
-    FlowEventStats* stats)
-{
-    std::vector<SleepEvent> events;
-    FlowEventStats st;
-    st.breaths = breaths.size();
-
-    if (breaths.empty() || flow.empty() || sample_rate <= 0) {
-        if (stats) *stats = st;
-        return events;
-    }
-
-    st.analysed_seconds = static_cast<double>(flow.size()) / sample_rate;
+// Runs of flow whose amplitude stays below `fraction` of the trailing baseline
+// for at least params.min_duration_s, with the mask-off and large-leak runs
+// taken out. The one search both the apnea (fraction 0.10) and the hypopnea
+// candidate (0.70) use.
+std::vector<Run> suppressedRuns(const std::vector<EDFParser::BreathCycle>& breaths,
+                                const std::vector<double>& flow, double sample_rate,
+                                const std::vector<double>& leak, double leak_rate,
+                                const FlowEventParams& params, double fraction,
+                                FlowEventStats& st) {
+    std::vector<Run> runs;
 
     // Amplitude per breath, and the second each breath begins at.
     std::vector<double> amp(breaths.size());
@@ -128,10 +106,10 @@ std::vector<SleepEvent> detectFlowApneas(
         const double base = baselineAt(intervals[i]);
         if (base < 0) { ++st.rejected_no_baseline; continue; }
         if (base <= 0) continue;
-        suppressed[i] = intervals[i].amp < params.drop_fraction * base;
+        suppressed[i] = intervals[i].amp < fraction * base;
     }
 
-    // Runs of suppressed intervals, long enough to be an apnea.
+    // Runs of suppressed intervals, long enough to be an event.
     for (size_t i = 0; i < intervals.size();) {
         if (!suppressed[i]) { ++i; continue; }
 
@@ -157,19 +135,115 @@ std::vector<SleepEvent> detectFlowApneas(
             ++st.rejected_leak;
             continue;
         }
+        runs.push_back({from_s, to_s});
+    }
+    return runs;
+}
 
+std::chrono::system_clock::time_point at(std::chrono::system_clock::time_point start,
+                                         double seconds) {
+    return start + std::chrono::milliseconds(static_cast<long long>(std::llround(seconds * 1000.0)));
+}
+
+} // anonymous namespace
+
+double breathAmplitude(const std::vector<double>& flow,
+                       const EDFParser::BreathCycle& breath) {
+    const size_t a = static_cast<size_t>(std::max(0, breath.start_idx));
+    const size_t b = std::min(flow.size(), static_cast<size_t>(std::max(0, breath.end_idx)));
+    if (a >= b) return 0;
+
+    double lo = flow[a], hi = flow[a];
+    for (size_t i = a; i < b; ++i) {
+        lo = std::min(lo, flow[i]);
+        hi = std::max(hi, flow[i]);
+    }
+    return hi - lo;
+}
+
+std::vector<SleepEvent> detectFlowApneas(
+    const std::vector<EDFParser::BreathCycle>& breaths,
+    const std::vector<double>& flow,
+    double sample_rate,
+    std::chrono::system_clock::time_point start,
+    const std::vector<double>& leak,
+    double leak_rate,
+    const FlowEventParams& params,
+    FlowEventStats* stats)
+{
+    std::vector<SleepEvent> events;
+    FlowEventStats st;
+    st.breaths = breaths.size();
+
+    if (breaths.empty() || flow.empty() || sample_rate <= 0) {
+        if (stats) *stats = st;
+        return events;
+    }
+
+    st.analysed_seconds = static_cast<double>(flow.size()) / sample_rate;
+
+    for (const auto& r : suppressedRuns(breaths, flow, sample_rate, leak, leak_rate, params,
+                                        params.drop_fraction, st)) {
         SleepEvent ev;
         // Unclassified. Airflow stopped -- that we can measure. Obstructive
         // versus central needs effort belts, and is not guessed at.
         ev.event_type = EventType::APNEA;
-        ev.timestamp = start + std::chrono::milliseconds(
-            static_cast<long long>(std::llround(from_s * 1000.0)));
-        ev.duration_seconds = duration;
+        ev.timestamp = at(start, r.from_s);
+        ev.duration_seconds = r.to_s - r.from_s;
         ev.details = "Flow-derived apnea";
+        ev.source = EventSource::Computed;  // SDD-014
         events.push_back(std::move(ev));
     }
 
     if (stats) *stats = st;
+    return events;
+}
+
+std::vector<SleepEvent> detectFlowHypopneas(
+    const std::vector<EDFParser::BreathCycle>& breaths,
+    const std::vector<double>& flow,
+    double sample_rate,
+    std::chrono::system_clock::time_point start,
+    const std::vector<DesatEvent>& desaturations,
+    const std::vector<double>& leak,
+    double leak_rate,
+    const FlowEventParams& params)
+{
+    std::vector<SleepEvent> events;
+    if (breaths.empty() || flow.empty() || sample_rate <= 0 || desaturations.empty())
+        return events;
+
+    FlowEventStats ignored;
+    const auto apneas = suppressedRuns(breaths, flow, sample_rate, leak, leak_rate, params,
+                                       params.drop_fraction, ignored);
+    const auto drops = suppressedRuns(breaths, flow, sample_rate, leak, leak_rate, params,
+                                      params.hypopnea_fraction, ignored);
+
+    for (const auto& d : drops) {
+        // A drop that holds an apnea is that apnea, scored once.
+        const bool is_apnea = std::any_of(apneas.begin(), apneas.end(), [&](const Run& a) {
+            return a.from_s < d.to_s && d.from_s < a.to_s;
+        });
+        if (is_apnea) continue;
+
+        // The desaturation that goes with it begins during the drop or within
+        // the window after its end.
+        const auto from = at(start, d.from_s);
+        const auto until = at(start, d.to_s + params.desat_window_s);
+        const bool desat = std::any_of(
+            desaturations.begin(), desaturations.end(), [&](const DesatEvent& e) {
+                return e.depth >= params.desat_min_depth && e.onset >= from && e.onset <= until;
+            });
+        if (!desat) continue;
+
+        SleepEvent ev;
+        ev.event_type = EventType::HYPOPNEA;
+        ev.timestamp = from;
+        ev.duration_seconds = d.to_s - d.from_s;
+        ev.details = "Flow-derived hypopnea, with a desaturation";
+        ev.source = EventSource::Computed;
+        events.push_back(std::move(ev));
+    }
     return events;
 }
 

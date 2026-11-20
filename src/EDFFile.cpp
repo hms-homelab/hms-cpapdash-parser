@@ -1,4 +1,5 @@
 #include "cpapdash/parser/EDFFile.h"
+#include "cpapdash/parser/WallClock.h"
 #include <fstream>
 #include <cstring>
 #include <cstdlib>
@@ -227,7 +228,8 @@ std::chrono::system_clock::time_point EDFFile::getStartTime() const {
     t.tm_min  = start_minute;
     t.tm_sec  = start_second;
     t.tm_isdst = -1;
-    return std::chrono::system_clock::from_time_t(std::mktime(&t));
+    // The host's mktime, or the header's own fields as a label (SDD-013).
+    return std::chrono::system_clock::from_time_t(wallClockToTimeT(t));
 }
 
 int EDFFile::findSignal(const std::string& partial_label) const {

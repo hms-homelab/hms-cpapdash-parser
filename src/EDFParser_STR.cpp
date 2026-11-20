@@ -1,4 +1,5 @@
 #include "cpapdash/parser/EDFParser.h"
+#include "cpapdash/parser/WallClock.h"
 #include <algorithm>
 #include <iostream>
 #include <cmath>
@@ -196,7 +197,8 @@ std::vector<STRDailyRecord> EDFParser::parseSTRInternal(
         t.tm_min  = edf.start_minute;
         t.tm_sec  = edf.start_second;
         t.tm_isdst = -1;
-        return std::chrono::system_clock::from_time_t(std::mktime(&t));
+        // A label normalises the day the same way (SDD-013).
+        return std::chrono::system_clock::from_time_t(wallClockToTimeT(t));
     };
 
     for (int rec = 0; rec < edf.actual_records; ++rec) {

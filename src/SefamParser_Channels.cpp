@@ -1,6 +1,7 @@
 #ifdef CPAPDASH_WITH_SEFAM
 
 #include "cpapdash/parser/SefamParser.h"
+#include "cpapdash/parser/WallClock.h"
 
 #include <algorithm>
 #include <cctype>
@@ -27,8 +28,8 @@ int twoDigits(const std::string& s, size_t at) {
     return (s[at] - '0') * 10 + (s[at + 1] - '0');
 }
 
-// Local wall-clock, matching SefamIni.cpp and EDFFile::getStartTime(). The
-// device stamps its own face's time.
+// Local wall-clock, matching SefamIni.cpp and EDFFile::getStartTime(), or a
+// label in SDD-013's frame. The device stamps its own face's time.
 std::optional<std::chrono::system_clock::time_point>
 makeLocalTime(int year, int month, int day, int hour, int min, int sec) {
     if (year < 1970 || month < 1 || month > 12 || day < 1 || day > 31) return std::nullopt;
@@ -43,7 +44,7 @@ makeLocalTime(int year, int month, int day, int hour, int min, int sec) {
     t.tm_sec  = sec;
     t.tm_isdst = -1;
 
-    std::time_t epoch = std::mktime(&t);
+    std::time_t epoch = wallClockToTimeT(t);
     if (epoch == static_cast<std::time_t>(-1)) return std::nullopt;
     return std::chrono::system_clock::from_time_t(epoch);
 }

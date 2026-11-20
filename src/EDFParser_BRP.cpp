@@ -1,4 +1,5 @@
 #include "cpapdash/parser/EDFParser.h"
+#include "cpapdash/parser/WallClock.h"
 #include <iostream>
 #include <cmath>
 #include <algorithm>
@@ -38,12 +39,13 @@ startFromFilename(const std::string& path) {
     // local time in both the name and the header, and the two must land on the
     // same instant: interpreting the name as UTC while the header stays local
     // would shift every path-opened file by the machine's UTC offset — invisible
-    // in a UTC test environment and hours wrong everywhere else.
+    // in a UTC test environment and hours wrong everywhere else. Under SDD-013's
+    // label frame both become labels together, through the same conversion.
     std::tm t{};
     t.tm_year = Y - 1900; t.tm_mon = Mo - 1; t.tm_mday = D;
     t.tm_hour = h; t.tm_min = mi; t.tm_sec = s;
     t.tm_isdst = -1;
-    const std::time_t e = std::mktime(&t);
+    const std::time_t e = wallClockToTimeT(t);
     if (e == static_cast<std::time_t>(-1)) return std::nullopt;
     return std::chrono::system_clock::from_time_t(e);
 }

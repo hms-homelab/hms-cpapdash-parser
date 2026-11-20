@@ -38,6 +38,8 @@
 // the same machine wrote, so a day the machine reported another way (its
 // Bluetooth summary) can sit among the days its card carried.
 //
+#include "cpapdash/parser/WallClock.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -58,11 +60,7 @@ struct EDFWriteSignal {
     std::vector<double> samples;       // physical values; clamped to [phys_min, phys_max]
 };
 
-/// The wall clock a machine writes into its files: ITS local time, as the
-/// card's file names and EDF headers carry it.
-struct WallClock {
-    int year = 2000, month = 1, day = 1, hour = 0, minute = 0, second = 0;
-};
+// WallClock, the machine's own time a file is stamped with, is in WallClock.h.
 
 struct EDFWriteSpec {
     std::string patient   = "X X X X";   // up to 80

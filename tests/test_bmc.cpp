@@ -172,10 +172,14 @@ struct Train {
     std::function<uint16_t(int)> vt = [](int) { return uint16_t(0); };
     uint16_t mv = 0, rr = 15, ie = 15;                          // ie: Te/Ti 1.5
     bool breathe = true;
+    int ripple = 0;  // codes of cardiac ripple (1.25 s) while not breathing
 };
 
 int trainSample(const Train& t, long n) {
-    if (!t.breathe) return t.level;
+    if (!t.breathe)
+        return t.ripple ? static_cast<int>(std::lround(
+                              t.level + t.ripple * std::sin(2 * std::acos(-1.0) * n / 31.25)))
+                        : t.level;
     const long phase = n % 100;
     const double pi = std::acos(-1.0);
     if (phase < 40) return static_cast<int>(std::lround(t.level + t.insp * std::sin(pi * phase / 40.0)));
@@ -797,6 +801,101 @@ TEST(BmcWaveform, TheReaderReturnsThe25HzSamplesCalibrated) {
     EXPECT_TRUE(u.pressure.empty()) << "no pressure for a model not measured";
     EXPECT_EQ(u.flow.size(), 60u * 25);
     EXPECT_TRUE(BmcParser::waveform(card, s0 + 10, s0 + 10).flow.empty());
+}
+
+// ── flow apneas (SDD-014) ────────────────────────────────────────────────────
+
+namespace {
+
+// 180 s of breathing, a 20 s pause at the leak level (no patient flow), 120 s of
+// breathing: a night with one apnea in its flow at 23:03:00. `pause_leak` is word
+// 98 during the pause.
+std::vector<uint8_t> nightWithAPause(uint16_t pause_leak = 50) {
+    Train pause;
+    pause.breathe = false;
+    pause.ripple = 10;  // 1 L/min, as real flow keeps during an apnea
+    pause.leak = [pause_leak](int) { return pause_leak; };
+    return cat(cat(breathing(kEvening, 180, Train{}), breathing(plus(kEvening, 180), 20, pause)),
+               breathing(plus(kEvening, 200), 120, Train{}));
+}
+
+// The machine's own obstructive apnea at 23:01, which the flow does not show.
+std::vector<uint8_t> oneMachineApnea() {
+    return evtFile({{1, bmc_event::kObstructive, 11 * 3600 + 60, 12}});
+}
+
+}  // namespace
+
+TEST_F(BmcCardDir, ADefaultParseHasOnlyTheMachinesEvents) {
+    // SDD-014: computed apneas are opt-in, so a consumer that does not ask (the
+    // cloud's ingest) gets exactly the event list and index it always got.
+    write(kSerial + ".000", nightWithAPause());
+    write(kSerial + ".evt", oneMachineApnea());
+    BmcParser plain;
+    auto s = plain.parseSession(dir_.string(), "dev", "BMC");
+    ASSERT_NE(s, nullptr);
+    ASSERT_EQ(s->events.size(), 1u);
+    EXPECT_EQ(s->events[0].event_type, EventType::OBSTRUCTIVE);
+    EXPECT_EQ(s->events[0].source, EventSource::Machine);
+    EXPECT_EQ(s->events[0].timestamp, bmcToTimePoint(*bmcCivilSeconds(2031, 3, 14, 23, 1, 0)));
+    EXPECT_TRUE(s->computed_events.empty());
+
+    BmcParser asked;
+    asked.setFlowApneas(true);
+    auto c = asked.parseSession(dir_.string(), "dev", "BMC");
+    ASSERT_NE(c, nullptr);
+    ASSERT_EQ(c->events.size(), s->events.size()) << "the machine's list is untouched";
+    EXPECT_EQ(c->events[0].timestamp, s->events[0].timestamp);
+    EXPECT_EQ(c->events[0].event_type, s->events[0].event_type);
+    EXPECT_DOUBLE_EQ(c->events[0].duration_seconds, s->events[0].duration_seconds);
+    EXPECT_EQ(c->metrics->total_events, s->metrics->total_events) << "never a sum (D4)";
+    EXPECT_DOUBLE_EQ(c->metrics->ahi, s->metrics->ahi);
+    EXPECT_EQ(c->metrics->index_kind, s->metrics->index_kind);
+
+    ASSERT_EQ(c->computed_events.size(), 1u);
+    const auto& a = c->computed_events[0];
+    EXPECT_EQ(a.event_type, EventType::APNEA);
+    EXPECT_EQ(a.source, EventSource::Computed);
+    const auto pause_at = bmcToTimePoint(*bmcCivilSeconds(2031, 3, 14, 23, 3, 0));
+    EXPECT_LE(std::abs(std::chrono::duration<double>(a.timestamp - pause_at).count()), 4.0);
+    EXPECT_GE(a.duration_seconds, 16.0);
+}
+
+TEST(BmcFlowApneas, TheSameApneasFromTheCardAsFromTheParse) {
+    const auto card = buildBmcCard(kSerial, {nightWithAPause()}, oneMachineApnea());
+    FlowEventStats st;
+    const auto found = BmcParser::flowApneas(card, card.sessions[0], &st);
+    ASSERT_EQ(found.size(), 1u);
+    EXPECT_GT(st.breaths, 70u);
+    auto s = BmcParser::sessionFromCard(card, card.sessions[0], "dev", "BMC", nullptr, true);
+    ASSERT_EQ(s->computed_events.size(), 1u);
+    EXPECT_EQ(s->computed_events[0].timestamp, found[0].timestamp);
+    EXPECT_TRUE(BmcParser::sessionFromCard(card, card.sessions[0], "dev", "BMC")
+                    ->computed_events.empty());
+}
+
+TEST(BmcFlowApneas, AStretchTheCardHasNoReadingForIsNotAnApnea) {
+    // The 20 s pause is replaced by 20 missing seconds: one session still (under
+    // the 60 s gap), but a hole, not breathing that stopped.
+    const auto raw = cat(breathing(kEvening, 180, Train{}),
+                         breathing(plus(kEvening, 200), 120, Train{}));
+    const auto card = buildBmcCard(kSerial, {raw}, {});
+    ASSERT_EQ(card.sessions.size(), 1u);
+    EXPECT_TRUE(BmcParser::flowApneas(card, card.sessions[0]).empty());
+}
+
+TEST(BmcFlowApneas, APauseInALargeLeakIsNotAnApnea) {
+    // Word 98 at 30 L/min over the pause: above the large-leak line the flow no
+    // longer describes the airway.
+    const auto card = buildBmcCard(kSerial, {nightWithAPause(300)}, {});
+    FlowEventStats st;
+    EXPECT_TRUE(BmcParser::flowApneas(card, card.sessions[0], &st).empty());
+    EXPECT_EQ(st.rejected_leak, 1u);
+}
+
+TEST(BmcFlowApneas, SteadyBreathingHasNone) {
+    const auto card = buildBmcCard(kSerial, {breathing(kEvening, 600, Train{})}, {});
+    EXPECT_TRUE(BmcParser::flowApneas(card, card.sessions[0]).empty());
 }
 
 #endif  // CPAPDASH_WITH_BMC

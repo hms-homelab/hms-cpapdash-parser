@@ -24,6 +24,7 @@ add_library(cpapdash_parser STATIC
     src/SleepIndex.cpp
     src/FlowEvents.cpp
     src/EdfRecordCount.cpp
+    src/WallClock.cpp
 )
 
 target_include_directories(cpapdash_parser PUBLIC
@@ -137,6 +138,8 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         tests/test_edf_record_count.cpp
         tests/test_edf_writer.cpp
         tests/test_str_record_writer.cpp
+        tests/test_flow_events.cpp
+        tests/test_wall_clock.cpp
     )
     if(CPAPDASH_PARSER_WITH_LOWENSTEIN)
         list(APPEND TEST_SOURCES tests/test_prisma.cpp)

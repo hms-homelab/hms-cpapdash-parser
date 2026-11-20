@@ -1,4 +1,5 @@
 #include "cpapdash/parser/EDFParser.h"
+#include "cpapdash/parser/WallClock.h"
 #include "ParseNum.h"
 #include <iostream>
 #include <filesystem>
@@ -222,7 +223,7 @@ std::unique_ptr<ParsedSession> EDFParser::parseSessionFromBuffers(
             t.tm_year = year - 1900; t.tm_mon = mon - 1; t.tm_mday = mday;
             t.tm_hour = hour; t.tm_min = min; t.tm_sec = sec;
             t.tm_isdst = -1;
-            session->session_start = std::chrono::system_clock::from_time_t(std::mktime(&t));
+            session->session_start = std::chrono::system_clock::from_time_t(wallClockToTimeT(t));
         }
     }
 

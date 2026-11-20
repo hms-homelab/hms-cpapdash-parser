@@ -1,6 +1,7 @@
 #ifdef CPAPDASH_WITH_SEFAM
 
 #include "cpapdash/parser/SefamParser.h"
+#include "cpapdash/parser/WallClock.h"
 #include "ParseNum.h"
 
 #include <algorithm>
@@ -40,7 +41,7 @@ int expandYear(int y) {
 // ResMed EDF header does, and EDFFile::getStartTime() reads those through
 // std::mktime. A Sefam night and a ResMed night have to land on the same axis for
 // a sleep day to mean anything, so this follows that convention rather than the
-// oximetry CSV one.
+// oximetry CSV one, including SDD-013's label frame when a caller asks for it.
 std::optional<std::chrono::system_clock::time_point>
 makeLocalTime(int year, int month, int day, int hour, int min, int sec) {
     if (year < 1970 || month < 1 || month > 12 || day < 1 || day > 31) return std::nullopt;
@@ -55,7 +56,7 @@ makeLocalTime(int year, int month, int day, int hour, int min, int sec) {
     t.tm_sec  = sec;
     t.tm_isdst = -1;
 
-    std::time_t epoch = std::mktime(&t);
+    std::time_t epoch = wallClockToTimeT(t);
     if (epoch == static_cast<std::time_t>(-1)) return std::nullopt;
     return std::chrono::system_clock::from_time_t(epoch);
 }

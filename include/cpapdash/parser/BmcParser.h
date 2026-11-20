@@ -2,6 +2,7 @@
 
 #ifdef CPAPDASH_WITH_BMC
 
+#include "cpapdash/parser/FlowEvents.h"
 #include "cpapdash/parser/ISessionParser.h"
 #include "cpapdash/parser/Models.h"
 
@@ -219,12 +220,31 @@ public:
     /** The sessions on the card in `dir`, oldest first. */
     static std::vector<BmcSessionSpan> listSessions(const std::string& dir);
 
-    /** Turn one session of a card into a ParsedSession. */
+    /**
+     * Turn one session of a card into a ParsedSession. `flow_apneas` also fills
+     * its computed_events (SDD-014); off, the session is what it always was.
+     */
     static std::unique_ptr<ParsedSession> sessionFromCard(const BmcCard& card,
                                                           const BmcSessionSpan& span,
                                                           const std::string& device_id,
                                                           const std::string& device_name,
-                                                          BmcNotes* notes = nullptr);
+                                                          BmcNotes* notes = nullptr,
+                                                          bool flow_apneas = false);
+
+    /**
+     * SDD-014: the apneas this library finds in one session's patient flow
+     * (detectFlowApneas, the AASM >=90% drop for >=10 s), EventType::APNEA with
+     * EventSource::Computed, on the same clock as the session's other times.
+     * Word 98's leak is the large-leak exclusion, and an apnea that touches a
+     * second with no flow reading (no packet, or the leak cap) is not returned.
+     * The machine's own .evt apneas are not here and are never merged in.
+     */
+    static std::vector<SleepEvent> flowApneas(const BmcCard& card, const BmcSessionSpan& span,
+                                              FlowEventStats* stats = nullptr);
+
+    /** Off by default. On, parseSession and parseSessionFromBuffers fill each
+     *  session's computed_events with flowApneas (SDD-014). */
+    void setFlowApneas(bool on) { flow_apneas_ = on; }
 
     /**
      * The calibrated 25 Hz flow and pressure of [from, to) (civil seconds), for
@@ -239,6 +259,7 @@ private:
                                         const std::string& device_id,
                                         const std::string& device_name);
     BmcNotes notes_;
+    bool flow_apneas_ = false;
 };
 
 std::unique_ptr<ISessionParser> createBmcParser();

@@ -5,6 +5,8 @@
 
 #include "cpapdash/parser/BmcParser.h"
 #include "cpapdash/parser/EDFParser.h"
+#include "cpapdash/parser/FlowEvents.h"
+#include "cpapdash/parser/WallClock.h"
 
 #include <algorithm>
 #include <cctype>
@@ -85,15 +87,11 @@ std::vector<uint8_t> readFile(const fs::path& p) {
     return std::vector<uint8_t>(std::istreambuf_iterator<char>(in), {});
 }
 
-// A local time_point back to civil seconds, for a caller's hint.
+// A caller's hint back to civil seconds, in the frame bmcToTimePoint made it in:
+// the host's local time, or a label (SDD-013).
 BmcCivilSeconds civilFromTimePoint(std::chrono::system_clock::time_point tp) {
     const std::time_t t = std::chrono::system_clock::to_time_t(tp);
-    std::tm lt{};
-#if defined(_WIN32)
-    localtime_s(&lt, &t);
-#else
-    localtime_r(&t, &lt);
-#endif
+    const std::tm lt = wallClockFromTimeT(t);
     return daysFromCivil(lt.tm_year + 1900, static_cast<unsigned>(lt.tm_mon + 1),
                          static_cast<unsigned>(lt.tm_mday)) * kDay +
            lt.tm_hour * 3600 + lt.tm_min * 60 + lt.tm_sec;
@@ -265,6 +263,29 @@ SessionWave sessionWave(const BmcCard& card, const BmcSessionSpan& span) {
     return w;
 }
 
+// True when any sample of [from, to] has no flow reading, or lies off the series.
+bool touchesNoReading(const std::vector<double>& patient, long from, long to) {
+    for (long i = from; i <= to; ++i)
+        if (i < 0 || static_cast<size_t>(i) >= patient.size() || std::isnan(patient[i]))
+            return true;
+    return false;
+}
+
+// The breaths of a session, each lying wholly on flow the card measured. The
+// detector reads a sample with no reading (a second missing from the card, or
+// one at the leak cap) as zero flow and carries a breath across the gap: a 4 s
+// session spread over 12 s got one "breath" of Ti 9.2 s and Te 0.36 s, an I:E
+// of 25.
+std::vector<EDFParser::BreathCycle> measuredBreaths(const SessionWave& wave) {
+    auto breaths = EDFParser::detectBreaths(wave.patient, kBmcWaveHz);
+    breaths.erase(std::remove_if(breaths.begin(), breaths.end(),
+                                 [&wave](const EDFParser::BreathCycle& b) {
+                                     return touchesNoReading(wave.patient, b.start_idx, b.end_idx);
+                                 }),
+                  breaths.end());
+    return breaths;
+}
+
 // The machine's own tidal volume for a breath ending at second `end_s`: word 99
 // is written once per breath, 1 to 2 s after it ends, so the first change in
 // the three seconds after the end; with no change (two equal breaths), the
@@ -322,7 +343,8 @@ std::chrono::system_clock::time_point bmcToTimePoint(BmcCivilSeconds s) {
     t.tm_min = static_cast<int>((tod % 3600) / 60);
     t.tm_sec = static_cast<int>(tod % 60);
     t.tm_isdst = -1;
-    return std::chrono::system_clock::from_time_t(std::mktime(&t));
+    // In SDD-013's label frame this is `s` itself: a civil stamp is a label.
+    return std::chrono::system_clock::from_time_t(wallClockToTimeT(t));
 }
 
 std::optional<BmcPacket> decodeBmcPacket(const uint8_t* packet) {
@@ -482,7 +504,7 @@ std::unique_ptr<ParsedSession> BmcParser::sessionFromCard(const BmcCard& card,
                                                           const BmcSessionSpan& span,
                                                           const std::string& device_id,
                                                           const std::string& device_name,
-                                                          BmcNotes* notes) {
+                                                          BmcNotes* notes, bool flow_apneas) {
     auto session = std::make_unique<ParsedSession>();
     session->device_id = device_id;
     session->device_name = device_name;
@@ -567,20 +589,7 @@ std::unique_ptr<ParsedSession> BmcParser::sessionFromCard(const BmcCard& card,
     // bucketed by the minute their onset falls in, as the ResMed BRP path does.
     const SessionWave wave = sessionWave(card, span);
     const int per_minute = 60 * kBmcWaveHz;
-    auto breaths = EDFParser::detectBreaths(wave.patient, kBmcWaveHz);
-    // A breath lies wholly on flow the card measured. The detector reads a
-    // sample with no reading (a second missing from the card, or one at the
-    // leak cap) as zero flow and carries a breath across the gap: a 4 s session
-    // spread over 12 s got one "breath" of Ti 9.2 s and Te 0.36 s, an I:E of 25.
-    breaths.erase(std::remove_if(breaths.begin(), breaths.end(),
-                                 [&wave](const EDFParser::BreathCycle& b) {
-                                     for (int i = b.start_idx; i <= b.end_idx; ++i)
-                                         if (i < 0 || static_cast<size_t>(i) >= wave.patient.size() ||
-                                             std::isnan(wave.patient[i]))
-                                             return true;
-                                     return false;
-                                 }),
-                  breaths.end());
+    const auto breaths = measuredBreaths(wave);
     std::map<int64_t, std::vector<EDFParser::BreathCycle>> breaths_by_minute;
     for (const auto& b : breaths) breaths_by_minute[b.start_idx / per_minute].push_back(b);
 
@@ -712,7 +721,43 @@ std::unique_ptr<ParsedSession> BmcParser::sessionFromCard(const BmcCard& card,
     // AHI exactly. No hypopnea record has been seen on a BMC card yet; if one turns
     // up under a type not handled here, it lands in span_types and is visible.
     session->calculateMetrics();
+
+    // SDD-014: our own apneas only when asked, kept apart, after the metrics so
+    // they can never reach the index.
+    if (flow_apneas) session->computed_events = flowApneas(card, span);
     return session;
+}
+
+std::vector<SleepEvent> BmcParser::flowApneas(const BmcCard& card, const BmcSessionSpan& span,
+                                              FlowEventStats* stats) {
+    const SessionWave wave = sessionWave(card, span);
+    const auto breaths = measuredBreaths(wave);
+
+    // Word 98 per second of the span, L/min; NaN where there is no reading.
+    std::vector<double> leak(static_cast<size_t>(span.end - span.start + 1), kNaN);
+    auto it = std::lower_bound(card.packets.begin(), card.packets.end(), span.start,
+                               [](const BmcPacket& p, BmcCivilSeconds s) { return p.stamp < s; });
+    for (; it != card.packets.end() && it->stamp <= span.end; ++it)
+        if (it->words[bmc_word::kLeak] != kBmcInvalid)
+            leak[static_cast<size_t>(it->stamp - span.start)] = it->words[bmc_word::kLeak] / 10.0;
+
+    auto found = detectFlowApneas(breaths, wave.patient, kBmcWaveHz, bmcToTimePoint(span.start),
+                                  leak, 1.0, FlowEventParams{}, stats);
+
+    // Like a breath, an apnea lies wholly on measured flow: a stretch the card
+    // has no reading for is a hole, not a pause in breathing.
+    const auto t0 = bmcToTimePoint(span.start);
+    found.erase(std::remove_if(found.begin(), found.end(),
+                               [&](const SleepEvent& e) {
+                                   const double from_s =
+                                       std::chrono::duration<double>(e.timestamp - t0).count();
+                                   const long a = static_cast<long>(std::floor(from_s * kBmcWaveHz));
+                                   const long b = static_cast<long>(
+                                       std::ceil((from_s + e.duration_seconds) * kBmcWaveHz));
+                                   return touchesNoReading(wave.patient, a, b - 1);
+                               }),
+                found.end());
+    return found;
 }
 
 BmcWaveform BmcParser::waveform(const BmcCard& card, BmcCivilSeconds from, BmcCivilSeconds to) {
@@ -760,7 +805,7 @@ std::unique_ptr<ParsedSession> BmcParser::pick(BmcCard card, std::optional<BmcCi
         }
         chosen = nearest;
     }
-    return sessionFromCard(card, *chosen, device_id, device_name, &notes_);
+    return sessionFromCard(card, *chosen, device_id, device_name, &notes_, flow_apneas_);
 }
 
 std::unique_ptr<ParsedSession> BmcParser::parseSession(

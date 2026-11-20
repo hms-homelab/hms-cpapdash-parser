@@ -49,6 +49,16 @@ enum class DeviceManufacturer {
 std::string eventTypeToString(EventType type);
 
 /**
+ * Who scored an event (SDD-014). Machine is what every parser has always
+ * emitted; Computed is this library's own detector run on the flow
+ * (FlowEvents.h). An event that does not say is the machine's.
+ */
+enum class EventSource {
+    Machine,
+    Computed
+};
+
+/**
  * SleepEvent - Respiratory event (apnea, hypopnea, etc.)
  */
 struct SleepEvent {
@@ -56,6 +66,9 @@ struct SleepEvent {
     std::chrono::system_clock::time_point timestamp;
     double duration_seconds;
     std::optional<std::string> details;
+    // Last, with a default, so every existing construction keeps compiling and
+    // keeps meaning the machine's event (SDD-014).
+    EventSource source = EventSource::Machine;
 
     SleepEvent() = default;
     SleepEvent(EventType t, std::chrono::system_clock::time_point ts, double dur)
@@ -421,6 +434,10 @@ struct ParsedSession {
 
     // Session data
     std::vector<SleepEvent> events;
+    // SDD-014: events this library computed from the flow, kept apart from the
+    // machine's `events` and never counted in `metrics`. Empty unless the caller
+    // asked for them (BmcParser::setFlowApneas); a default parse leaves it empty.
+    std::vector<SleepEvent> computed_events;
     std::vector<VitalSample> vitals;
     std::vector<BreathingSummary> breathing_summary;
     std::vector<DesatEvent> desaturations;  // SpO2 desats (kept out of events/AHI)
