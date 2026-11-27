@@ -1,5 +1,28 @@
 # Changelog
 
+## [12.4.0] - 2026-11-27
+
+Existing parses are unchanged: this release only adds.
+
+### AirSense 11 read-only request: the AR01 stream
+
+`AirSense11RequestReader` reads the "AR01" stream a bridge relays for one
+read-only AirSense 11 request (a stored page or a Get): the call sent, the
+machine's replies, the page bytes (for `AirSense11PagesParser`), the end of
+the spool with its next cursor, and an outcome record that always comes last.
+Bytes are taken in any pieces; a stream that is cut, not AR01, or out of order
+is read as broken and keeps every whole record before the break. A page that
+broke part way keeps what arrived. `AirSense11RequestWriter` builds one.
+Platform SDD-067.
+
+### The AirSense 11 selector list, as data
+
+`data/as11_selectors.json` lists the spools the cloud may ask an AirSense 11
+for: the five stored-page spools, and no Get id yet. `AirSense11Selectors`
+reads it and refuses any name the firmware would refuse (1 to 47 of
+`[A-Za-z0-9_-]`). `CPAPDASH_PARSER_DATA_DIR` points a FetchContent consumer at
+`data/`.
+
 ## [12.3.0] - 2026-11-20
 
 Default parses are unchanged: a full dump of every local night and session is
