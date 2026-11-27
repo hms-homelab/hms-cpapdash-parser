@@ -1,0 +1,10 @@
+{
+  "spool": [
+    "TherapyEvents-RespiratoryEvents",
+    "RespiratoryFlow6p25Hz",
+    "MaskPressure6p25Hz",
+    "Leak0p5Hz",
+    "InspiratoryPressure0p5Hz"
+  ],
+  "get": []
+}

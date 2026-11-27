@@ -22,6 +22,7 @@ add_library(cpapdash_parser STATIC
     src/AirSense11Summary.cpp
     src/AirSense11Settings.cpp
     src/AirSense11Pages.cpp
+    src/AirSense11Request.cpp
     src/SleepIndex.cpp
     src/FlowEvents.cpp
     src/EdfRecordCount.cpp
@@ -32,6 +33,12 @@ target_include_directories(cpapdash_parser PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
+
+# The parser's data files (platform SDD-067 D1: data/as11_selectors.json, the
+# AirSense 11 selectors the cloud may ask for). A consumer pulling the parser
+# with FetchContent reads them from here: ${CPAPDASH_PARSER_DATA_DIR}/...
+set(CPAPDASH_PARSER_DATA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/data"
+    CACHE INTERNAL "hms-cpapdash-parser data files")
 
 # std::filesystem: GCC < 9 and Clang < 9 need explicit linking
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.0)
@@ -130,6 +137,7 @@ if(CPAPDASH_PARSER_BUILD_TESTS AND CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURC
         tests/test_airsense11_summary.cpp
         tests/test_airsense11_settings.cpp
         tests/test_airsense11_pages.cpp
+        tests/test_airsense11_request.cpp
         tests/test_o2ring_csv.cpp
         tests/test_str_family.cpp
         tests/test_desat_detector.cpp
