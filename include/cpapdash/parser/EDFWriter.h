@@ -58,6 +58,12 @@ struct EDFWriteSignal {
     int         dig_max  = 32767;
     int         samples_per_record = 1;
     std::vector<double> samples;       // physical values; clamped to [phys_min, phys_max]
+    // A NaN sample is written as this digital value when set (it may lie
+    // outside [dig_min, dig_max]: a ResMed's SAD writes -1 under a digital
+    // minimum of 0 for a second with no reading, and OSCAR reads -1 as null).
+    // Unset, a NaN is written as physical 0.
+    bool        has_null_digital = false;
+    int         null_digital     = -1;
 };
 
 // WallClock, the machine's own time a file is stamped with, is in WallClock.h.
@@ -115,8 +121,9 @@ struct StreamedPLD {
 std::vector<uint8_t> writeResMedPLD(const StreamedPLD& pld);
 
 /// A streamed night's oximetry, one value per second in the units the SAD
-/// reader expects. A NaN is "no reading" and is written as 0, which the
-/// readers take as the sensor absent for that second (never as a value). The
+/// reader expects. A NaN is "no reading" and is written as digital -1, as the
+/// machine's own SAD writes it: OSCAR reads -1 as null, and our reader takes
+/// it as the sensor absent for that second (never as a value). The
 /// shorter vector is padded with NaN to the longer; both empty, no file.
 struct StreamedSAD {
     WallClock   start;

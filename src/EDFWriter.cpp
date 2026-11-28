@@ -95,12 +95,16 @@ std::vector<uint8_t> writeEDF(const EDFWriteSpec& spec) {
             const size_t base      = r * static_cast<size_t>(s.samples_per_record);
             for (int k = 0; k < s.samples_per_record; k++) {
                 double v = s.samples[base + static_cast<size_t>(k)];
-                if (!(v == v)) v = 0.0;                                   // NaN reads as zero
-                v = std::clamp(v, s.phys_min, s.phys_max);
                 long d = s.dig_min;
-                if (span_phys > 0 && span_dig > 0)
-                    d = std::lround(s.dig_min + (v - s.phys_min) * span_dig / span_phys);
-                d = std::clamp(d, static_cast<long>(s.dig_min), static_cast<long>(s.dig_max));
+                if (!(v == v) && s.has_null_digital) {
+                    d = s.null_digital;                                   // the machine's null, unscaled
+                } else {
+                    if (!(v == v)) v = 0.0;                               // NaN reads as zero
+                    v = std::clamp(v, s.phys_min, s.phys_max);
+                    if (span_phys > 0 && span_dig > 0)
+                        d = std::lround(s.dig_min + (v - s.phys_min) * span_dig / span_phys);
+                    d = std::clamp(d, static_cast<long>(s.dig_min), static_cast<long>(s.dig_max));
+                }
                 const auto u = static_cast<uint16_t>(static_cast<int16_t>(d));
                 out.push_back(static_cast<uint8_t>(u & 0xFF));
                 out.push_back(static_cast<uint8_t>(u >> 8));
@@ -208,9 +212,14 @@ std::vector<uint8_t> writeResMedPLD(const StreamedPLD& pld) {
 std::vector<uint8_t> writeResMedSAD(const StreamedSAD& sad) {
     const size_t n = std::max(sad.spo2_pct.size(), sad.pulse_bpm.size());
     if (n == 0) return {};
+    // A second with no reading is -1, as the machine's own SAD writes it
+    // (digital -1 under a digital minimum of 0): OSCAR reads -1 as null and
+    // holds the last reading across it, where a 0 drew the pulse down to
+    // zero and broke the SpO2 into dots. Our reader takes
+    // anything not above 0 as no reading, so -1 and 0 parse the same.
     auto padded = [n](const std::vector<double>& v) {
-        std::vector<double> out(n, 0.0);
-        for (size_t i = 0; i < v.size(); i++) out[i] = std::isnan(v[i]) ? 0.0 : v[i];
+        std::vector<double> out(n, std::nan(""));
+        for (size_t i = 0; i < v.size(); i++) out[i] = v[i];
         return out;
     };
     EDFWriteSpec spec;
@@ -220,8 +229,10 @@ std::vector<uint8_t> writeResMedSAD(const StreamedSAD& sad) {
     // One digital step a unit, physical equal to digital, as the machine's SAD.
     EDFWriteSignal spo2 = cardSignal("SpO2", "%", 0.0, 100.0, 0, 100, 1);
     spo2.samples        = padded(sad.spo2_pct);
+    spo2.has_null_digital = true;
     EDFWriteSignal pulse = cardSignal("Pulse", "bpm", 0.0, 300.0, 0, 300, 1);
     pulse.samples        = padded(sad.pulse_bpm);
+    pulse.has_null_digital = true;
     spec.signals = {spo2, pulse};
     return writeEDF(spec);
 }

@@ -160,6 +160,29 @@ TEST(AirSense11Settings, VAutoActiveIsMode8WithTimesInSeconds) {
     EXPECT_EQ(valueOf(r, "S.VA.Cycle"), 4.0);
 }
 
+// The layout an AirCurve 11 sends: CPAP in slot 3, Spont in slot
+// 4, VAuto in slot 9, and the active field naming the STR's Mode code (8 for
+// VAuto, 4 for Spont), not a slot. Its card said Mode 8 and Mode 4 on those
+// days; read as a slot, VAuto active (8) named no profile and the STR went out
+// with Mode -1 ("PAP Mode: Unknown" in OSCAR).
+TEST(AirSense11Settings, TheActiveFieldIsTheStrModeCodeOnAnAirCurve) {
+    const Profile cpap{3, {{1, 1}, {2, 1000}, {3, 400}}};
+    const Profile spont{4, {{1, 4}, {2, 400}, {3, 1200}, {4, 800}}};
+    const Profile vauto{9, {{1, 7}, {2, 400}, {3, 1400}, {4, 1000}, {5, 300}}};
+    Bytes spool = record(kT0, 8, {cpap, spont, vauto});
+    append(spool, record(kT0 + 1000, 4, {cpap, spont, vauto}));
+    const auto recs = AirSense11SettingsParser::parse(spool.data(), spool.size());
+    ASSERT_EQ(recs.size(), 2u);
+    EXPECT_EQ(recs[0].active_profile, 8);
+    EXPECT_EQ(recs[0].active_mode, 7);
+    EXPECT_EQ(valueOf(recs[0], "Mode"), 8.0);
+    EXPECT_DOUBLE_EQ(*valueOf(recs[0], "S.VA.MaxIPAP"), 14.0);
+    EXPECT_DOUBLE_EQ(*valueOf(recs[0], "S.VA.MinEPAP"), 10.0);
+    EXPECT_DOUBLE_EQ(*valueOf(recs[0], "S.VA.PS"), 3.0);
+    EXPECT_EQ(recs[1].active_mode, 4);
+    EXPECT_EQ(valueOf(recs[1], "Mode"), 4.0);
+}
+
 TEST(AirSense11Settings, ModeLeftOutWhenItsStrCodeIsUnknown) {
     // ASV active: its STR Mode code was never seen on a card.
     const Bytes spool = record(kT0, 7, {kAutoSet, kAsv});

@@ -144,6 +144,7 @@ const std::map<uint32_t, std::vector<Slot>>& featureSlots() {
 int strModeOf(uint32_t mode) {
     switch (mode) {
     case 2: return 1;   // AutoSet
+    case 4: return 4;   // Spont (S): seen on an AirCurve 11's card
     case 7: return 8;   // VAuto
     default: return 0;
     }
@@ -206,16 +207,26 @@ bool readRecord(const uint8_t* b, size_t n, AirSense11SettingsRecord& out) {
     }
     if (!have_time) return false;
 
+    // Field 2.1 is the STR's own Mode code of the active therapy. An
+    // AirCurve 11 against its card: 4 while its card's Mode was 4 (Spont,
+    // in slot 4) and 8 while its card's Mode was 8 (VAuto, mode 7, in slot
+    // 9: no slot 8 at all). So the active profile is the one whose mode has
+    // that STR code; only when none has, the profile in that slot (AutoSet in
+    // slot 1, active 1, where both readings agree).
+    int by_code = 0, by_slot = 0;
     for (const auto& [slot, fields] : profiles) {
         const auto mode = fields.find(1);
         if (mode == fields.end()) continue;
-        // The active profile is named by its slot in field 3 (AutoSet in
-        // slot 1, active 1, on a card that says AutoSet).
-        if (out.active_profile > 0 && slot == static_cast<uint32_t>(out.active_profile))
-            out.active_mode = static_cast<int>(mode->second);
+        if (out.active_profile > 0) {
+            if (!by_code && strModeOf(static_cast<uint32_t>(mode->second)) == out.active_profile)
+                by_code = static_cast<int>(mode->second);
+            if (slot == static_cast<uint32_t>(out.active_profile))
+                by_slot = static_cast<int>(mode->second);
+        }
         const auto known = profileSlots().find(static_cast<uint32_t>(mode->second));
         if (known != profileSlots().end()) put(out.values, known->second, fields);
     }
+    out.active_mode = by_code ? by_code : by_slot;
     for (const auto& [number, fields] : features) {
         const auto known = featureSlots().find(number);
         if (known != featureSlots().end()) put(out.values, known->second, fields);

@@ -236,7 +236,25 @@ TEST(EDFWriter, TheRingLandsAsASADFileBesideTheBreathing) {
         ASSERT_EQ(edf.readSignal(edf.findSignal("SpO2"), spo2), 80);
         EXPECT_NEAR(spo2[0], 96.0, 0.01);
         EXPECT_NEAR(spo2[2], 97.0, 0.01);
-        EXPECT_NEAR(spo2[10], 0.0, 0.01) << "no reading is written as 0";
+        EXPECT_NEAR(spo2[10], -1.0, 0.01) << "no reading is written as -1, the machine's null";
+        std::vector<double> pulse;
+        ASSERT_EQ(edf.readSignal(edf.findSignal("Pulse"), pulse), 80);
+        EXPECT_NEAR(pulse[11], -1.0, 0.01);
+        EXPECT_NEAR(pulse[12], 60.0 + 6 % 5, 0.01);
+    }
+    {
+        // On disk the null is the raw int16 -1 (0xFFFF), never 0,
+        // under a digital minimum of 0, exactly as a ResMed SAD carries it.
+        const size_t header = 256 + 256 * 2;
+        auto raw = [&](size_t record, size_t signal) {
+            const size_t at = header + (record * 2 + signal) * 2;
+            return static_cast<int16_t>(sad_bytes[at] | (sad_bytes[at + 1] << 8));
+        };
+        EXPECT_EQ(raw(10, 0), -1);
+        EXPECT_EQ(raw(11, 1), -1);
+        EXPECT_EQ(raw(9, 0), 96 + 4 % 3);
+        const std::string hdr(sad_bytes.begin(), sad_bytes.begin() + header);
+        EXPECT_EQ(hdr.substr(256 + 2 * (16 + 80 + 8 + 8 + 8), 8), "0       ") << "digital minimum stays 0";
     }
 
     // Parsed as a card's session: the vitals are per second, and the seconds
@@ -268,7 +286,7 @@ TEST(EDFWriter, ASADWithNoReadingsIsNoFile) {
     EXPECT_EQ(edf.num_records_header, 2);
     std::vector<double> spo2;
     ASSERT_EQ(edf.readSignal(edf.findSignal("SpO2"), spo2), 2);
-    EXPECT_NEAR(spo2[1], 0.0, 0.01);
+    EXPECT_NEAR(spo2[1], -1.0, 0.01) << "the padded signal carries the machine's null";
 }
 
 // ── The card's own scale ─────────────────────────────────────────────────────

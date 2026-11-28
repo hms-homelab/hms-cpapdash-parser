@@ -1,5 +1,30 @@
 # Changelog
 
+## [12.4.1] - 2026-11-28
+
+Fixes. Parses of card files are unchanged.
+
+### A written SAD's second with no reading is -1, as the machine's own
+
+`writeResMedSAD` wrote a second with no reading as 0. OSCAR draws a 0 pulse
+as a real value, so a SAD built from sparse readings showed the pulse dropping
+to zero between readings and the SpO2 as scattered dots. The second is now the
+raw int16 -1 under the digital minimum of 0, exactly as a ResMed SAD carries
+it: OSCAR reads -1 as null and holds the last reading across it, and our own
+SAD reader, which takes anything not above 0 as no reading, parses it as
+before. `EDFWriteSignal` gains `has_null_digital` / `null_digital` for this.
+
+### An AirCurve 11's settings history names its Mode
+
+`AirSense11SettingsParser` took the active field (2.1) as a profile slot. On
+an AirCurve 11 it is the STR's own Mode code: 8 with VAuto active (its profile
+in slot 9, no slot 8 at all) and 4 with Spont active, matching the machine's
+card on the same days. Read as a slot, VAuto active named no profile and the
+record carried no Mode, so an STR built from it had Mode -1 ("PAP Mode:
+Unknown" in OSCAR, no pressure line). The active profile is now the one whose
+mode has that STR code, falling back to the slot (AutoSet, where both
+readings agree); Spont (4) joins the known codes.
+
 ## [12.4.0] - 2026-11-27
 
 Existing parses are unchanged: this release only adds.
